@@ -18,14 +18,32 @@ import '../../app/screen_awake.dart';
 /// Lautstärke, stumm und solo sofort ändern, und alles bleibt genau im Takt.
 /// Ein anderes Tempo rechnet die Tonspuren neu (die Tonhöhe bleibt).
 class ScorePlayer extends ChangeNotifier {
-  ScorePlayer(this.score)
-    : volume = List.filled(score.tracks.length, 1.0),
-      muted = List.filled(score.tracks.length, false),
-      solo = List.filled(score.tracks.length, false) {
-    _plan = core.PlaybackPlan.build(score);
+  ScorePlayer(this._score)
+    : volume = List.filled(_score.tracks.length, 1.0, growable: true),
+      muted = List.filled(_score.tracks.length, false, growable: true),
+      solo = List.filled(_score.tracks.length, false) {
+    _plan = core.PlaybackPlan.build(_score);
   }
 
-  final core.Score score;
+  core.Score _score;
+  core.Score get score => _score;
+
+  /// Das Stück wurde bearbeitet: Plan neu, Klang beim nächsten Abspielen neu rechnen.
+  Future<void> updateScore(core.Score s) async {
+    if (_playing) await pause();
+    _score = s;
+    while (volume.length < s.tracks.length) {
+      volume.add(1);
+      muted.add(false);
+      solo.add(false);
+    }
+    _plan = core.PlaybackPlan.build(s, tempoFactor: _tempo);
+    position.value = position.value.clamp(0.0, _plan.duration);
+    _updateLoopTimes();
+    await _unload();
+    _notify();
+  }
+
   late core.PlaybackPlan _plan;
 
   core.PlaybackPlan get plan => _plan;
@@ -169,7 +187,7 @@ class ScorePlayer extends ChangeNotifier {
     final pb = _plan.bars.isEmpty ? null : _plan.bars[idx];
     final within = pb == null ? 0.0 : pb.positionAt(position.value - pb.start);
     _tempo = t;
-    _plan = core.PlaybackPlan.build(score, tempoFactor: t);
+    _plan = core.PlaybackPlan.build(_score, tempoFactor: t);
     if (pb != null && idx < _plan.bars.length) {
       final nb = _plan.bars[idx];
       position.value = nb.start + nb.secondsAt(within);
@@ -279,7 +297,7 @@ class ScorePlayer extends ChangeNotifier {
     _notify();
     try {
       final soloud = await AudioEngine.use(this);
-      final s = score, tempo = _tempo;
+      final s = _score, tempo = _tempo;
       final wavs = await Isolate.run(() => _render(s, tempo));
       if (gen != _generation || _disposed) return;
       final tracks = <AudioSource>[];
@@ -357,8 +375,7 @@ class ScorePlayer extends ChangeNotifier {
   }
 
   /// Stelle der Musik: Stelle der Stimme minus Einzähl-Vorsprung.
-  double _voicePosition(SoundHandle h) =>
-      math.max(_startedAt, _soloud.getPosition(h).inMicroseconds / 1e6 - _lead);
+  double _voicePosition(SoundHandle h) => math.max(_startedAt, _soloud.getPosition(h).inMicroseconds / 1e6 - _lead);
 
   void _readPosition() {
     final h = _handles.isEmpty ? _clickHandle : _handles.first;

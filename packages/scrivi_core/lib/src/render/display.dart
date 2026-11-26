@@ -99,11 +99,49 @@ class SystemBox {
     required this.firstBar,
     required this.lastBar,
     this.bars = const [],
+    this.staffTop,
+    this.topDiatonic = 38,
+    this.tabTop,
+    this.tabSpacing = 1.5,
+    this.strings = 0,
   });
   final double top;
   final double bottom;
   final int firstBar;
   final int lastBar;
+
+  /// Oberste Linie des Notensystems (null = ohne Noten).
+  final double? staffTop;
+
+  /// Stammton auf der obersten Linie (seit C0 gezählt), z. B. F5 = 38 im Violinschlüssel.
+  final int topDiatonic;
+
+  /// Oberste Tab-Linie (höchste Saite), null = ohne Tabulatur.
+  final double? tabTop;
+  final double tabSpacing;
+  final int strings;
+
+  /// y einer Saite (0 = tiefste).
+  double? stringY(int string) => tabTop == null ? null : tabTop! + (strings - 1 - string) * tabSpacing;
+
+  /// Nächste Saite zu [y], null = zu weit weg von der Tabulatur.
+  int? stringAt(double y) {
+    final t = tabTop;
+    if (t == null || strings == 0) return null;
+    final k = ((y - t) / tabSpacing).round();
+    if (k < -1 || k > strings) return null;
+    return (strings - 1 - k.clamp(0, strings - 1)).toInt();
+  }
+
+  /// y eines geschriebenen Stammtons (seit C0 gezählt).
+  double? diatonicY(int diatonic) => staffTop == null ? null : staffTop! + (topDiatonic - diatonic) / 2;
+
+  /// Stammton an der Höhe [y] (nur nahe beim Notensystem).
+  int? diatonicAt(double y) {
+    final s = staffTop;
+    if (s == null || y < s - 6 || y > s + 10) return null;
+    return topDiatonic - ((y - s) * 2).round();
+  }
 
   /// Lage der Takte und ihrer Schläge (für die mitlaufende Markierung).
   final List<BarSpan> bars;

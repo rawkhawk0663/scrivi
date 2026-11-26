@@ -97,7 +97,10 @@ class LibraryController extends ChangeNotifier {
   final String metaDir;
 
   /// Dateiendungen, die Scrivi öffnet: Guitar Pro, MusicXML, MIDI.
-  static const readable = ['gp', 'gpx', 'gp5', 'gp4', 'gp3', 'musicxml', 'mxl', 'xml', 'mid', 'midi'];
+  static const readable = ['scrivi', 'gp', 'gpx', 'gp5', 'gp4', 'gp3', 'musicxml', 'mxl', 'xml', 'mid', 'midi'];
+
+  /// Ordner für die Originale bearbeiteter Stücke (nie gelöscht, nicht in der Liste).
+  String get originalsDir => p.join(root, 'Originale');
 
   final List<Piece> _pieces = [];
   bool loading = true;
@@ -177,6 +180,7 @@ class LibraryController extends ChangeNotifier {
       return String.fromCharCodes(b.take(4096)).contains('Content/score.gpif') ? 'gp' : 'mxl';
     }
     if (starts('BCF')) return 'gpx';
+    if (ScriviFormat.looksLike(b)) return 'scrivi';
     if (starts('MThd')) return 'mid';
     if (b.length > 20 && String.fromCharCodes(b.sublist(1, 20)).startsWith('FICHIER GUITAR PRO')) {
       final v = String.fromCharCodes(b.sublist(1, 30));
@@ -314,6 +318,79 @@ class LibraryController extends ChangeNotifier {
     _pieces.removeWhere((x) => x.path == piece.path);
     await _writeIndex();
     notifyListeners();
+  }
+
+  /// Neues Stück als `.scrivi` in der Bibliothek anlegen.
+  Future<Piece> create(Score score) async {
+    final title = score.info.title.trim().isEmpty ? 'Neues Stück' : score.info.title.trim();
+    final target = await _uniqueName(piecesDir, '${_safeName(title)}.scrivi');
+    await _writeAtomic(target, ScriviFormat.encode(score));
+    final piece = await _pieceFor(target, score, added: DateTime.now());
+    _pieces.add(piece);
+    _sort();
+    await _writeIndex();
+    notifyListeners();
+    return piece;
+  }
+
+  /// Bearbeitetes Stück speichern (erst in eine Zwischendatei, dann umbenennen).
+  ///
+  /// Ist es noch keine `.scrivi`-Datei (z. B. eine importierte Guitar-Pro-Datei),
+  /// entsteht daneben eine `.scrivi`-Datei; das Original wandert in den Ordner
+  /// „Originale“ und bleibt dort erhalten. Gibt das (evtl. neue) Stück zurück.
+  Future<Piece> save(Piece piece, Score score) async {
+    var path = piece.path;
+    if (_ext(path) != 'scrivi') {
+      final target = await _uniqueName(piecesDir, '${p.basenameWithoutExtension(path)}.scrivi');
+      await _writeAtomic(target, ScriviFormat.encode(score));
+      await Directory(originalsDir).create(recursive: true);
+      final keep = await _uniqueName(originalsDir, p.basename(path));
+      try {
+        await File(path).rename(keep);
+      } catch (_) {
+        await File(path).copy(keep);
+        await File(path).delete();
+      }
+      path = target;
+    } else {
+      await _writeAtomic(path, ScriviFormat.encode(score));
+    }
+    final updated = await _pieceFor(path, score, added: piece.added);
+    final i = _pieces.indexWhere((x) => x.path == piece.path);
+    if (i >= 0) {
+      _pieces[i] = updated;
+    } else {
+      _pieces.add(updated);
+    }
+    _sort();
+    await _writeIndex();
+    notifyListeners();
+    return updated;
+  }
+
+  Future<Piece> _pieceFor(String path, Score score, {required DateTime added}) async {
+    final stat = await File(path).stat();
+    return Piece(
+      path: path,
+      title: score.info.title,
+      artist: score.info.artist,
+      bars: score.masterBars.length,
+      added: added,
+      size: stat.size,
+      modified: stat.modified,
+    );
+  }
+
+  static Future<void> _writeAtomic(String path, List<int> bytes) async {
+    final tmp = File('$path.neu');
+    await tmp.writeAsBytes(bytes, flush: true);
+    await tmp.rename(path);
+  }
+
+  /// Dateiname aus einem Titel (ohne Zeichen, die Dateisysteme nicht mögen).
+  static String _safeName(String title) {
+    final s = title.replaceAll(RegExp(r'[\\/:*?"<>|\x00-\x1F]'), '_').trim();
+    return s.isEmpty ? 'Neues Stück' : (s.length > 80 ? s.substring(0, 80) : s);
   }
 
   /// Das ganze Stück lesen (im Hintergrund).

@@ -1,0 +1,1257 @@
+import 'dart:convert';
+import 'dart:math' as math;
+
+import '../io/scrivi_format.dart';
+import '../model/fraction.dart';
+import '../model/pitch.dart';
+import '../model/score.dart';
+
+/// Stelle, an der geschrieben wird: Takt, Schlag (in Stimme 1) und Saite.
+class EditCursor {
+  const EditCursor({this.bar = 0, this.beat = 0, this.string = 0});
+  final int bar;
+  final int beat;
+
+  /// Saite (0 = tiefste) für die Eingabe in der Tabulatur.
+  final int string;
+
+  EditCursor copyWith({int? bar, int? beat, int? string}) =>
+      EditCursor(bar: bar ?? this.bar, beat: beat ?? this.beat, string: string ?? this.string);
+
+  bool before(EditCursor o) => bar < o.bar || (bar == o.bar && beat < o.beat);
+
+  @override
+  bool operator ==(Object other) =>
+      other is EditCursor && other.bar == bar && other.beat == beat && other.string == string;
+
+  @override
+  int get hashCode => Object.hash(bar, beat, string);
+}
+
+/// Spieltechniken zum Ein- und Ausschalten.
+enum Technique {
+  palmMute,
+  letRing,
+  dead,
+  ghost,
+  vibrato,
+  harmonic,
+  hammer,
+  slide,
+  bend,
+  bendHalf,
+  accent,
+  staccato,
+  tapping,
+}
+
+/// Bearbeitet ein Stück: Cursor, Eingabe, Takte, Rückgängig.
+///
+/// Geschrieben wird im Überschreib-Modus: Ein Ton ersetzt, was an seiner Stelle
+/// stand; was übrig bleibt, wird mit Pausen gefüllt. So ist jeder Takt immer
+/// genau voll. Geschrieben wird in Stimme 1 der gewählten Spur.
+///
+/// Rückgängig: Vor jeder Änderung wird das ganze Stück als Text gemerkt
+/// (wie es in der Datei steht). Einfach und sicher, auch bei grossen Änderungen.
+class ScoreEditor {
+  ScoreEditor(Score score, {this.track = 0}) : _score = score {
+    _clampCursor();
+  }
+
+  Score _score;
+  Score get score => _score;
+
+  /// Spur, in der geschrieben wird.
+  int track;
+
+  EditCursor cursor = const EditCursor();
+
+  /// Anfang der Auswahl (null = keine Auswahl).
+  EditCursor? anchor;
+
+  /// Notenwert für neue Töne.
+  NoteDuration duration = const NoteDuration(NoteValue.quarter);
+
+  /// Zählt jede Änderung am Stück (für Speichern und Neusetzen).
+  int revision = 0;
+
+  final _undo = <String>[];
+  final _redo = <String>[];
+  static const _maxUndo = 200;
+
+  bool get canUndo => _undo.isNotEmpty;
+  bool get canRedo => _redo.isNotEmpty;
+
+  Track get _track => _score.tracks[track];
+  bool get stringed => _track.staff.isStringed;
+
+  // ───────────────────────── Rückgängig ─────────────────────────
+
+  String _snapshot() => jsonEncode(ScriviFormat.toJson(_score));
+
+  Score _restore(String s) => ScriviFormat.fromJson(jsonDecode(s) as Map<String, dynamic>);
+
+  /// Vor jeder Änderung aufrufen.
+  void _begin() {
+    _undo.add(_snapshot());
+    if (_undo.length > _maxUndo) _undo.removeAt(0);
+    _redo.clear();
+  }
+
+  void _done() {
+    _normalize();
+    _clampCursor();
+    revision++;
+  }
+
+  bool undo() {
+    if (_undo.isEmpty) return false;
+    _redo.add(_snapshot());
+    _score = _restore(_undo.removeLast());
+    _clampCursor();
+    revision++;
+    return true;
+  }
+
+  bool redo() {
+    if (_redo.isEmpty) return false;
+    _undo.add(_snapshot());
+    _score = _restore(_redo.removeLast());
+    _clampCursor();
+    revision++;
+    return true;
+  }
+
+  // ───────────────────────── Hilfen ─────────────────────────
+
+  Fraction barLength(int bar) => _score.masterBars[bar].time.length;
+
+  /// Schläge der Stimme 1 im Takt [bar] (bei Bedarf mit Pausen angelegt).
+  List<Beat> beatsOf(int bar) {
+    final b = _track.bars[bar];
+    if (b.voices.isEmpty) b.voices.add(Voice(_rests(barLength(bar))));
+    final v = b.voices.first.beats;
+    if (v.isEmpty) v.addAll(_rests(barLength(bar)));
+    return v;
+  }
+
+  /// Schlag unter dem Cursor (null, wenn der Takt leer ist).
+  Beat? get currentBeat {
+    final beats = beatsOf(cursor.bar);
+    return cursor.beat < beats.length ? beats[cursor.beat] : null;
+  }
+
+  /// Beginn eines Schlags im Takt (ganze Noten).
+  Fraction onsetOf(int bar, int beat) {
+    var t = Fraction.zero;
+    final beats = beatsOf(bar);
+    for (var i = 0; i < beat && i < beats.length; i++) {
+      if (beats[i].grace == GraceType.none) t = t + beats[i].duration.length;
+    }
+    return t;
+  }
+
+  /// Beginn des Schlags unter dem Cursor.
+  Fraction get cursorOnset => onsetOf(cursor.bar, cursor.beat);
+
+  /// Pausen, die zusammen [length] ergeben (möglichst wenige, auch punktiert).
+  static List<Beat> _rests(Fraction length) => [for (final d in durationsFor(length)) Beat(duration: d)];
+
+  /// Pausen ab der Stelle [start] im Takt: zuerst bis zum nächsten Schlag
+  /// auffüllen, dann grössere Werte (so wie man Pausen liest).
+  static List<Beat> _restsAt(Fraction start, Fraction length) {
+    final out = <Beat>[];
+    var t = start;
+    final end = start + length;
+    var guard = 0;
+    bool on(Fraction pos, Fraction grid) => (pos / grid).d == 1;
+    while (t < end && guard++ < 64) {
+      NoteDuration? best;
+      for (final v in NoteValue.values) {
+        final plain = NoteDuration(v);
+        if (plain.length <= end - t && on(t, plain.length) && (best == null || plain.length > best.length)) {
+          best = plain;
+        }
+        final dotted = NoteDuration(v, dots: 1);
+        if (dotted.length <= end - t && on(t, v.length.scale(2)) && (best == null || dotted.length > best.length)) {
+          best = dotted;
+        }
+      }
+      if (best == null) {
+        out.addAll(_rests(end - t));
+        break;
+      }
+      out.add(Beat(duration: best));
+      t = t + best.length;
+    }
+    return out;
+  }
+
+  /// Notenwerte, die zusammen [length] ergeben (grösste zuerst).
+  static List<NoteDuration> durationsFor(Fraction length) {
+    final out = <NoteDuration>[];
+    var rest = length;
+    var guard = 0;
+    while (rest > Fraction.zero && guard++ < 64) {
+      NoteDuration? best;
+      for (final v in NoteValue.values) {
+        for (final dots in const [1, 0]) {
+          final d = NoteDuration(v, dots: dots);
+          if (d.length <= rest && (best == null || d.length > best.length)) best = d;
+        }
+      }
+      if (best == null) break;
+      out.add(best);
+      rest = rest - best.length;
+    }
+    return out;
+  }
+
+  /// Grösster Notenwert, der in [space] passt (für zu lange Töne am Taktende).
+  static NoteDuration _fit(NoteDuration want, Fraction space) {
+    if (want.length <= space) return want;
+    final ds = durationsFor(space);
+    return ds.isEmpty ? want : ds.first;
+  }
+
+  /// Schläge von [from] bis [to] (ganze Noten) durch [insert] ersetzen. Ein
+  /// Schlag, der über [to] hinausreicht, wird durch Pausen ergänzt. [from] muss
+  /// ein Schlaganfang sein. Gibt den Index des ersten eingefügten Schlags zurück.
+  int _replace(int bar, Fraction from, Fraction to, List<Beat> insert) {
+    final beats = beatsOf(bar);
+    var t = Fraction.zero;
+    var first = -1;
+    var last = -1;
+    var end = Fraction.zero;
+    for (var i = 0; i < beats.length; i++) {
+      final b = beats[i];
+      if (b.grace != GraceType.none) continue;
+      final e = t + b.duration.length;
+      if (t >= from && t < to) {
+        if (first < 0) first = i;
+        last = i;
+        end = e;
+      }
+      t = e;
+    }
+    if (first < 0) {
+      // Nichts zu ersetzen (Takt zu kurz): hinten anfügen
+      beats.addAll(insert);
+      return beats.length - insert.length;
+    }
+    // Vorschläge vor dem ersten ersetzten Schlag bleiben, die dazwischen gehen mit.
+    beats.removeRange(first, last + 1);
+    final fill = end > to ? _restsAt(to, end - to) : const <Beat>[];
+    beats.insertAll(first, [...insert, ...fill]);
+    return first;
+  }
+
+  void _clampCursor() {
+    final n = _score.masterBars.length;
+    final bar = cursor.bar.clamp(0, math.max(0, n - 1)).toInt();
+    if (n == 0) {
+      cursor = const EditCursor();
+      return;
+    }
+    final beats = beatsOf(bar);
+    final beat = cursor.beat.clamp(0, math.max(0, beats.length - 1)).toInt();
+    final strings = math.max(1, _track.staff.stringCount);
+    cursor = EditCursor(bar: bar, beat: beat, string: cursor.string.clamp(0, strings - 1).toInt());
+    final a = anchor;
+    if (a != null) {
+      final ab = a.bar.clamp(0, n - 1).toInt();
+      anchor = a.copyWith(bar: ab, beat: a.beat.clamp(0, math.max(0, beatsOf(ab).length - 1)));
+    }
+  }
+
+  // ───────────────────────── Cursor ─────────────────────────
+
+  /// Einen Schlag weiter (bzw. zurück); am Ende des Stücks kommt ein neuer Takt dazu.
+  void moveBeat(int dir, {bool select = false}) {
+    _selecting(select);
+    var bar = cursor.bar, beat = cursor.beat + dir;
+    if (beat >= beatsOf(bar).length) {
+      if (bar + 1 >= _score.masterBars.length) {
+        if (select) return;
+        _begin();
+        _insertBarsRaw(bar + 1, 1);
+        _done();
+      }
+      bar++;
+      beat = 0;
+    } else if (beat < 0) {
+      if (bar == 0) return;
+      bar--;
+      beat = beatsOf(bar).length - 1;
+    }
+    cursor = cursor.copyWith(bar: bar, beat: beat);
+  }
+
+  void moveBar(int dir, {bool select = false}) {
+    _selecting(select);
+    final bar = (cursor.bar + dir).clamp(0, _score.masterBars.length - 1);
+    cursor = cursor.copyWith(bar: bar, beat: 0);
+  }
+
+  /// Saite wechseln: +1 = höhere Saite.
+  void moveString(int dir) {
+    if (!stringed) return;
+    cursor = cursor.copyWith(string: (cursor.string + dir).clamp(0, _track.staff.stringCount - 1));
+  }
+
+  /// Cursor auf Takt [bar], an den Schlag, der die Stelle [position] (ganze Noten) enthält.
+  void setCursor(int bar, double position, {int? string, bool select = false}) {
+    _selecting(select);
+    final beats = beatsOf(bar);
+    var t = 0.0, best = 0;
+    for (var i = 0; i < beats.length; i++) {
+      if (beats[i].grace != GraceType.none) continue;
+      final len = beats[i].duration.length.toDouble();
+      if (position >= t - 1e-9) best = i;
+      t += len;
+      if (position < t) break;
+    }
+    cursor = EditCursor(bar: bar, beat: best, string: string ?? cursor.string);
+    _clampCursor();
+  }
+
+  void _selecting(bool select) {
+    if (select) {
+      anchor ??= cursor;
+    } else {
+      anchor = null;
+    }
+  }
+
+  /// Ausgewählter Bereich (Anfang, Ende), beide einschliesslich, oder null.
+  (EditCursor, EditCursor)? get selection {
+    final a = anchor;
+    if (a == null) return null;
+    return a.before(cursor) ? (a, cursor) : (cursor, a);
+  }
+
+  void selectAll() {
+    anchor = const EditCursor();
+    final last = _score.masterBars.length - 1;
+    cursor = cursor.copyWith(bar: last, beat: beatsOf(last).length - 1);
+  }
+
+  /// Alle Schläge (Takt, Index) im Bereich, von vorne nach hinten.
+  Iterable<(int, int)> _range((EditCursor, EditCursor) r) sync* {
+    final (a, b) = r;
+    for (var bar = a.bar; bar <= b.bar; bar++) {
+      final n = beatsOf(bar).length;
+      final from = bar == a.bar ? a.beat : 0;
+      final to = bar == b.bar ? b.beat : n - 1;
+      for (var i = from; i <= to && i < n; i++) {
+        yield (bar, i);
+      }
+    }
+  }
+
+  /// Schläge, auf die sich ein Befehl bezieht: die Auswahl oder der Schlag unter dem Cursor.
+  List<(int, int)> get _targets {
+    final s = selection;
+    return s == null ? [(cursor.bar, cursor.beat)] : _range(s).toList();
+  }
+
+  // ───────────────────────── Tonhöhen ─────────────────────────
+
+  /// Klingende Tonhöhe aus der geschriebenen.
+  Pitch _concert(Pitch written) {
+    final t = _track.transposeSemitones;
+    if (t % 12 == 0) return written.octaves(-t ~/ 12);
+    return Pitch.fromMidi(written.midi - t, fifths: _score.masterBars[cursor.bar].key.fifths);
+  }
+
+  Pitch _writtenFor(Pitch concert, int fifths) {
+    final t = _track.transposeSemitones;
+    if (t % 12 == 0) return concert.octaves(t ~/ 12);
+    return Pitch.fromMidi(concert.midi + t, fifths: fifths);
+  }
+
+  /// Saite und Bund für eine klingende Tonhöhe: möglichst nahe beim zuletzt
+  /// gespielten Bund, sonst so tief wie möglich (bis Bund 12).
+  (int, int)? _place(int midi, {int? preferString, int? nearFret, Set<int> taken = const {}}) {
+    final st = _track.staff;
+    if (!st.isStringed) return null;
+    if (preferString != null && !taken.contains(preferString)) {
+      // Die gewünschte Saite nur, wenn der Bund bequem liegt (nahe beim vorigen bzw. bis Bund 12)
+      final f = midi - st.tuning[preferString] - st.capo;
+      final comfortable = nearFret != null ? (f - nearFret).abs() <= 4 : f <= 12;
+      if (f >= 0 && f <= st.fretCount && comfortable) return (preferString, f);
+    }
+    (int, int)? best;
+    var bestScore = double.infinity;
+    for (var s = 0; s < st.stringCount; s++) {
+      if (taken.contains(s)) continue;
+      final f = midi - st.tuning[s] - st.capo;
+      if (f < 0 || f > st.fretCount) continue;
+      final score = nearFret != null ? (f - nearFret).abs() + (f == 0 ? 0.5 : 0) : f + (f > 12 ? 20 : 0);
+      if (score < bestScore) {
+        bestScore = score.toDouble();
+        best = (s, f);
+      }
+    }
+    return best;
+  }
+
+  /// Letzter Ton vor dem Cursor (für Oktave und Lage).
+  Note? _previousNote() {
+    for (var bar = cursor.bar; bar >= 0; bar--) {
+      final beats = beatsOf(bar);
+      final from = bar == cursor.bar ? cursor.beat - 1 : beats.length - 1;
+      for (var i = from; i >= 0; i--) {
+        final n = beats[i].notes;
+        if (n.isNotEmpty) return n.last;
+      }
+    }
+    return null;
+  }
+
+  Note _noteForWritten(Pitch written, {int? string, Set<int> taken = const {}}) {
+    final concert = _concert(written);
+    final prev = _previousNote();
+    final place = _place(concert.midi, preferString: string, nearFret: prev?.fret, taken: taken);
+    return Note(pitch: concert, written: written == concert ? null : written, string: place?.$1, fret: place?.$2);
+  }
+
+  Note _noteForFret(int string, int fret) {
+    final st = _track.staff;
+    final midi = st.tuning[string] + st.capo + fret;
+    final fifths = _score.masterBars[cursor.bar].key.fifths;
+    final concert = Pitch.fromMidi(midi, fifths: fifths);
+    final written = _writtenFor(concert, fifths);
+    return Note(pitch: concert, written: written == concert ? null : written, string: string, fret: fret);
+  }
+
+  // ───────────────────────── Eingabe ─────────────────────────
+
+  /// Am Cursor einen Schlag mit [notes] schreiben (Notenwert: [duration]).
+  void _writeNotes(List<Note> notes) {
+    final bar = cursor.bar;
+    final from = cursorOnset;
+    final d = _fit(duration, barLength(bar) - from);
+    final old = currentBeat;
+    final beat = Beat(duration: d, notes: notes, chordId: old?.chordId, text: old?.text, lyrics: old?.lyrics);
+    final i = _replace(bar, from, from + d.length, [beat]);
+    cursor = cursor.copyWith(beat: i);
+  }
+
+  /// Bundzahl auf der Saite des Cursors. Ist am Cursor schon ein Ton, kommt
+  /// die Saite dazu (Akkord); sonst entsteht ein neuer Ton.
+  void inputFret(int fret) {
+    if (!stringed) return;
+    final st = _track.staff;
+    if (fret < 0 || fret > st.fretCount) return;
+    _begin();
+    final note = _noteForFret(cursor.string, fret);
+    final b = currentBeat;
+    if (b != null && !b.isRest && !b.slashed) {
+      final notes = [
+        for (final n in b.notes)
+          if (n.string != cursor.string) n,
+        note,
+      ]..sort((x, y) => (x.string ?? 0).compareTo(y.string ?? 0));
+      beatsOf(cursor.bar)[cursor.beat] = b.copyWith(notes: notes);
+    } else {
+      _writeNotes([note]);
+    }
+    _done();
+  }
+
+  /// Notenname (Stammton 0 = C … 6 = H). Die Oktave ist die nächste zum vorigen
+  /// Ton, das Vorzeichen kommt aus der Tonart. [addToChord]: zum Akkord hinzufügen.
+  void inputStep(int step, {bool addToChord = false}) {
+    if (_track.percussion) return;
+    _begin();
+    final key = _score.masterBars[cursor.bar].key;
+    final alter = key.alterFor(step);
+    final prev = _previousNote();
+    final ref = prev?.shown ?? _middleOfStaff();
+    // Oktave so wählen, dass der Abstand zum vorigen Ton höchstens eine Quarte ist
+    var best = Pitch(step, alter, ref.octave);
+    for (final o in [ref.octave - 1, ref.octave, ref.octave + 1]) {
+      final p = Pitch(step, alter, o);
+      if ((p.diatonic - ref.diatonic).abs() < (best.diatonic - ref.diatonic).abs()) best = p;
+    }
+    _inputWritten(best, addToChord);
+    _done();
+  }
+
+  /// Note an einer Stelle im Notensystem (mit dem Stift angetippt): geschriebener
+  /// Stammton seit C0 gezählt, Vorzeichen aus der Tonart.
+  void inputDiatonic(int diatonic, {bool addToChord = false}) {
+    if (_track.percussion) return;
+    _begin();
+    final step = diatonic % 7;
+    final alter = _score.masterBars[cursor.bar].key.alterFor(step);
+    _inputWritten(Pitch(step, alter, diatonic ~/ 7), addToChord);
+    _done();
+  }
+
+  void _inputWritten(Pitch best, bool addToChord) {
+    final b = currentBeat;
+    if (addToChord && b != null && !b.isRest) {
+      final taken = {for (final n in b.notes) ?n.string};
+      final note = _noteForWritten(best, taken: taken);
+      beatsOf(cursor.bar)[cursor.beat] = b.copyWith(notes: [...b.notes, note]);
+    } else {
+      _writeNotes([_noteForWritten(best, string: stringed ? cursor.string : null)]);
+    }
+    final placed = currentBeat?.notes.last.string;
+    if (placed != null) cursor = cursor.copyWith(string: placed);
+  }
+
+  Pitch _middleOfStaff() => switch (_track.bars[cursor.bar].clef) {
+    Clef.bass => const Pitch(1, 0, 3),
+    Clef.alto => const Pitch(0, 0, 4),
+    Clef.tenor => const Pitch(5, 0, 3),
+    _ => const Pitch(6, 0, 4),
+  };
+
+  /// Pause am Cursor bzw. alle ausgewählten Schläge zu Pausen machen.
+  void toRest() {
+    _begin();
+    for (final (bar, i) in _targets) {
+      final beats = beatsOf(bar);
+      final b = beats[i];
+      if (stringed && selection == null && b.notes.length > 1 && b.notes.any((n) => n.string == cursor.string)) {
+        // Nur den Ton auf der Saite des Cursors entfernen
+        beats[i] = b.copyWith(
+          notes: [
+            for (final n in b.notes)
+              if (n.string != cursor.string) n,
+          ],
+        );
+      } else {
+        beats[i] = Beat(duration: b.duration, chordId: b.chordId, text: b.text, lyrics: b.lyrics);
+      }
+    }
+    _done();
+  }
+
+  /// Notenwert für die Eingabe; ändert auch den Schlag unter dem Cursor.
+  void setDuration(NoteValue v) {
+    duration = NoteDuration(v, dots: duration.dots, tuplet: duration.tuplet);
+    _changeCurrentDuration(NoteDuration(v, dots: currentBeat?.duration.dots ?? 0));
+  }
+
+  /// Punkt ein/aus (Eingabe und Schlag unter dem Cursor).
+  void toggleDot() {
+    final b = currentBeat;
+    final dots = (b?.duration.dots ?? duration.dots) > 0 ? 0 : 1;
+    duration = NoteDuration(duration.value, dots: dots);
+    if (b != null) _changeCurrentDuration(NoteDuration(b.duration.value, dots: dots));
+  }
+
+  /// Notenwert des Schlags unter dem Cursor ändern (überschreibt, was folgt).
+  void _changeCurrentDuration(NoteDuration d) {
+    final b = currentBeat;
+    if (b == null || b.duration.tuplet != null) return;
+    final bar = cursor.bar;
+    final from = cursorOnset;
+    final nd = _fit(d, barLength(bar) - from);
+    if (nd.length == b.duration.length && nd.value == b.duration.value) return;
+    _begin();
+    final oldEnd = from + b.duration.length;
+    final newEnd = from + nd.length;
+    final i = _replace(bar, from, newEnd > oldEnd ? newEnd : oldEnd, [
+      b.copyWith(duration: nd),
+      if (newEnd < oldEnd) ..._restsAt(newEnd, oldEnd - newEnd),
+    ]);
+    cursor = cursor.copyWith(beat: i);
+    _done();
+  }
+
+  /// Triole ein/aus: Aus einem Schlag werden drei Triolen-Werte im Raum von zwei.
+  void toggleTriplet() {
+    final b = currentBeat;
+    if (b == null) return;
+    final bar = cursor.bar;
+    final beats = beatsOf(bar);
+    _begin();
+    if (b.duration.tuplet == null) {
+      final v = b.duration.value;
+      final from = cursorOnset;
+      final span = v.length.scale(2);
+      if (from + span > barLength(bar)) {
+        _undo.removeLast();
+        return;
+      }
+      const t = Tuplet(3, 2);
+      final i = _replace(bar, from, from + span, [
+        b.copyWith(duration: NoteDuration(v, tuplet: t)),
+        Beat(duration: NoteDuration(v, tuplet: t)),
+        Beat(duration: NoteDuration(v, tuplet: t)),
+      ]);
+      cursor = cursor.copyWith(beat: i);
+    } else {
+      // Ganze Triolen-Gruppe finden und durch normale Werte ersetzen
+      final v = b.duration.value;
+      final group = v.length.scale(2);
+      var start = cursor.beat;
+      var t = cursorOnset;
+      // Gruppe beginnt dort, wo die Zeit ab Taktanfang ein Vielfaches der Gruppenlänge ist
+      while (start > 0 && beats[start - 1].duration.tuplet != null) {
+        final probe = t - beats[start - 1].duration.length;
+        final ratio = probe / group;
+        start--;
+        t = probe;
+        if (ratio.toDouble() == ratio.toDouble().roundToDouble()) break;
+      }
+      final first = beats[start];
+      final i = _replace(bar, t, t + group, [
+        Beat(duration: NoteDuration(v), notes: first.notes, chordId: first.chordId, text: first.text),
+        Beat(duration: NoteDuration(v)),
+      ]);
+      cursor = cursor.copyWith(beat: i);
+    }
+    _done();
+  }
+
+  /// Haltebogen vom vorigen Schlag: Die Töne werden übernommen und gebunden.
+  void toggleTie() {
+    final b = currentBeat;
+    if (b == null) return;
+    _begin();
+    final beats = beatsOf(cursor.bar);
+    if (b.notes.isNotEmpty && b.notes.every((n) => n.tieDestination)) {
+      beats[cursor.beat] = b.copyWith(notes: [for (final n in b.notes) n.copyWith(tieDestination: false)]);
+    } else {
+      final prev = _previousBeat(cursor.bar, cursor.beat);
+      if (prev == null || prev.isRest) {
+        _undo.removeLast();
+        return;
+      }
+      beats[cursor.beat] = b.copyWith(
+        notes: [
+          for (final n in prev.notes)
+            n.copyWith(tieDestination: true, tieOrigin: false, hammerOrigin: false, hammerDestination: false, slide: 0),
+        ],
+      );
+    }
+    _done();
+  }
+
+  Beat? _previousBeat(int bar, int beat) {
+    if (beat > 0) return beatsOf(bar)[beat - 1];
+    if (bar == 0) return null;
+    final b = beatsOf(bar - 1);
+    return b.isEmpty ? null : b.last;
+  }
+
+  /// Halbtöne höher/tiefer (Auswahl oder Schlag unter dem Cursor).
+  void transposeSelection(int semitones) {
+    _begin();
+    for (final (bar, i) in _targets) {
+      final beats = beatsOf(bar);
+      final b = beats[i];
+      if (b.isRest) continue;
+      final fifths = _score.masterBars[bar].key.fifths;
+      beats[i] = b.copyWith(notes: [for (final n in b.notes) _shift(n, semitones, fifths)]);
+    }
+    _done();
+  }
+
+  Note _shift(Note n, int semitones, int fifths) {
+    final concert = Pitch.fromMidi(
+      n.pitch.midi + semitones,
+      fifths: fifths < 0 || semitones < 0 && fifths == 0 ? -1 : 1,
+    );
+    final written = _writtenFor(concert, fifths);
+    var out = n.copyWith(pitch: concert, written: written, clearWritten: written == concert);
+    if (n.string != null && stringed) {
+      final place = _place(concert.midi, preferString: n.string);
+      out = place == null ? out : out.copyWith(string: place.$1, fret: place.$2);
+    }
+    return out;
+  }
+
+  /// Technik an den Tönen am Cursor ein/aus (in der Tab: nur die Saite des Cursors, falls dort ein Ton ist).
+  void toggleTechnique(Technique t) {
+    final targets = _targets;
+    _begin();
+    var changed = false;
+    for (final (bar, i) in targets) {
+      final beats = beatsOf(bar);
+      final b = beats[i];
+      if (b.isRest) continue;
+      final onString = selection == null && stringed && b.notes.any((n) => n.string == cursor.string);
+      bool hit(Note n) => !onString || n.string == cursor.string;
+      final sample = b.notes.firstWhere(hit);
+      final on = !_has(sample, t);
+      beats[i] = b.copyWith(notes: [for (final n in b.notes) hit(n) ? _set(n, t, on) : n]);
+      changed = true;
+    }
+    if (!changed) {
+      _undo.removeLast();
+      return;
+    }
+    _done();
+  }
+
+  static bool _has(Note n, Technique t) => switch (t) {
+    Technique.palmMute => n.palmMuted,
+    Technique.letRing => n.letRing,
+    Technique.dead => n.dead,
+    Technique.ghost => n.ghost,
+    Technique.vibrato => n.vibrato,
+    Technique.harmonic => n.harmonic,
+    Technique.hammer => n.hammerOrigin,
+    Technique.slide => n.slide & 2 != 0,
+    Technique.bend => n.bend != null && (n.bend!.maxSemitones - 2).abs() < 0.01,
+    Technique.bendHalf => n.bend != null && (n.bend!.maxSemitones - 1).abs() < 0.01,
+    Technique.accent => n.accent & 8 != 0,
+    Technique.staccato => n.accent & 1 != 0,
+    Technique.tapping => n.tapped,
+  };
+
+  static Note _set(Note n, Technique t, bool on) => switch (t) {
+    Technique.palmMute => n.copyWith(palmMuted: on),
+    Technique.letRing => n.copyWith(letRing: on),
+    Technique.dead => n.copyWith(dead: on),
+    Technique.ghost => n.copyWith(ghost: on),
+    Technique.vibrato => n.copyWith(vibrato: on),
+    Technique.harmonic => n.copyWith(harmonic: on),
+    Technique.hammer => n.copyWith(hammerOrigin: on),
+    Technique.slide => n.copyWith(slide: on ? 2 : 0),
+    Technique.bend =>
+      on
+          ? n.copyWith(bend: const Bend([BendPoint(0, 0), BendPoint(0.5, 2), BendPoint(1, 2)]))
+          : n.copyWith(clearBend: true),
+    Technique.bendHalf =>
+      on
+          ? n.copyWith(bend: const Bend([BendPoint(0, 0), BendPoint(0.5, 1), BendPoint(1, 1)]))
+          : n.copyWith(clearBend: true),
+    Technique.accent => n.copyWith(accent: on ? n.accent | 8 : n.accent & ~8),
+    Technique.staccato => n.copyWith(accent: on ? n.accent | 1 : n.accent & ~1),
+    Technique.tapping => n.copyWith(tapped: on),
+  };
+
+  /// Gilt die Technik für den Ton am Cursor? (für die Anzeige der Knöpfe)
+  bool hasTechnique(Technique t) {
+    final b = currentBeat;
+    if (b == null || b.isRest) return false;
+    final n = b.notes.where((n) => !stringed || n.string == cursor.string).firstOrNull ?? b.notes.first;
+    return _has(n, t);
+  }
+
+  // ───────────────────────── Akkorde, Text, Liedtext ─────────────────────────
+
+  /// Akkordsymbol am Cursor setzen (leer = entfernen).
+  void setChord(String name) {
+    final b = currentBeat;
+    if (b == null) return;
+    _begin();
+    final n = name.trim();
+    final beats = beatsOf(cursor.bar);
+    if (n.isEmpty) {
+      beats[cursor.beat] = b.copyWith(clearChord: true);
+    } else {
+      final chords = _track.chords;
+      var id = chords.entries.where((e) => e.value.name == n).map((e) => e.key).firstOrNull;
+      if (id == null) {
+        id = chords.isEmpty ? 0 : chords.keys.reduce(math.max) + 1;
+        chords[id] = ChordDef(name: n);
+      }
+      beats[cursor.beat] = b.copyWith(chordId: id);
+    }
+    _done();
+  }
+
+  String chordAtCursor() {
+    final id = currentBeat?.chordId;
+    return id == null ? '' : (_track.chords[id]?.name ?? '');
+  }
+
+  /// Text über dem Schlag (leer = entfernen).
+  void setText(String text) {
+    final b = currentBeat;
+    if (b == null) return;
+    _begin();
+    final t = text.trim();
+    beatsOf(cursor.bar)[cursor.beat] = t.isEmpty ? b.copyWith(clearText: true) : b.copyWith(text: t);
+    _done();
+  }
+
+  /// Liedtext-Silbe (Strophe [line]) am Cursor.
+  void setLyric(String syllable, {int line = 0}) {
+    final b = currentBeat;
+    if (b == null) return;
+    _begin();
+    final lyrics = [...b.lyrics];
+    while (lyrics.length <= line) {
+      lyrics.add('');
+    }
+    lyrics[line] = syllable.trim();
+    while (lyrics.isNotEmpty && lyrics.last.isEmpty) {
+      lyrics.removeLast();
+    }
+    beatsOf(cursor.bar)[cursor.beat] = b.copyWith(lyrics: lyrics);
+    _done();
+  }
+
+  /// Zum nächsten Schlag mit Ton (für die Liedtext-Eingabe).
+  void nextNote() {
+    var bar = cursor.bar, beat = cursor.beat + 1;
+    while (bar < _score.masterBars.length) {
+      final beats = beatsOf(bar);
+      for (var i = beat; i < beats.length; i++) {
+        if (!beats[i].isRest && !beats[i].notes.every((n) => n.tieDestination)) {
+          cursor = cursor.copyWith(bar: bar, beat: i);
+          anchor = null;
+          return;
+        }
+      }
+      bar++;
+      beat = 0;
+    }
+  }
+
+  void toggleFermata() {
+    final b = currentBeat;
+    if (b == null) return;
+    _begin();
+    beatsOf(cursor.bar)[cursor.beat] = b.copyWith(fermata: !b.fermata);
+    _done();
+  }
+
+  // ───────────────────────── Takte ─────────────────────────
+
+  void _insertBarsRaw(int at, int count) {
+    final ref = _score.masterBars[(at - 1).clamp(0, _score.masterBars.length - 1)];
+    for (var k = 0; k < count; k++) {
+      _score.masterBars.insert(at, MasterBar(time: ref.time, key: ref.key));
+      for (final t in _score.tracks) {
+        final clef = t.bars.isEmpty ? Clef.treble : t.bars[(at - 1).clamp(0, t.bars.length - 1)].clef;
+        t.bars.insert(at, Bar(clef: clef, voices: [Voice(_rests(ref.time.length))]));
+      }
+    }
+    for (var i = 0; i < _score.tempos.length; i++) {
+      final m = _score.tempos[i];
+      if (m.bar >= at && !(m.bar == 0 && at == 0)) _score.tempos[i] = _tempoAt(m, m.bar + count);
+    }
+    _dropLayoutHints();
+  }
+
+  static TempoMark _tempoAt(TempoMark m, int bar) =>
+      TempoMark(bar: bar, position: m.position, bpm: m.bpm, unit: m.unit, dotted: m.dotted, visible: m.visible);
+
+  /// Die Zeilenaufteilung aus der Datei passt nach Taktänderungen nicht mehr.
+  void _dropLayoutHints() {
+    for (var i = 0; i < _score.tracks.length; i++) {
+      final t = _score.tracks[i];
+      if (t.layoutHint == null) continue;
+      _score.tracks[i] = Track(
+        name: t.name,
+        shortName: t.shortName,
+        staff: t.staff,
+        bars: t.bars,
+        chords: t.chords,
+        transposeSemitones: t.transposeSemitones,
+        program: t.program,
+      );
+    }
+  }
+
+  /// [count] leere Takte vor (bzw. nach) dem Takt am Cursor einfügen.
+  void insertBars({bool after = true, int count = 1}) {
+    _begin();
+    final at = after ? cursor.bar + 1 : cursor.bar;
+    _insertBarsRaw(at, count);
+    cursor = EditCursor(bar: at, beat: 0, string: cursor.string);
+    anchor = null;
+    _done();
+  }
+
+  /// Takte der Auswahl (bzw. den Takt am Cursor) löschen. Mindestens ein Takt bleibt.
+  void deleteBars() {
+    final s = selection;
+    final from = s?.$1.bar ?? cursor.bar, to = s?.$2.bar ?? cursor.bar;
+    final n = _score.masterBars.length;
+    if (to - from + 1 >= n) {
+      // Alles löschen hiesse: ein leerer Takt bleibt
+      _begin();
+      for (var b = 0; b < n; b++) {
+        for (final t in _score.tracks) {
+          t.bars[b] = Bar(clef: t.bars[b].clef, voices: [Voice(_rests(barLength(b)))]);
+        }
+      }
+      _removeBars(1, n - 1);
+      cursor = EditCursor(string: cursor.string);
+      anchor = null;
+      _done();
+      return;
+    }
+    _begin();
+    _removeBars(from, to);
+    cursor = EditCursor(bar: math.min(from, _score.masterBars.length - 1), string: cursor.string);
+    anchor = null;
+    _done();
+  }
+
+  void _removeBars(int from, int to) {
+    final count = to - from + 1;
+    if (count <= 0) return;
+    _score.masterBars.removeRange(from, to + 1);
+    for (final t in _score.tracks) {
+      if (from < t.bars.length) t.bars.removeRange(from, math.min(to + 1, t.bars.length));
+    }
+    final tempos = <TempoMark>[];
+    for (final m in _score.tempos) {
+      if (m.bar < from) {
+        tempos.add(m);
+      } else if (m.bar > to) {
+        tempos.add(_tempoAt(m, m.bar - count));
+      } else if (m.bar == from) {
+        // Tempo im gelöschten Bereich gilt ab der Stelle weiter
+        tempos.add(_tempoAt(m, math.min(from, _score.masterBars.length - 1)));
+      }
+    }
+    _score.tempos
+      ..clear()
+      ..addAll(tempos);
+    _dropLayoutHints();
+  }
+
+  /// Taktart ab dem Takt am Cursor (bis zum nächsten Wechsel).
+  void setTimeSignature(TimeSignature ts) {
+    _begin();
+    final start = cursor.bar;
+    final old = _score.masterBars[start].time;
+    for (var b = start; b < _score.masterBars.length; b++) {
+      final mb = _score.masterBars[b];
+      if (b > start && mb.time != old) break;
+      _score.masterBars[b] = mb.copyWith(time: ts);
+      for (final t in _score.tracks) {
+        if (b < t.bars.length) _refit(t.bars[b], ts.length);
+      }
+    }
+    _done();
+  }
+
+  /// Inhalt eines Takts an eine neue Länge anpassen: kürzen bzw. mit Pausen füllen.
+  static void _refit(Bar bar, Fraction length) {
+    for (final v in bar.voices) {
+      var t = Fraction.zero;
+      final out = <Beat>[];
+      for (final b in v.beats) {
+        if (b.grace != GraceType.none) {
+          out.add(b);
+          continue;
+        }
+        if (t >= length) break;
+        final room = length - t;
+        if (b.duration.length <= room) {
+          out.add(b);
+          t = t + b.duration.length;
+        } else {
+          final d = _fit(b.duration, room);
+          out.add(b.copyWith(duration: d));
+          t = t + d.length;
+        }
+      }
+      if (t < length) out.addAll(_restsAt(t, length - t));
+      v.beats
+        ..clear()
+        ..addAll(out);
+    }
+  }
+
+  /// Tonart ab dem Takt am Cursor (bis zum nächsten Wechsel).
+  void setKey(KeySignature key) {
+    _begin();
+    final start = cursor.bar;
+    final old = _score.masterBars[start].key;
+    for (var b = start; b < _score.masterBars.length; b++) {
+      final mb = _score.masterBars[b];
+      if (b > start && mb.key != old) break;
+      _score.masterBars[b] = mb.copyWith(key: key);
+    }
+    _done();
+  }
+
+  /// Tempo ab dem Takt am Cursor.
+  void setTempo(double bpm) {
+    _begin();
+    final bar = cursor.bar;
+    _score.tempos.removeWhere((t) => t.bar == bar && t.position == 0);
+    _score.tempos.add(TempoMark(bar: bar, bpm: bpm));
+    _score.tempos.sort((a, b) => a.bar.compareTo(b.bar));
+    _done();
+  }
+
+  double get tempoAtCursor {
+    double bpm = 120;
+    for (final t in _score.tempos) {
+      if (t.bar <= cursor.bar) bpm = t.bpm;
+    }
+    return bpm;
+  }
+
+  void toggleRepeatStart() {
+    _begin();
+    final mb = _score.masterBars[cursor.bar];
+    _score.masterBars[cursor.bar] = mb.copyWith(repeatStart: !mb.repeatStart);
+    _done();
+  }
+
+  /// Wiederholungsende: wie oft insgesamt gespielt wird (0 = keines).
+  void setRepeatEnd(int times) {
+    _begin();
+    final mb = _score.masterBars[cursor.bar];
+    _score.masterBars[cursor.bar] = mb.copyWith(repeatEnd: times < 2 ? 0 : times);
+    _done();
+  }
+
+  void toggleDoubleBar() {
+    _begin();
+    final mb = _score.masterBars[cursor.bar];
+    _score.masterBars[cursor.bar] = mb.copyWith(doubleBar: !mb.doubleBar);
+    _done();
+  }
+
+  /// Häuser (1., 2. …) für den Takt am Cursor; leer = keine.
+  void setEndings(Set<int> endings) {
+    _begin();
+    final mb = _score.masterBars[cursor.bar];
+    _score.masterBars[cursor.bar] = mb.copyWith(endings: endings);
+    _done();
+  }
+
+  /// Formteil (z. B. „Refrain“) ab dem Takt am Cursor; leer = entfernen.
+  void setSection(String label) {
+    _begin();
+    final mb = _score.masterBars[cursor.bar];
+    final l = label.trim();
+    _score.masterBars[cursor.bar] = l.isEmpty
+        ? mb.copyWith(clearSection: true)
+        : mb.copyWith(section: Section(text: l));
+    _done();
+  }
+
+  /// Titel, Untertitel und Interpret.
+  void setInfo({String? title, String? subtitle, String? artist}) {
+    _begin();
+    _score = _score.copyWith(
+      info: _score.info.copyWith(title: title, subtitle: subtitle, artist: artist),
+    );
+    _done();
+  }
+
+  // ───────────────────────── Transponieren ─────────────────────────
+
+  /// Das ganze Stück um [semitones] Halbtöne transponieren (Tonarten mit).
+  void transposeAll(int semitones) {
+    if (semitones == 0) return;
+    _begin();
+    for (var b = 0; b < _score.masterBars.length; b++) {
+      final mb = _score.masterBars[b];
+      var f = mb.key.fifths + 7 * semitones;
+      f = ((f + 6) % 12 + 12) % 12 - 6; // in −6 … +5
+      if (f == -6 && semitones > 0) f = 6;
+      _score.masterBars[b] = mb.copyWith(key: KeySignature(f, minor: mb.key.minor));
+    }
+    final saved = track;
+    for (var ti = 0; ti < _score.tracks.length; ti++) {
+      final t = _score.tracks[ti];
+      if (t.percussion) continue;
+      track = ti;
+      for (var b = 0; b < t.bars.length; b++) {
+        final fifths = _score.masterBars[b].key.fifths;
+        for (final v in t.bars[b].voices) {
+          for (var i = 0; i < v.beats.length; i++) {
+            final beat = v.beats[i];
+            if (beat.isRest) continue;
+            v.beats[i] = beat.copyWith(notes: [for (final n in beat.notes) _shiftSpelled(n, semitones, fifths)]);
+          }
+        }
+      }
+      // Akkordsymbole mit
+      for (final e in t.chords.entries.toList()) {
+        t.chords[e.key] = ChordDef(
+          name: transposeChordName(e.value.name, semitones, _score.masterBars.first.key.fifths),
+        );
+      }
+    }
+    track = saved;
+    _done();
+  }
+
+  Note _shiftSpelled(Note n, int semitones, int fifths) {
+    final concert = Pitch.fromMidi(n.pitch.midi + semitones, fifths: fifths);
+    final written = _writtenFor(concert, fifths);
+    var out = n.copyWith(pitch: concert, written: written, clearWritten: written == concert);
+    if (n.string != null && stringed) {
+      final place = _place(concert.midi, preferString: n.string);
+      out = place == null ? out : out.copyWith(string: place.$1, fret: place.$2);
+    }
+    return out;
+  }
+
+  /// Akkordname um [semitones] verschieben (Grundton und Bass), z. B. „D/F#“ → „E/G#“.
+  static String transposeChordName(String name, int semitones, int fifths) {
+    const sharps = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    const flats = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
+    String shift(String note) {
+      const base = {'C': 0, 'D': 2, 'E': 4, 'F': 5, 'G': 7, 'A': 9, 'B': 11, 'H': 11};
+      var pc = base[note[0]]!;
+      if (note.length > 1 && (note[1] == '#' || note[1] == '♯')) pc++;
+      if (note.length > 1 && (note[1] == 'b' || note[1] == '♭')) pc--;
+      pc = (pc + semitones) % 12;
+      if (pc < 0) pc += 12;
+      final out = (fifths < 0 ? flats : sharps)[pc];
+      return note[0] == 'H' && out == 'B' ? 'H' : out;
+    }
+
+    return name.replaceAllMapped(RegExp(r'(^|/)([A-H][#b♯♭]?)'), (m) => '${m[1]}${shift(m[2]!)}');
+  }
+
+  // ───────────────────────── Kopieren und Einfügen ─────────────────────────
+
+  /// Die ausgewählten Schläge (bzw. den Schlag am Cursor).
+  List<Beat> copy() => [for (final (bar, i) in _targets) beatsOf(bar)[i]];
+
+  /// Ausgewählte Schläge kopieren und zu Pausen machen.
+  List<Beat> cut() {
+    final c = copy();
+    toRest();
+    return c;
+  }
+
+  /// Schläge ab dem Cursor einsetzen (überschreibt; neue Takte am Ende nach Bedarf).
+  void paste(List<Beat> beats) {
+    if (beats.isEmpty) return;
+    _begin();
+    anchor = null;
+    var bar = cursor.bar;
+    var from = cursorOnset;
+    for (final b in beats) {
+      if (b.grace != GraceType.none) continue;
+      if (from >= barLength(bar)) {
+        bar++;
+        from = Fraction.zero;
+        if (bar >= _score.masterBars.length) _insertBarsRaw(bar, 1);
+      }
+      final d = _fit(b.duration, barLength(bar) - from);
+      _replace(bar, from, from + d.length, [b.copyWith(duration: d)]);
+      from = from + d.length;
+    }
+    cursor = cursor.copyWith(bar: bar);
+    // Cursor hinter das Eingefügte
+    setCursor(bar, from.toDouble() - 1e-6);
+    _done();
+  }
+
+  // ───────────────────────── Aufräumen ─────────────────────────
+
+  /// Bögen nachführen: Haltebogen-Anfang am Ton vor einem gebundenen Ton,
+  /// gebundene Töne mit derselben Tonhöhe, Ziel von Hammer-on/Pull-off.
+  void _normalize() {
+    final t = _track;
+    final last = <String, (int, int, int)>{}; // Saite/Ton → (Takt, Schlag, Note)
+    Beat? prevBeat;
+    int? prevBar, prevIdx;
+    for (var bar = 0; bar < t.bars.length && bar < _score.masterBars.length; bar++) {
+      if (t.bars[bar].voices.isEmpty) {
+        prevBeat = null;
+        continue;
+      }
+      final beats = t.bars[bar].voices.first.beats;
+      for (var i = 0; i < beats.length; i++) {
+        final b = beats[i];
+        if (b.grace != GraceType.none) continue;
+        var notes = b.notes;
+        var changed = false;
+        final prevNotes = prevBeat?.notes ?? const <Note>[];
+        String key(Note n) => n.string != null ? 's${n.string}' : 'p${n.pitch.midi}';
+        final newNotes = <Note>[];
+        for (final n in notes) {
+          var m = n;
+          final p =
+              prevNotes.where((x) => key(x) == key(n)).firstOrNull ??
+              (n.tieDestination ? prevNotes.where((x) => x.pitch.midi == n.pitch.midi).firstOrNull : null);
+          if (n.tieDestination && p != null) {
+            if (m.pitch != p.pitch || m.fret != p.fret || m.written != p.written) {
+              m = m.copyWith(pitch: p.pitch, written: p.written, clearWritten: p.written == null, fret: p.fret);
+            }
+          } else if (n.tieDestination && p == null) {
+            m = m.copyWith(tieDestination: false);
+          }
+          final shouldHammerTo = p != null && p.hammerOrigin && !n.tieDestination;
+          if (m.hammerDestination != shouldHammerTo) m = m.copyWith(hammerDestination: shouldHammerTo);
+          if (!identical(m, n)) changed = true;
+          newNotes.add(m);
+        }
+        if (changed) {
+          notes = newNotes;
+          beats[i] = b.copyWith(notes: notes);
+        }
+        // Haltebogen-Anfang am vorigen Schlag nachführen
+        if (prevBeat != null && prevBar != null && prevIdx != null) {
+          final pb = t.bars[prevBar].voices.first.beats;
+          final pv = pb[prevIdx];
+          var pChanged = false;
+          final fixed = <Note>[
+            for (final x in pv.notes)
+              () {
+                final tied = notes.any((n) => n.tieDestination && key(n) == key(x));
+                if (x.tieOrigin != tied) {
+                  pChanged = true;
+                  return x.copyWith(tieOrigin: tied);
+                }
+                return x;
+              }(),
+          ];
+          if (pChanged) pb[prevIdx] = pv.copyWith(notes: fixed);
+        }
+        prevBeat = beats[i];
+        prevBar = bar;
+        prevIdx = i;
+      }
+    }
+    last.clear();
+  }
+
+  // ───────────────────────── Neues Stück ─────────────────────────
+
+  /// Leeres Stück: [kind] bestimmt Instrument und Ansicht.
+  static Score newScore({
+    String title = '',
+    String artist = '',
+    NewPieceKind kind = NewPieceKind.guitarTab,
+    TimeSignature time = const TimeSignature(4, 4),
+    KeySignature key = const KeySignature(0),
+    double tempo = 100,
+    int bars = 16,
+  }) {
+    final n = math.max(1, bars);
+    final (name, tuning, clef, transpose, program) = switch (kind) {
+      NewPieceKind.guitarTab ||
+      NewPieceKind.guitarNotation => ('Gitarre', const [40, 45, 50, 55, 59, 64], Clef.treble8vb, 12, 25),
+      NewPieceKind.bass => ('Bass', const [28, 33, 38, 43], Clef.bass, 12, 33),
+      NewPieceKind.leadSheet => ('Melodie', const <int>[], Clef.treble, 0, 0),
+    };
+    final staff = StaffDef(tuning: tuning, showTab: kind != NewPieceKind.guitarNotation && tuning.isNotEmpty);
+    return Score(
+      info: ScoreInfo(title: title, artist: artist),
+      tempos: [TempoMark(bar: 0, bpm: tempo)],
+      masterBars: [for (var i = 0; i < n; i++) MasterBar(time: time, key: key)],
+      tracks: [
+        Track(
+          name: name,
+          staff: staff,
+          program: program,
+          transposeSemitones: transpose,
+          bars: [
+            for (var i = 0; i < n; i++) Bar(clef: clef, voices: [Voice(_rests(time.length))]),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// Art eines neuen Stücks.
+enum NewPieceKind { guitarTab, guitarNotation, bass, leadSheet }

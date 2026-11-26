@@ -3,12 +3,14 @@ import 'dart:io';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:scrivi_core/scrivi_core.dart' as core;
 
 import '../../app/l10n.dart';
 import '../../app/theme.dart';
 import '../../core/library/library_controller.dart';
 import '../../core/library/thumbnails.dart';
 import '../../widgets/visuals.dart';
+import '../score/edit_tools.dart';
 import '../score/score_screen.dart';
 
 /// Macht Bibliothek und Vorschaubilder überall erreichbar.
@@ -108,8 +110,30 @@ class _LibraryScreenState extends State<LibraryScreen> {
     }
   }
 
-  void _open(Piece piece) {
-    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => ScoreScreen(piece: piece)));
+  void _open(Piece piece, {bool edit = false}) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ScoreScreen(piece: piece, startEditing: edit),
+      ),
+    );
+  }
+
+  /// Neues, leeres Stück anlegen und gleich zum Schreiben öffnen.
+  Future<void> _newPiece() async {
+    final lib = LibraryScope.of(context).library;
+    final s = await askNewPiece(context);
+    if (s == null || !mounted) return;
+    final score = core.ScoreEditor.newScore(
+      title: s.title,
+      artist: s.artist,
+      kind: s.kind,
+      time: s.time,
+      key: s.key,
+      tempo: s.tempo,
+      bars: s.bars,
+    );
+    final piece = await lib.create(score);
+    if (mounted) _open(piece, edit: true);
   }
 
   Future<void> _delete(Piece piece) async {
@@ -175,6 +199,12 @@ class _LibraryScreenState extends State<LibraryScreen> {
       label: Text(tr('Importieren', 'Import')),
     );
 
+    final newButton = OutlinedButton.icon(
+      onPressed: _newPiece,
+      icon: const Icon(Icons.add),
+      label: Text(tr('Neues Stück', 'New piece')),
+    );
+
     Widget body;
     if (lib.loading) {
       body = const Center(child: CircularProgressIndicator());
@@ -197,6 +227,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
           alignment: WrapAlignment.center,
           children: [
             importButton,
+            newButton,
             if (_desktop)
               OutlinedButton.icon(
                 onPressed: _busy ? null : _importFolder,
@@ -264,6 +295,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 onPressed: _busy ? null : _importFolder,
                 icon: const Icon(Icons.folder_open_outlined),
               ),
+            IconButton(tooltip: tr('Neues Stück', 'New piece'), onPressed: _newPiece, icon: const Icon(Icons.add)),
             const SizedBox(width: 4),
             importButton,
             const SizedBox(width: 12),

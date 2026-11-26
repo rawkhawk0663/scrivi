@@ -25,7 +25,11 @@ Scrivi is available in **German and English**. It needs **no account**, collects
 - **Viewing:** scroll with the mouse wheel, swipes, Page Up/Down, arrow keys or a pedal. Zoom with two fingers, Ctrl + mouse wheel or the buttons at the top. If a file has several tracks, choose the track at the top.
 - **Playback:** the bar at the bottom plays the piece, with all repeats, endings and jumps (D.C., D.S., coda, fine). A coloured marker follows along and the pages turn by themselves. Tap a bar to jump there; the space bar starts and stops. Also: tempo (25 to 200 %, pitch stays the same), count-in, metronome, a loop over any bars and a mixer (volume, mute, solo per track). Scrivi makes the sounds itself, without sound files: guitar (also overdriven), bass, piano, strings, brass and drums, with bends, slides, vibrato, palm mute and harmonics.
 
-Not yet: writing, several instruments at once (full score). These come in the next stages.
+- **Writing:** *New piece* in the library (guitar with tab, notation only, bass or lead sheet), or edit an existing piece with the pen button. A small toolbar always floats next to the note you are working on: note values, dot, triplet, rest, tie, semitone up/down, playing techniques (hammer-on/pull-off, slide, bend, palm mute, vibrato …), chord symbol, text, lyrics and fret numbers to tap. With the pen you tap notes straight onto the staff. Under *…* you insert or delete bars, change time signature, key and tempo, set repeats, sections and double bar lines, copy and paste, change title and artist, or transpose the whole piece. Undo and redo at the top.
+- **Keyboard while writing:** type a fret number (two digits quickly for 10–24), ↑/↓ changes the string, ←/→ moves from note to note (a new bar is added at the end), A–G or H places a note (with Shift added to the chord), + / − shorter/longer, full stop for a dot, T triplet, L tie, K chord, Y lyrics, Del rest, Shift + ↑/↓ semitone, Ctrl + Z/Y, Ctrl + C/X/V.
+- **Saving:** Scrivi saves by itself shortly after every change, in its own `.scrivi` format. If you edit an imported file (e.g. Guitar Pro), the original is kept in the library’s “Originale” folder.
+
+Not yet: several instruments at once (full score), PDF export. These come in the next stages. These come in the next stages.
 
 ## What Scrivi is meant to do
 

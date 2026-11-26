@@ -1,6 +1,6 @@
 # Scrivi – Bauplan
 
-Stand: 26. November 2026 · Name: **Scrivi** (ital. „schreib!“) · Etappen 0 bis 4 fertig
+Stand: 26. November 2026 · Name: **Scrivi** (ital. „schreib!“) · Etappen 0 bis 5 fertig
 
 Scrivi ist ein Notenschreibprogramm für Noten, Tabulatur und Partituren. Es läuft mit Flutter
 auf Windows und Android, später vielleicht auch auf macOS und iPadOS. Es gehört zur gleichen
@@ -196,7 +196,7 @@ Jede Etappe endet mit einem Release, das man ausprobieren kann.
 | 2 | **Weitere Formate einlesen** ✅ | ältere Guitar-Pro-Dateien (`.gpx`, `.gp5/4/3`), MusicXML (für die Partitur-Dateien), MIDI | alle alten Dateien lassen sich öffnen | M–L |
 | 3 | **Tabulatur vollständig** ✅ | alle Spieltechniken in Noten und Tab (Bending-Kurven, Vibrato, Flageolett, Tapping …), alle Stimmungen, Kapo, Rhythmus in der Tab, 7- und 8-saitige Gitarre, Bass | Gitarrenstücke mit allen Spieltechniken sehen vollständig aus | L |
 | 4 | **Abspielen** ✅ | Abspiel-Liste, Gitarrenklang, Tempo, Schleife, Einzähler, Metronom, mitlaufende Markierung, Mischpult; danach SoundFont-Klänge | ein Stück klingt richtig, auch mit Wiederholungen, Bends und Slides | M–L |
-| 5 | **Schreiben** | Cursor, Eingabe über Tastatur, Stift und Griffbrett, Auswahl, Kopieren, Rückgängig, Transponieren, Takte einfügen und löschen, Akkordsymbole, Liedtext, Titel | ein Leadsheet und eine Tab lassen sich vollständig in Scrivi schreiben | L |
+| 5 | **Schreiben** ✅ | Cursor, Eingabe über Tastatur, Stift und Griffbrett, Auswahl, Kopieren, Rückgängig, Transponieren, Takte einfügen und löschen, Akkordsymbole, Liedtext, Titel | ein Leadsheet und eine Tab lassen sich vollständig in Scrivi schreiben | L |
 | 6 | **Ausgeben** | PDF, PNG/SVG, MusicXML, MIDI, Tonspur (WAV), „An Volti senden“, Drucken | ein PDF ist bereit für Schüler und Band | M |
 | 7 | **Partitur** | Mehrere Instrumente, Klammern, Stimmen-Auszüge, Transposition, mehrere Stimmen pro System, Dynamik, Bögen, n-tolen, Vorschläge, Schlagzeug | ein Band-Arrangement mit Auszügen ist druckreif | XL |
 | 8 | **Feinschliff Notensatz** | Kollisionen vermeiden, Abstände von Hand, Stilvorlagen, Schriften (Petaluma), Umbrüche, Kopf- und Fusszeilen | Ergebnis braucht kaum Handarbeit | L |
@@ -291,6 +291,28 @@ Bewusst offen:
 - Ein anderes Tempo rechnet die Tonspuren neu (ein paar Sekunden Warten).
 - Gehört habe ich (Claude) den Klang nicht selbst, nur gemessen: Rückmeldung zum Klang erwünscht.
 - Mehrere Spuren mit Wiederholungen nur mit Testdaten geprüft.
+
+### Stand nach Etappe 5 (26. November 2026)
+
+Fertig: eigenes Format `.scrivi` (lesbarer Text, Lesen und Schreiben, Rundlauf-Tests). Bearbeiten im
+Kern (`ScoreEditor`): Überschreib-Eingabe, bei der jeder Takt voll bleibt (Pausen füllen zuerst bis
+zum nächsten Schlag auf), Bundzahl oder Notenname, Stift ins Notensystem, Akkorde aus mehreren
+Saiten, Notenwerte, Punkt, Triole, Pause, Haltebogen, Halbton, Spieltechniken, Fermate,
+Akkordsymbol, Text, Liedtext, Takte einfügen/löschen, Taktart, Tonart, Tempo, Wiederholungen,
+Formteil, Doppelstrich, Titel, Transponieren (mit Bünden, Tonart und Akkordsymbolen), Kopieren,
+Ausschneiden, Einfügen, Rückgängig/Wiederholen. Gitarre: Saite und Bund werden bequem gewählt
+(nahe beim vorigen Ton bzw. bis Bund 12). In der App: Bearbeiten-Knopf, **Werkzeugleiste, die beim
+Cursor schwebt** (Wunsch des Besitzers), Tastatur, Antippen setzt Cursor (Takt, Schlag, Saite),
+„Neues Stück“, automatisches Speichern (Original importierter Dateien bleibt in „Originale“),
+Wiedergabe folgt den Änderungen.
+
+Bewusst offen:
+- Geschrieben wird nur in Stimme 1 einer Spur; zweite Stimmen und Schlagzeug-Eingabe → Etappe 7.
+- Nach jeder Änderung wird das ganze Stück neu gesetzt. Bei langen Stücken auf dem Surface messen;
+  falls zu langsam: nur die betroffenen Zeilen neu setzen.
+- Vorschlagsnoten, Dynamik, Gabeln, Häuser und D.C./D.S. lassen sich noch nicht schreiben (nur lesen).
+- Griffbrett zum Antippen (aus Suona) fehlt noch; die Bundzahlen-Tasten in der Werkzeugleiste
+  ersetzen es vorerst.
 
 ## 9. Entscheidungen (26. November 2026)
 

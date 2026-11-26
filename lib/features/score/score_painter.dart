@@ -59,7 +59,17 @@ class PagePictures {
 
   static final _glyphPaths = <String, Path>{};
 
-  static Path glyphPath(String name) => _glyphPaths.putIfAbsent(name, () => _toPath(core.Glyphs.get(name).path));
+  /// Notenzeichen werden 64-fach vergrössert als Pfad abgelegt und beim Zeichnen
+  /// wieder verkleinert: In den winzigen Einheiten (Linienabstände) liess die
+  /// Grafik sonst sehr dünne Teile weg, z. B. den Hals der Tempo-Note.
+  static const glyphUnit = 64.0;
+
+  static Path glyphPath(String name) => _glyphPaths.putIfAbsent(
+    name,
+    () =>
+        _toPath(core.Glyphs.get(name).path)
+            .transform((Matrix4.identity()..scaleByDouble(glyphUnit, glyphUnit, 1, 1)).storage),
+  );
 
   static Path _toPath(List<double> c) {
     final path = Path();
@@ -103,7 +113,7 @@ class PagePictures {
         case core.GlyphItem g:
           canvas.save();
           canvas.translate(g.x, g.y);
-          canvas.scale(g.scale, -g.scale);
+          canvas.scale(g.scale / glyphUnit, -g.scale / glyphUnit);
           canvas.drawPath(glyphPath(g.name), ink);
           canvas.restore();
         case core.LineItem l:

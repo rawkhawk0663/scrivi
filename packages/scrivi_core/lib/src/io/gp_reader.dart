@@ -1,3 +1,5 @@
+import 'scrivi_format.dart';
+
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -61,6 +63,7 @@ class GpReader {
         throw ScoreFileException(ScoreFileProblem.damaged, 'gpx: $e');
       }
     }
+    if (ScriviFormat.looksLike(bytes)) return ScriviFormat.decode(bytes);
     if (GpBinaryReader.looksLike(bytes)) return GpBinaryReader.read(bytes);
     if (MidiReader.looksLike(bytes)) return MidiReader.read(bytes);
     final head = String.fromCharCodes(bytes.take(2000));

@@ -25,7 +25,11 @@ Scrivi gibt es auf **Deutsch und Englisch**. Es braucht **kein Konto**, sammelt 
 - **Ansehen:** blättern mit Mausrad, Wischen, Bild auf/ab, Pfeiltasten oder Pedal. Zoomen mit zwei Fingern, Strg + Mausrad oder den Knöpfen oben. Hat eine Datei mehrere Spuren, wählst du oben die Spur.
 - **Abspielen:** Die Leiste unten spielt das Stück ab, mit allen Wiederholungen, Häusern und Sprüngen (D.C., D.S., Coda, Fine). Eine farbige Markierung läuft mit, die Seiten blättern von selbst. Einen Takt antippen springt dorthin, die Leertaste startet und hält an. Dazu: Tempo (25 bis 200 %, die Tonhöhe bleibt), Einzähler, Metronom, Schleife über beliebige Takte und ein Mischpult (Lautstärke, stumm, solo pro Spur). Die Klänge rechnet Scrivi selbst, ohne Klangdateien: Gitarre (auch verzerrt), Bass, Klavier, Streicher, Bläser und Schlagzeug, mit Bendings, Slides, Vibrato, Palm Mute und Flageoletts.
 
-Noch nicht: Schreiben, mehrere Instrumente gleichzeitig (Partitur). Das kommt in den nächsten Etappen.
+- **Schreiben:** *Neues Stück* in der Bibliothek (Gitarre mit Tab, nur Noten, Bass oder Leadsheet) oder ein vorhandenes Stück mit dem Stift-Knopf bearbeiten. Eine kleine Werkzeugleiste schwebt immer bei der Note, an der du arbeitest: Notenwerte, Punkt, Triole, Pause, Haltebogen, Halbton höher/tiefer, Spieltechniken (Hammer-on/Pull-off, Slide, Bending, Palm Mute, Vibrato …), Akkordsymbol, Text, Liedtext und Bundzahlen zum Antippen. Mit dem Stift tippst du Noten direkt ins Notensystem. Über *…* fügst du Takte ein oder löschst sie, änderst Taktart, Tonart und Tempo, setzt Wiederholungen, Formteile und Doppelstriche, kopierst und fügst ein, änderst Titel und Interpret oder transponierst das ganze Stück. Rückgängig und Wiederholen oben.
+- **Tastatur beim Schreiben:** Bundzahl tippen (zwei Ziffern schnell nacheinander für 10–24), ↑/↓ wechselt die Saite, ←/→ geht von Note zu Note (am Ende kommt ein neuer Takt dazu), A–G bzw. H setzt eine Note (mit Umschalt zum Akkord dazu), + / − kürzer/länger, Punkt, T Triole, L Haltebogen, K Akkord, Y Liedtext, Entf Pause, Umschalt + ↑/↓ Halbton, Strg + Z/Y, Strg + C/X/V.
+- **Speichern:** Scrivi speichert von selbst, kurz nach jeder Änderung, im eigenen Format `.scrivi`. Bearbeitest du eine importierte Datei (z. B. Guitar Pro), bleibt das Original im Ordner „Originale“ der Bibliothek erhalten.
+
+Noch nicht: mehrere Instrumente gleichzeitig (Partitur), Ausgabe als PDF. Das kommt in den nächsten Etappen. Das kommt in den nächsten Etappen.
 
 ## Was Scrivi können soll
 

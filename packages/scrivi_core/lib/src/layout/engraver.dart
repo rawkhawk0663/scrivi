@@ -698,7 +698,8 @@ class Engraver {
     var firstOnPage = true;
     for (var si = 0; si < systems.length; si++) {
       final s = systems[si];
-      final out = _SystemBuilder(this, s, si, systems).build(prevKey);
+      final sb = _SystemBuilder(this, s, si, systems);
+      final out = sb.build(prevKey);
       prevKey = s.measures.last.mb.key;
       final height = out.bottom - out.top;
       var top = firstOnPage ? y : y + options.systemGap;
@@ -719,6 +720,11 @@ class Engraver {
           bottom: top + height,
           firstBar: s.measures.first.index,
           lastBar: s.measures.last.index,
+          staffTop: _tabOnly ? null : top - out.top,
+          topDiatonic: _topDiatonic(s.measures.first.bar.clef),
+          tabTop: _tab ? sb._tabTop + top - out.top : null,
+          tabSpacing: options.tabLineSpacing,
+          strings: _tab ? _track.staff.stringCount : 0,
           bars: [
             for (var j = 0; j < s.measures.length; j++)
               BarSpan(
@@ -1871,6 +1877,9 @@ class _SystemBuilder {
           _ => 'metNoteQuarterUp',
         };
         glyph(name, x, y, scale: 0.8);
+        // Hals zusätzlich als Linie: im Zeichen ist er so dünn, dass er am
+        // Bildschirm verschwinden kann.
+        line(x + 1.268 * 0.8, y - 0.3, x + 1.268 * 0.8, y - 2.7 * 0.8, _stemT);
         var tx = x + Glyphs.get(name).right * 0.8 + 0.15;
         if (t.dotted) {
           glyph('metAugmentationDot', tx, y, scale: 0.8);

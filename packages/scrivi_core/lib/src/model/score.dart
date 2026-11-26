@@ -18,6 +18,9 @@ class Score {
 
   /// Tempo am Anfang (Viertel pro Minute), falls angegeben.
   TempoMark? get initialTempo => tempos.isEmpty ? null : tempos.first;
+
+  Score copyWith({ScoreInfo? info}) =>
+      Score(info: info ?? this.info, masterBars: masterBars, tracks: tracks, tempos: tempos);
 }
 
 class ScoreInfo {
@@ -42,6 +45,18 @@ class ScoreInfo {
   final String copyright;
   final String tabber;
   final String instructions;
+
+  ScoreInfo copyWith({String? title, String? subtitle, String? artist, String? words, String? music}) => ScoreInfo(
+    title: title ?? this.title,
+    subtitle: subtitle ?? this.subtitle,
+    artist: artist ?? this.artist,
+    album: album,
+    words: words ?? this.words,
+    music: music ?? this.music,
+    copyright: copyright,
+    tabber: tabber,
+    instructions: instructions,
+  );
 }
 
 /// Tempo: [bpm] Schläge pro Minute, ein Schlag ist [unit] lang (punktiert bei [dotted]).
@@ -167,6 +182,28 @@ class MasterBar {
   final Set<Direction> directions;
 
   bool get hasRepeatEnd => repeatEnd > 0;
+
+  MasterBar copyWith({
+    TimeSignature? time,
+    KeySignature? key,
+    bool? repeatStart,
+    int? repeatEnd,
+    Set<int>? endings,
+    Section? section,
+    bool clearSection = false,
+    bool? doubleBar,
+    Set<Direction>? directions,
+  }) => MasterBar(
+    time: time ?? this.time,
+    key: key ?? this.key,
+    repeatStart: repeatStart ?? this.repeatStart,
+    repeatEnd: repeatEnd ?? this.repeatEnd,
+    endings: endings ?? {...this.endings},
+    section: clearSection ? null : (section ?? this.section),
+    doubleBar: doubleBar ?? this.doubleBar,
+    freeTime: freeTime,
+    directions: directions ?? {...this.directions},
+  );
 }
 
 /// Ein Instrument (eine Spur) mit seinen Takten.
@@ -386,6 +423,40 @@ class Beat {
   final int tremolo;
 
   bool get isRest => notes.isEmpty;
+
+  /// Kopie mit Änderungen. Für null-fähige Felder: [clearChord], [clearText], [clearDynamic].
+  Beat copyWith({
+    NoteDuration? duration,
+    List<Note>? notes,
+    bool? slashed,
+    int? chordId,
+    bool clearChord = false,
+    String? text,
+    bool clearText = false,
+    Dynamic? dynamic,
+    bool clearDynamic = false,
+    Hairpin? hairpin,
+    List<String>? lyrics,
+    GraceType? grace,
+    bool? fermata,
+    int? pickStroke,
+    bool? letRingText,
+    int? tremolo,
+  }) => Beat(
+    duration: duration ?? this.duration,
+    notes: notes ?? [...this.notes],
+    slashed: slashed ?? this.slashed,
+    chordId: clearChord ? null : (chordId ?? this.chordId),
+    text: clearText ? null : (text ?? this.text),
+    dynamic: clearDynamic ? null : (dynamic ?? this.dynamic),
+    hairpin: hairpin ?? this.hairpin,
+    lyrics: lyrics ?? [...this.lyrics],
+    grace: grace ?? this.grace,
+    fermata: fermata ?? this.fermata,
+    pickStroke: pickStroke ?? this.pickStroke,
+    letRingText: letRingText ?? this.letRingText,
+    tremolo: tremolo ?? this.tremolo,
+  );
 }
 
 /// Ein Ton im Schlag, mit Saite und Bund und den Spieltechniken.
@@ -446,6 +517,49 @@ class Note {
   final bool tapped;
 
   Pitch get shown => written ?? pitch;
+
+  /// Kopie mit Änderungen. [clearBend] entfernt das Saitenziehen.
+  Note copyWith({
+    Pitch? pitch,
+    Pitch? written,
+    bool clearWritten = false,
+    int? string,
+    int? fret,
+    bool? tieOrigin,
+    bool? tieDestination,
+    bool? palmMuted,
+    bool? dead,
+    bool? ghost,
+    bool? letRing,
+    int? slide,
+    bool? hammerOrigin,
+    bool? hammerDestination,
+    Bend? bend,
+    bool clearBend = false,
+    int? accent,
+    bool? vibrato,
+    bool? harmonic,
+    bool? tapped,
+  }) => Note(
+    pitch: pitch ?? this.pitch,
+    written: clearWritten ? null : (written ?? this.written),
+    string: string ?? this.string,
+    fret: fret ?? this.fret,
+    tieOrigin: tieOrigin ?? this.tieOrigin,
+    tieDestination: tieDestination ?? this.tieDestination,
+    palmMuted: palmMuted ?? this.palmMuted,
+    dead: dead ?? this.dead,
+    ghost: ghost ?? this.ghost,
+    letRing: letRing ?? this.letRing,
+    slide: slide ?? this.slide,
+    hammerOrigin: hammerOrigin ?? this.hammerOrigin,
+    hammerDestination: hammerDestination ?? this.hammerDestination,
+    bend: clearBend ? null : (bend ?? this.bend),
+    accent: accent ?? this.accent,
+    vibrato: vibrato ?? this.vibrato,
+    harmonic: harmonic ?? this.harmonic,
+    tapped: tapped ?? this.tapped,
+  );
 }
 
 /// Saitenziehen: Punkte mit Stelle (0..1 der Notenlänge) und Höhe in Halbtönen.

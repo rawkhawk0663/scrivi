@@ -27,11 +27,12 @@ Der Plan mit allen Etappen steht in **`BAUPLAN.md`**. Nach jeder Etappe dort den
 packages/scrivi_core/   Herz von Scrivi, reines Dart ohne Flutter (eigene Tests: dart test)
   model/      Fraction (genaue Notenlängen), Pitch (mit Schreibweise), Score/MasterBar/Track/Bar/Voice/Beat/Note,
               ChordLibrary (eingebaute Griffbilder)
-  io/         GpReader.read: erkennt das Format und liest .gp (ZIP mit score.gpif), .gpx (GpxContainer:
+  io/         ScriviFormat (eigenes Format .scrivi, JSON), GpReader.read: erkennt das Format und liest .gp (ZIP mit score.gpif), .gpx (GpxContainer:
               BCFZ entpacken, BCFS-Dateisystem), .gp3/.gp4/.gp5 (GpBinaryReader), MusicXML
               (MusicXmlReader, auch .mxl und „timewise“), MIDI (MidiReader)
   layout/     Engraver (Notensatz → Seiten), shapes (Bögen, Balken, Gabeln)
   render/     Zeichenliste (DisplayItem), Glyphs (Bravura-Umrisse, erzeugt), SVG-Ausgabe
+  edit/       ScoreEditor (Cursor, Eingabe, Takte, Transponieren, Rückgängig)
   playback/   PlaybackPlan (Abspiel-Reihenfolge, Zeiten, Töne mit Effekten, Metronom),
               Synth (Klangerzeugung ohne Klangdateien, WAV)
 lib/
@@ -42,7 +43,8 @@ lib/
     shell/    Rahmen: Leiste links (breit) bzw. unten (schmal), ein Navigator pro Bereich
     library/  Bibliothek (Raster mit Vorschau, Suche, Import, Ziehen und Ablegen)
     score/    Notenansicht (Seiten, Zoom, Blättern, Spurwahl), score_painter (Zeichenliste → Bild),
-              score_player (Abspielen), transport_bar (Leiste unten)
+              score_player (Abspielen), transport_bar (Leiste unten),
+              edit_tools (Werkzeugleiste beim Cursor, Dialoge zum Schreiben)
     settings/ Einstellungen, Über Scrivi, Updates
   widgets/    gemeinsame Bausteine (ScriviMark, SectionCard, EmptyState …)
 tool/         make_icon.py (Symbol), make_glyphs.py (Notenzeichen aus Bravura)
@@ -60,6 +62,12 @@ tool/         make_icon.py (Symbol), make_glyphs.py (Notenzeichen aus Bravura)
 - **Ansichten** (`LayoutOptions.showTab`/`showNotation`): ohne Notenzeile steht die Tab bei y = 0, der Rhythmus der Hauptstimme darunter (`_buildTabOnly`, `_tabRhythm`); ohne Saiten immer Noten. Die Wahl steht in `einstellungen.json` (`ansicht`).
 - **Griffbilder** oben auf Seite 1 (`_drawDiagrams`): aus der Datei, wenn mindestens drei Saiten belegt sind; sonst `ChordLibrary` (nur sechs Saiten in Normalstimmung und ohne Kapo). Barré in GP-Dateien: gleicher Finger auf gleichem Bund über mindestens vier Saiten.
 - **Saitennamen** nur bei besonderen Stimmungen (Liste `_standardTunings`), mit ♭ wenn die Stimmung E♭/A♭/B♭ enthält; deutsche Namen (H, B) über `LayoutOptions.germanNoteNames` nach der App-Sprache.
+
+## Schreiben
+- **Format `.scrivi`:** JSON `{"format":"scrivi","version":1,…}` mit dem ganzen Modell; Grundwerte werden weggelassen, unbekannte Felder beim Lesen übergangen. Schlüssel nie übersetzen. Erkannt über `ScriviFormat.looksLike` in `GpReader.read`.
+- **`ScoreEditor`** (Kern): Cursor = Takt, Schlag in Stimme 1, Saite. Überschreib-Eingabe: ein Ton ersetzt die Zeit, die er braucht; was übrig bleibt, wird Pause (`_restsAt`: zuerst bis zum nächsten Schlag). Jede Änderung: `_begin()` (Schnappschuss als JSON für Rückgängig) … `_done()` (`_normalize` führt Haltebögen und Hammer-on-Ziele nach). Klingend/geschrieben über `Track.transposeSemitones`. Saite und Bund: `_place` (bequem: nahe beim vorigen Bund bzw. bis Bund 12).
+- **App:** `ScoreScreen` hält den Editor; nach einer Änderung neu setzen, Wiedergabe nachführen (`ScorePlayer.updateScore`), nach 0,8 s speichern (`LibraryController.save`: Zwischendatei, dann umbenennen; nicht-`.scrivi` → neue `.scrivi`, Original nach `Bibliothek/Originale/`). Die Werkzeugleiste (`EditPalette`) liegt im Seiten-Viewer bei `_cursorRect()`. Antippen → `_hitAt` (Takt, Stelle, Saite über `SystemBox.stringAt`, Stammton über `diatonicAt`).
+- Neue Icons: Der lokale Linux-Bau kann ein altes, gekürztes Icon-Schriftbild behalten (`build/flutter_assets`); bei fehlenden Icons `build/` löschen. Auf GitHub wird immer frisch gebaut.
 
 ## Abspielen
 - `PlaybackPlan.build(score, tempoFactor:)` rollt Wiederholungen, Häuser und Sprünge aus (nach einem D.C./D.S. keine Wiederholungen mehr, vom Haus das letzte) und liefert Takte mit Zeiten, Töne pro Spur und Metronom-Klicks. `locate(sekunden)` → (Takt, Stelle in ganzen Noten).
@@ -80,7 +88,7 @@ tool/         make_icon.py (Symbol), make_glyphs.py (Notenzeichen aus Bravura)
 ## Bibliothek
 - `<ApplicationSupport>/Bibliothek/Stücke/` enthält Kopien der importierten Dateien (alle lesbaren Formate, Endung bleibt; fehlt sie, wird sie aus dem Inhalt bestimmt), `Bibliothek/Papierkorb/` Gelöschtes, `Bibliothek/.scrivi/index.json` (Format `scrivi-library` v1: Titel, Interpret, Takte, Grösse, Änderungszeit pro Datei) und `.scrivi/vorschau/` (Vorschaubilder, Name mit Grösse, Änderungszeit und `Thumbnails.style`; diese Zahl erhöhen, wenn sich der Notensatz sichtbar ändert).
 - Import prüft jede Datei (im Hintergrund) und erkennt Doppelte (gleicher Inhalt).
-- Das eigene Format `.scrivi` kommt mit dem Schreiben (Etappe 5).
+- `Bibliothek/Originale/`: Originale bearbeiteter Dateien (nicht in der Liste, nie gelöscht). Neue Stücke und bearbeitete Stücke sind `.scrivi`.
 
 ## Grundsätze
 1. **Kein Konto, keine Daten sammeln, keine Werbung, funktioniert ohne Internet.** Internet nur für Updates und (später) den eigenen Dropbox-Abgleich.
