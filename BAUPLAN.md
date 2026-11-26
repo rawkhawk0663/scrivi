@@ -1,6 +1,6 @@
 # Scrivi – Bauplan
 
-Stand: 26. November 2026 · Arbeitsname „Scrivi“ (ital. „schreib!“)
+Stand: 26. November 2026 · Name: **Scrivi** (ital. „schreib!“) · Etappe 0 fertig
 
 Scrivi ist ein Notenschreibprogramm für Noten, Tabulatur und Partituren. Es läuft mit Flutter
 auf Windows und Android, später vielleicht auch auf macOS und iPadOS. Es gehört zur gleichen
@@ -188,10 +188,10 @@ Jede Etappe endet mit einem Release, das man ausprobieren kann.
 
 | # | Etappe | Inhalt | Fertig, wenn … | Grösse |
 |---|---|---|---|---|
-| 0 | **Grundgerüst** | Flutter-Projekt, Theme, l10n, Fensterknöpfe, Updater, Fehlerprotokoll, Bau über GitHub Actions, README, CLAUDE.md, Lizenz | Scrivi startet auf Surface und Android und aktualisiert sich selbst | S |
-| 1 | **Noten zeigen** | Modell, Notensatz für ein System: Schlüssel, Tonart, Taktart, Noten und Pausen, Punkte, Vorzeichen, Hälse, Balken, Haltebögen, Taktstriche, Wiederholungen; Zeilen- und Seitenumbruch; Seiten- und Endlos-Ansicht | ein Stück aus Testdaten sieht sauber gesetzt aus | L |
-| 2 | **Einlesen** | MusicXML (Noten, Akkorde, Text), Guitar-Pro-Dateien `.gp`, `.gpx`, `.gp5/4/3`, MIDI. Bibliothek mit Import und Vorschaubildern | eigene echte Stücke lassen sich öffnen und lesen. Ab hier sind sie unser Testmaterial | L |
-| 3 | **Tabulatur** | Tab-System gekoppelt an Noten, Stimmungen, Kapo, Spieltechniken, Rhythmus in der Tab, Griffbilder, Slash-Notation | Gitarrenstücke aus Guitar Pro sehen vollständig aus | L |
+| 0 | **Grundgerüst** ✅ | Flutter-Projekt, Theme, l10n, Fensterknöpfe, Updater, Fehlerprotokoll, Bau über GitHub Actions, README, CLAUDE.md, Lizenz | Scrivi startet auf Surface und Android und aktualisiert sich selbst | S |
+| 1 | **Guitar-Pro-Dateien öffnen und zeigen** | Notenmodell; Einlesen von `.gp` (das Format der eigenen Dateien); Bibliothek mit Import und Vorschaubildern; Notensatz für ein Instrument: Schlüssel, Tonart, Taktart, Noten und Pausen, Punkte, Vorzeichen, Hälse, Balken, Haltebögen, Taktstriche, Wiederholungen, Häuser, Formteile, Akkordsymbole; Tabulatur darunter; Zeilen- und Seitenumbruch | die eigenen Stücke sehen in Scrivi sauber gesetzt aus | L |
+| 2 | **Weitere Formate einlesen** | ältere Guitar-Pro-Dateien (`.gpx`, `.gp5/4/3`), MusicXML (für die Partitur-Dateien), MIDI | alle alten Dateien lassen sich öffnen | M–L |
+| 3 | **Tabulatur vollständig** | alle Spieltechniken in Noten und Tab (Bending-Kurven, Vibrato, Flageolett, Tapping …), alle Stimmungen, Kapo, Rhythmus in der Tab, 7- und 8-saitige Gitarre, Bass | Gitarrenstücke mit allen Spieltechniken sehen vollständig aus | L |
 | 4 | **Abspielen** | Abspiel-Liste, Gitarrenklang, Tempo, Schleife, Einzähler, Metronom, mitlaufende Markierung, Mischpult; danach SoundFont-Klänge | ein Stück klingt richtig, auch mit Wiederholungen, Bends und Slides | M–L |
 | 5 | **Schreiben** | Cursor, Eingabe über Tastatur, Stift und Griffbrett, Auswahl, Kopieren, Rückgängig, Transponieren, Takte einfügen und löschen, Akkordsymbole, Liedtext, Titel | ein Leadsheet und eine Tab lassen sich vollständig in Scrivi schreiben | L |
 | 6 | **Ausgeben** | PDF, PNG/SVG, MusicXML, MIDI, Tonspur (WAV), „An Volti senden“, Drucken | ein PDF ist bereit für Schüler und Band | M |
@@ -199,7 +199,7 @@ Jede Etappe endet mit einem Release, das man ausprobieren kann.
 | 8 | **Feinschliff Notensatz** | Kollisionen vermeiden, Abstände von Hand, Stilvorlagen, Schriften (Petaluma), Umbrüche, Kopf- und Fusszeilen | Ergebnis braucht kaum Handarbeit | L |
 | 9 | **Extras** | Dropbox-Abgleich, Mikrofon-Eingabe, MIDI-Keyboard, Übungsblatt-Generator, Lieder an Suona, macOS, iPadOS | nach Wunsch | je M |
 
-**Warum Einlesen so früh?** Die eigenen Guitar-Pro- und MusicXML-Dateien sind das beste
+**Warum Einlesen so früh?** Die eigenen Guitar-Pro-Dateien sind das beste
 Testmaterial. So sehen wir sofort an echten Stücken, wo der Notensatz noch hinkt, und Scrivi
 ist schon zum Lesen und Abspielen nützlich, bevor man darin schreiben kann.
 
@@ -222,15 +222,32 @@ für Band und Ensemble. Für grosse Orchesterpartituren bleibt es lange schwäch
 
 ---
 
-## 9. Offene Fragen an dich
+## 9. Entscheidungen (26. November 2026)
 
-1. **Wofür brauchst du die beiden bisherigen Programme konkret am meisten?**
-   (z. B. Tabs für Schüler, Leadsheets für die Band, Arrangements, Bläsersätze, Chor …)
-   Danach richten wir die Reihenfolge aus.
-2. **Wie viele alte Dateien gibt es, und welche Formate?** (ungefähr: Anzahl `.gp`, `.gpx`,
-   `.gp5`, `.sib`). Ein paar Beispiele als Testmaterial wären sehr hilfreich.
-3. **Bibliothek oder freie Dateien?** Volti verwaltet seine Noten selbst in einer Bibliothek.
-   Für Scrivi schlage ich dasselbe vor (passt zum Abgleich), dazu Import und Export von
-   einzelnen Dateien. Einverstanden?
-4. **Name:** siehe Vorschläge im Chat. Der Name lässt sich bis zum ersten öffentlichen
-   Release noch ändern (das GitHub-Projekt kann man umbenennen).
+1. **Umfang:** alles, was unter Punkt 1 steht.
+2. **Alte Dateien:** sehr viele Guitar-Pro-Dateien. Vier Beispiele liegen vor (siehe unten).
+3. **Bibliothek:** Scrivi verwaltet seine Stücke selbst wie Volti, dazu Import und Export
+   einzelner Dateien.
+4. **Name:** Scrivi.
+
+## 10. Was die eigenen Dateien brauchen
+
+Ausgewertet wurden vier Beispiele (Worship-Lieder, je eine Gitarrenstimme). Sie sind
+urheberrechtlich geschützt und kommen deshalb **nicht** ins öffentliche Projekt; sie dienen nur
+lokal zum Prüfen.
+
+- **Format:** `.gp` (neueres Format: eine ZIP-Datei mit `Content/score.gpif`, einer XML-Datei).
+  Das ist das am besten lesbare der Guitar-Pro-Formate, ein guter Start.
+- **Aufbau:** eine Spur „Overdriven Guitar“, Standardstimmung E A D G H E, 24 Bünde, ohne Kapo,
+  53 bis 81 Takte, 4/4, Tempo um 78.
+- **Was darin vorkommt** (danach richtet sich die Reihenfolge in Etappe 1):
+  - **Formteile** (INTRO, VERSE 1, CHORUS, BRIDGE …) in jedem Stück
+  - **Akkordsymbole** sehr häufig, dazu **Griffbilder**
+  - **Wiederholungen** und **Häuser** (1., 2. …) sehr häufig, Doppelstriche
+  - **Haltebögen**, **Slash-Rhythmus** (Schrägstriche statt Noten)
+  - **Palm Mute**, **Slide**, **Hammer-on/Pull-off**, gedämpfte Noten (x), ein **Bending**
+  - **Crescendo/Decrescendo-Gabeln**, freier Text, einmal Liedtext
+  - Klangeinstellungen (Verzerrer usw.): werden beim Einlesen übergangen
+- **Folgerung:** Die Stücke sind eher Bandcharts als dichte Notensätze. Formteile,
+  Akkordsymbole, Wiederholungen und Slash-Rhythmus gehören deshalb schon in Etappe 1, nicht erst
+  später.

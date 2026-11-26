@@ -1,0 +1,56 @@
+name: scrivi
+description: "Scrivi – Noten, Tabulatur und Partituren schreiben."
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.13.7
+
+# Alle Pakete müssen zur GPL-3.0 passen (MIT, BSD, Apache-2.0, LGPL; Schriften OFL).
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  archive: ^4.7.0
+  path: ^1.9.1
+  path_provider: ^2.1.6
+  url_launcher: ^6.3.3
+  # Bei 0.5.x bleiben (wie Volti und Conti): 0.6 baut auf einer neuen, ungeprüften Grundlage auf.
+  window_manager: ^0.5.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/brand/scrivi_icon.png
+    # Lizenztexte der Schriften (erscheinen unter Über Scrivi → Lizenzen)
+    - assets/fonts/OFL-Bravura.txt
+    - assets/fonts/OFL-IBMPlexSans.txt
+    - assets/fonts/OFL-Sora.txt
+  fonts:
+    # Schriften der Oberfläche (feste Schnitte, OFL)
+    - family: Plex
+      fonts:
+        - asset: assets/fonts/IBMPlexSans-Light.ttf
+          weight: 300
+        - asset: assets/fonts/IBMPlexSans-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/IBMPlexSans-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/IBMPlexSans-SemiBold.ttf
+          weight: 600
+    - family: Sora
+      fonts:
+        - asset: assets/fonts/Sora-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Sora-Bold.ttf
+          weight: 700
+    # Notenschrift (SMuFL, OFL)
+    - family: Bravura
+      fonts:
+        - asset: assets/fonts/Bravura.otf

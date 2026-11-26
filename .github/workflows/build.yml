@@ -1,0 +1,187 @@
+# Baut Scrivi automatisch bei jeder Änderung auf "main" und stellt die
+# fertigen Dateien unter "Releases" zum Herunterladen bereit.
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  FLUTTER_VERSION: "3.47.9"
+  # Versionsnummer: VERSION_PREFIX + laufende Zahl. Die laufende Zahl ist die
+  # Build-Nummer minus VERSION_START (die Build-Nummer, mit der dieser vordere
+  # Teil begann), also v0.1.0, v0.1.1 … Für einen neuen vorderen Teil beide
+  # Werte umstellen (VERSION_START = Nummer des nächsten Builds). Die Update-
+  # Suche vergleicht alle drei Teile; Android zählt mit der Build-Nummer.
+  VERSION_PREFIX: "0.1"
+  VERSION_START: "1"
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Prüfen & Testen
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+
+  windows:
+    name: Windows-Build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Versionsnummer
+        shell: bash
+        run: echo "SCRIVI_VER=${VERSION_PREFIX}.$(( ${{ github.run_number }} - VERSION_START ))" >> "$GITHUB_ENV"
+      - name: Windows-App bauen
+        shell: bash
+        run: >-
+          flutter build windows --release
+          --build-name=${{ env.SCRIVI_VER }}
+          --build-number=${{ github.run_number }}
+          --dart-define=SCRIVI_VERSION=v${{ env.SCRIVI_VER }}
+      - name: ZIP erstellen
+        shell: pwsh
+        run: |
+          Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath Scrivi-Windows.zip
+      # Installationsprogramm (Inno Setup): Startmenü, Deinstallieren in den
+      # Windows-Einstellungen. Die ZIP-Datei bleibt für die Updates in der App.
+      - name: Installationsprogramm erstellen
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress | Out-Null }
+          # Deutsche Texte in Schweizer Schreibweise (ss statt ß).
+          $isl = "${env:ProgramFiles(x86)}\Inno Setup 6\Languages\German.isl"
+          $bytes = [IO.File]::ReadAllBytes($isl)
+          $out = "windows\installer\German-CH.isl"
+          if ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) {
+            $text = [IO.File]::ReadAllText($isl, [Text.UTF8Encoding]::new($true))
+            [IO.File]::WriteAllText($out, $text.Replace([string][char]0xDF, 'ss'), [Text.UTF8Encoding]::new($true))
+          } else {
+            Copy-Item $isl $out
+          }
+          & $iscc "/DAppVersion=${{ env.SCRIVI_VER }}" windows\installer\scrivi.iss
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          Copy-Item build\installer\Scrivi-Setup.exe Scrivi-Setup.exe
+      # Weiterreichen an den letzten Schritt über den Cache statt über
+      # „Artifacts“ (deren Speicher war im November 2026 bei Volti voll).
+      # Der Cache wird nach 7 Tagen von selbst geleert.
+      - shell: bash
+        run: mkdir -p dist && cp Scrivi-Windows.zip Scrivi-Setup.exe dist/
+      - uses: actions/cache/save@v4
+        with:
+          path: dist
+          key: dist-windows-${{ github.run_id }}-${{ github.run_attempt }}
+          enableCrossOsArchive: true
+
+  android:
+    name: Android-Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Versionsnummer
+        shell: bash
+        run: echo "SCRIVI_VER=${VERSION_PREFIX}.$(( ${{ github.run_number }} - VERSION_START ))" >> "$GITHUB_ENV"
+      # Mit festem Schlüssel signieren, damit Updates über die installierte
+      # App gehen, auch mit Obtainium (Geheimnisse SCRIVI_KEYSTORE und
+      # SCRIVI_KEYSTORE_PASSWORD). Bricht beim Herunterladen von Android-Teilen
+      # die Verbindung ab, einmal nochmals versuchen.
+      - name: Android-App bauen
+        env:
+          SCRIVI_KEYSTORE: ${{ secrets.SCRIVI_KEYSTORE }}
+          SCRIVI_KEYSTORE_PASSWORD: ${{ secrets.SCRIVI_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -z "$SCRIVI_KEYSTORE" ]; then echo "::warning::Kein Signier-Schlüssel hinterlegt – Test-Schlüssel wird verwendet."; fi
+          ARGS="--release --build-name=${{ env.SCRIVI_VER }} --build-number=${{ github.run_number }} --dart-define=SCRIVI_VERSION=v${{ env.SCRIVI_VER }}"
+          flutter build apk $ARGS || (echo "Zweiter Versuch …" && sleep 30 && flutter build apk $ARGS)
+      - run: mkdir -p dist && cp build/app/outputs/flutter-apk/app-release.apk dist/Scrivi-Android.apk
+      - uses: actions/cache/save@v4
+        with:
+          path: dist
+          key: dist-android-${{ github.run_id }}-${{ github.run_attempt }}
+          enableCrossOsArchive: true
+
+  release:
+    name: Zum Download bereitstellen
+    # Nur für "main"; Android ist optional – ein Android-Fehler blockiert
+    # den Windows-Download nicht.
+    if: always() && github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && needs.test.result == 'success' && needs.windows.result == 'success'
+    needs: [test, windows, android]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/cache/restore@v4
+        with:
+          path: dist
+          key: dist-windows-${{ github.run_id }}-${{ github.run_attempt }}
+          enableCrossOsArchive: true
+          fail-on-cache-miss: true
+      # Android ist optional (siehe oben).
+      - uses: actions/cache/restore@v4
+        with:
+          path: dist
+          key: dist-android-${{ github.run_id }}-${{ github.run_attempt }}
+          enableCrossOsArchive: true
+      - run: ls -la dist
+      - name: Versionsnummer
+        shell: bash
+        run: echo "SCRIVI_VER=${VERSION_PREFIX}.$(( ${{ github.run_number }} - VERSION_START ))" >> "$GITHUB_ENV"
+      - name: Release erstellen
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+        run: |
+          TAG="v${{ env.SCRIVI_VER }}"
+          MSG=$(printf '%s' "$COMMIT_MSG" | head -1)
+          cat > notes.md <<EOT
+          **Neu / New:** ${MSG:-Verbesserungen}
+
+          ### Installieren (Windows 10/11)
+          **\`Scrivi-Setup.exe\`** herunterladen und starten. Meldet Windows „Der Computer wurde durch Windows geschützt“: *Weitere Informationen → Trotzdem ausführen*. Ohne Installation: \`Scrivi-Windows.zip\` entpacken und \`Scrivi.exe\` starten.
+          Ist Scrivi schon installiert, kommt das Update direkt in der App: *Einstellungen → Über Scrivi → Nach Updates suchen*.
+
+          ### Install (Windows 10/11)
+          Download and run **\`Scrivi-Setup.exe\`**. If Windows says "Windows protected your PC": *More info → Run anyway*. Without installing: unzip \`Scrivi-Windows.zip\` and run \`Scrivi.exe\`.
+          If Scrivi is already installed, update right in the app: *Settings → About Scrivi → Check for updates*.
+
+          ### Android
+          \`Scrivi-Android.apk\` herunterladen und öffnen. Automatische Updates: In der App *Obtainium* „App hinzufügen“ wählen und \`https://github.com/rawkhawk0663/scrivi\` eintragen.
+          Download and open \`Scrivi-Android.apk\`. Automatic updates: in the *Obtainium* app choose "Add app" and enter \`https://github.com/rawkhawk0663/scrivi\`.
+
+          Scrivi ist freie Software unter der GPL-3.0. / Scrivi is free software under the GPL-3.0.
+          EOT
+          sed -i 's/^          //' notes.md
+          gh release create "$TAG" dist/* \
+            --repo "${{ github.repository }}" \
+            --target "${{ github.sha }}" \
+            --title "Scrivi $TAG" \
+            --notes-file notes.md \
+            --prerelease=false --latest

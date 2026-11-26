@@ -1,0 +1,267 @@
+import 'dart:io';
+
+import 'package:flutter/gestures.dart';
+import 'package:flutter/material.dart';
+import 'package:window_manager/window_manager.dart';
+
+import 'l10n.dart';
+
+/// Hat Scrivi ein eigenes Fenster mit eigenen Fensterknöpfen? (Am Computer.)
+/// Unter Windows ist die Titelleiste ausgeblendet ([prepareWindow]).
+bool get hasWindowButtons => Platform.isWindows || Platform.isLinux;
+
+/// Fenster vorbereiten (einmal beim Start): Unter Windows die Titelleiste
+/// ausblenden (der Rand zum Vergrössern bleibt) und maximiert öffnen.
+Future<void> prepareWindow() async {
+  if (!hasWindowButtons) return;
+  try {
+    await windowManager.ensureInitialized();
+  } catch (_) {
+    return; // ohne Fenster-Unterstützung (z. B. in Tests)
+  }
+  if (!Platform.isWindows) return;
+  try {
+    await windowManager.waitUntilReadyToShow(
+      const WindowOptions(title: 'Scrivi', minimumSize: Size(420, 560), titleBarStyle: TitleBarStyle.hidden, windowButtonVisibility: false),
+      () async {
+        await windowManager.setTitleBarStyle(TitleBarStyle.hidden, windowButtonVisibility: false);
+        await windowManager.maximize();
+        await windowManager.show();
+        await windowManager.focus();
+      },
+    );
+  } catch (_) {
+    // Dann bleibt eben die normale Titelleiste.
+  }
+}
+
+/// Die Fensterknöpfe schweben oben rechts über allen Seiten. Kopfzeilen
+/// lassen rechts so viel Platz frei ([windowButtonsWidth]).
+const windowButtonsWidth = 96.0;
+
+/// Schliessen, Minimieren, Maximieren – als drei runde, farbige Punkte
+/// (Wunsch des Besitzers). Beim Darüberfahren mit der Maus erscheinen die
+/// Zeichen darin.
+class WindowButtons extends StatefulWidget {
+  const WindowButtons({super.key, this.padding = const EdgeInsets.only(left: 6, right: 4)});
+  final EdgeInsets padding;
+
+  @override
+  State<WindowButtons> createState() => _WindowButtonsState();
+}
+
+class _WindowButtonsState extends State<WindowButtons> {
+  bool _hover = false;
+
+  static const _red = Color(0xFFFF5F57), _yellow = Color(0xFFFEBC2E), _green = Color(0xFF28C840);
+
+  Future<void> _toggleMaximize() async {
+    try {
+      if (await windowManager.isMaximized()) {
+        await windowManager.unmaximize();
+      } else {
+        await windowManager.maximize();
+      }
+    } catch (_) {}
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!hasWindowButtons) return const SizedBox.shrink();
+    return ExcludeFocus(
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hover = true),
+        onExit: (_) => setState(() => _hover = false),
+        child: Padding(
+          padding: widget.padding,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            // Reihenfolge wie bei Windows (vom Besitzer gewünscht): gelb, grün, rot ganz rechts.
+            children: [
+              _Dot(
+                color: _yellow,
+                glyph: _Glyph.minimize,
+                hover: _hover,
+                tooltip: tr('Minimieren', 'Minimise'),
+                onTap: windowManager.minimize,
+              ),
+              _Dot(
+                color: _green,
+                glyph: _Glyph.maximize,
+                hover: _hover,
+                tooltip: tr('Maximieren', 'Maximise'),
+                onTap: _toggleMaximize,
+              ),
+              _Dot(
+                color: _red,
+                glyph: _Glyph.close,
+                hover: _hover,
+                tooltip: tr('Schliessen', 'Close'),
+                onTap: windowManager.close,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+enum _Glyph { close, minimize, maximize }
+
+class _Dot extends StatelessWidget {
+  const _Dot({
+    required this.color,
+    required this.glyph,
+    required this.hover,
+    required this.tooltip,
+    required this.onTap,
+  });
+  final Color color;
+  final _Glyph glyph;
+  final bool hover;
+  final String tooltip;
+  final Future<void> Function() onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        // Grosse Trefferfläche für Finger und Stift, kleiner sichtbarer Punkt.
+        child: SizedBox(
+          width: 26,
+          height: 32,
+          child: Center(
+            child: CustomPaint(size: const Size(14, 14), painter: _DotPainter(color, hover ? glyph : null)),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DotPainter extends CustomPainter {
+  _DotPainter(this.color, this.glyph);
+  final Color color;
+  final _Glyph? glyph;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final c = size.center(Offset.zero);
+    final r = size.width / 2;
+    canvas.drawCircle(c, r, Paint()..color = color);
+    // Feiner, dunklerer Rand.
+    canvas.drawCircle(
+      c,
+      r - 0.4,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 0.8
+        ..color = Color.lerp(color, Colors.black, 0.18)!,
+    );
+    final g = glyph;
+    if (g == null) return;
+    final p = Paint()
+      ..color = const Color(0x99000000)
+      ..strokeWidth = 1.3
+      ..strokeCap = StrokeCap.round;
+    final d = r * 0.42;
+    switch (g) {
+      case _Glyph.close:
+        canvas.drawLine(c + Offset(-d, -d), c + Offset(d, d), p);
+        canvas.drawLine(c + Offset(d, -d), c + Offset(-d, d), p);
+      case _Glyph.minimize:
+        canvas.drawLine(c + Offset(-d * 1.2, 0), c + Offset(d * 1.2, 0), p);
+      case _Glyph.maximize:
+        canvas.drawLine(c + Offset(-d * 1.2, 0), c + Offset(d * 1.2, 0), p);
+        canvas.drawLine(c + Offset(0, -d * 1.2), c + Offset(0, d * 1.2), p);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DotPainter old) => old.color != color || old.glyph != glyph;
+}
+
+/// Fensterknöpfe oben rechts über der ganzen App (in `MaterialApp.builder`).
+class WindowButtonsOverlay extends StatefulWidget {
+  const WindowButtonsOverlay({super.key, required this.child});
+  final Widget child;
+
+  @override
+  State<WindowButtonsOverlay> createState() => _WindowButtonsOverlayState();
+}
+
+class _WindowButtonsOverlayState extends State<WindowButtonsOverlay> {
+  // Eigene Ebene, damit die Hinweise der Knöpfe (Tooltip) erscheinen können.
+  late final OverlayEntry _entry = OverlayEntry(
+    builder: (_) => Stack(
+      children: [
+        widget.child,
+        // In der Höhe mittig zur Kopfzeile (56 Punkte).
+        const Positioned(top: 12, right: 8, child: WindowButtons()),
+      ],
+    ),
+  );
+
+  @override
+  void didUpdateWidget(WindowButtonsOverlay old) {
+    super.didUpdateWidget(old);
+    // Die App hat neu aufgebaut (z. B. hell/dunkel): Ebene im selben Bild mitnehmen.
+    _entry.markNeedsBuild();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!hasWindowButtons) return widget.child;
+    return Overlay(initialEntries: [_entry]);
+  }
+}
+
+/// Fläche, an der man das Fenster verschiebt (ohne Titelleiste nötig);
+/// doppelt antippen maximiert. Auf Tablets ohne Fenster: nur [child].
+class WindowDragArea extends StatelessWidget {
+  const WindowDragArea({super.key, required this.child, this.doubleTapMaximizes = true, this.mouseOnly = false});
+  final Widget child;
+
+  /// Nur mit der Maus (z. B. an der Leiste der Notenansicht, wo ein Wischen
+  /// mit dem Finger das Fenster sonst aus Versehen verschieben würde).
+  final bool mouseOnly;
+
+  /// Doppelt antippen = maximieren. Aus, wo darin auch angetippt wird
+  /// (sonst würde jedes einfache Antippen kurz verzögert).
+  final bool doubleTapMaximizes;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!hasWindowButtons) return child;
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      supportedDevices: mouseOnly ? const {PointerDeviceKind.mouse} : null,
+      onPanStart: (_) async {
+        try {
+          await windowManager.startDragging();
+        } catch (_) {}
+      },
+      onDoubleTap: doubleTapMaximizes
+          ? () async {
+              try {
+                await (await windowManager.isMaximized() ? windowManager.unmaximize() : windowManager.maximize());
+              } catch (_) {}
+            }
+          : null,
+      child: child,
+    );
+  }
+}
+
+/// Scrivi wieder nach vorne holen (z. B. nach der Anmeldung im Browser).
+Future<void> bringWindowToFront() async {
+  if (!hasWindowButtons) return;
+  try {
+    await windowManager.show();
+    await windowManager.focus();
+  } catch (_) {}
+}
