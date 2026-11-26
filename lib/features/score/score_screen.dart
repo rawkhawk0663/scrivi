@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart';
+import 'package:flutter/physics.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:scrivi_core/scrivi_core.dart' as core;
@@ -230,67 +231,114 @@ class _PagesViewer extends StatefulWidget {
   State<_PagesViewer> createState() => _PagesViewerState();
 }
 
-class _PagesViewerState extends State<_PagesViewer> {
-  final _controller = TransformationController();
+class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderStateMixin {
+  // Eigene Steuerung statt eines fertigen Zoom-Bausteins: So bewegt das Mausrad nur
+  // die Seiten (Zoomen nur mit Strg), und Finger, Stift und Touchpad verhalten sich gleich.
+  double _scale = 1;
+  Offset _offset = Offset.zero; // Verschiebung des Inhalts (≤ 0)
   final _focus = FocusNode();
+  late final _fling = AnimationController.unbounded(vsync: this)..addListener(_onFling);
   Size _viewport = Size.zero;
   double _contentHeight = 0;
 
+  // Gesten mit Finger, Stift, Maus (ziehen) und Touchpad
+  double _gestureStartScale = 1;
+  Offset _flingDirection = Offset.zero;
+  double _flingLast = 0;
+
   static const _gap = 16.0;
+  static const _minScale = 1.0;
+  static const _maxScale = 4.0;
 
   @override
   void dispose() {
-    _controller.dispose();
+    _fling.dispose();
     _focus.dispose();
     super.dispose();
   }
 
-  double get _scale => _controller.value.getMaxScaleOnAxis();
-
-  void _set(double scale, double tx, double ty) {
+  void _set(double scale, Offset offset) {
     final w = _viewport.width, h = _viewport.height;
     final contentW = w * scale, contentH = _contentHeight * scale;
-    tx = tx.clamp(math.min(0.0, w - contentW), 0.0);
-    ty = ty.clamp(math.min(0.0, h - contentH), 0.0);
-    _controller.value = Matrix4.identity()
-      ..translateByDouble(tx, ty, 0, 1)
-      ..scaleByDouble(scale, scale, 1, 1);
-  }
-
-  Offset get _translation {
-    final m = _controller.value;
-    return Offset(m.getTranslation().x, m.getTranslation().y);
+    final clamped = Offset(
+      offset.dx.clamp(math.min(0.0, w - contentW), 0.0),
+      offset.dy.clamp(math.min(0.0, h - contentH), 0.0),
+    );
+    if (scale == _scale && clamped == _offset) return;
+    setState(() {
+      _scale = scale;
+      _offset = clamped;
+    });
   }
 
   void scrollBy(double dy, [double dx = 0]) {
-    final t = _translation;
-    _set(_scale, t.dx - dx, t.dy - dy);
+    _fling.stop();
+    _set(_scale, _offset - Offset(dx, dy));
   }
 
-  void zoomBy(double factor, [Offset? focal]) {
+  /// Zoomen um [factor]; der Punkt [focal] (im Fenster) bleibt stehen.
+  void zoomBy(double factor, [Offset? focal]) => _zoomTo(_scale * factor, focal);
+
+  void _zoomTo(double scale, Offset? focal) {
+    _fling.stop();
     final f = focal ?? Offset(_viewport.width / 2, _viewport.height / 2);
     final s0 = _scale;
-    final s1 = (s0 * factor).clamp(1.0, 4.0);
-    final t = _translation;
-    // Punkt unter dem Zeiger bleibt stehen.
-    final cx = (f.dx - t.dx) / s0, cy = (f.dy - t.dy) / s0;
-    _set(s1, f.dx - cx * s1, f.dy - cy * s1);
+    final s1 = scale.clamp(_minScale, _maxScale);
+    final content = (f - _offset) / s0;
+    _set(s1, f - content * s1);
   }
 
-  void reset() => _set(1, 0, _translation.dy / _scale);
+  void reset() => _set(1, Offset(0, _offset.dy / _scale));
 
   void _onSignal(PointerSignalEvent e) {
-    if (e is! PointerScrollEvent) return;
-    GestureBinding.instance.pointerSignalResolver.register(e, (event) {
-      final s = event as PointerScrollEvent;
-      final ctrl = HardwareKeyboard.instance.isControlPressed;
-      if (ctrl) {
-        zoomBy(s.scrollDelta.dy < 0 ? 1.1 : 1 / 1.1, s.localPosition);
-      } else {
-        final shift = HardwareKeyboard.instance.isShiftPressed;
-        scrollBy(shift ? 0 : s.scrollDelta.dy, shift ? s.scrollDelta.dy : s.scrollDelta.dx);
-      }
-    });
+    if (e is PointerScrollEvent) {
+      GestureBinding.instance.pointerSignalResolver.register(e, (event) {
+        final s = event as PointerScrollEvent;
+        if (HardwareKeyboard.instance.isControlPressed) {
+          zoomBy(s.scrollDelta.dy < 0 ? 1.1 : 1 / 1.1, s.localPosition);
+        } else if (HardwareKeyboard.instance.isShiftPressed) {
+          scrollBy(0, s.scrollDelta.dy);
+        } else {
+          scrollBy(s.scrollDelta.dy, s.scrollDelta.dx);
+        }
+      });
+    } else if (e is PointerScaleEvent) {
+      GestureBinding.instance.pointerSignalResolver.register(e, (event) {
+        zoomBy((event as PointerScaleEvent).scale, event.localPosition);
+      });
+    }
+  }
+
+  void _onScaleStart(ScaleStartDetails d) {
+    _fling.stop();
+    _gestureStartScale = _scale;
+  }
+
+  void _onScaleUpdate(ScaleUpdateDetails d) {
+    // Zuerst verschieben, dann um den Mittelpunkt der Finger zoomen.
+    _set(_scale, _offset + d.focalPointDelta);
+    if (d.pointerCount >= 2 || d.scale != 1.0) {
+      _zoomTo(_gestureStartScale * d.scale, d.localFocalPoint);
+    }
+  }
+
+  void _onScaleEnd(ScaleEndDetails d) {
+    // Schwung nach dem Wischen (nur beim Verschieben, nicht beim Zoomen)
+    final v = d.velocity.pixelsPerSecond;
+    if (d.pointerCount > 0 || v.distance < 200) return;
+    _flingDirection = v / v.distance;
+    _flingLast = 0;
+    final sim = FrictionSimulation(0.12, 0, v.distance);
+    _fling.animateWith(sim);
+  }
+
+  void _onFling() {
+    final pos = _fling.value;
+    final delta = pos - _flingLast;
+    _flingLast = pos;
+    final before = _offset;
+    _set(_scale, _offset + _flingDirection * delta);
+    if (_offset == before) _fling.stop();
   }
 
   KeyEventResult _onKey(FocusNode node, KeyEvent e) {
@@ -306,9 +354,9 @@ class _PagesViewerState extends State<_PagesViewer> {
     } else if (k == LogicalKeyboardKey.arrowUp) {
       scrollBy(-60);
     } else if (k == LogicalKeyboardKey.home) {
-      _set(_scale, _translation.dx, 0);
+      _set(_scale, Offset(_offset.dx, 0));
     } else if (k == LogicalKeyboardKey.end) {
-      _set(_scale, _translation.dx, -double.infinity);
+      _set(_scale, Offset(_offset.dx, -double.infinity));
     } else {
       return KeyEventResult.ignored;
     }
@@ -322,33 +370,50 @@ class _PagesViewerState extends State<_PagesViewer> {
         _viewport = Size(box.maxWidth, box.maxHeight);
         final pageW = math.min(box.maxWidth - 2 * _gap, 1100.0);
         final heights = widget.pages.map((p) => pageW * p.height / p.width).toList();
-        _contentHeight = heights.fold(_gap, (s, h) => s + h + _gap);
+        _contentHeight = math.max(heights.fold(_gap, (s, h) => s + h + _gap), box.maxHeight);
+        // Nach einer Grössenänderung des Fensters wieder in die Grenzen holen.
+        final w = box.maxWidth, h = box.maxHeight;
+        _offset = Offset(
+          _offset.dx.clamp(math.min(0.0, w - w * _scale), 0.0),
+          _offset.dy.clamp(math.min(0.0, h - _contentHeight * _scale), 0.0),
+        );
         return Focus(
           focusNode: _focus,
           autofocus: true,
           onKeyEvent: _onKey,
-          child: InteractiveViewer(
-            transformationController: _controller,
-            constrained: false,
-            minScale: 1,
-            maxScale: 4,
-            boundaryMargin: EdgeInsets.zero,
-            child: Listener(
-              onPointerSignal: _onSignal,
-              child: SizedBox(
-                width: box.maxWidth,
-                height: math.max(_contentHeight, box.maxHeight),
-                child: Column(
-                  children: [
-                    const SizedBox(height: _gap),
-                    for (var i = 0; i < widget.pages.length; i++) ...[
-                      SizedBox(
-                        width: pageW,
-                        child: ScorePageView(picture: widget.pictures[i], page: widget.pages[i]),
-                      ),
-                      const SizedBox(height: _gap),
-                    ],
-                  ],
+          child: Listener(
+            onPointerSignal: _onSignal,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onScaleStart: _onScaleStart,
+              onScaleUpdate: _onScaleUpdate,
+              onScaleEnd: _onScaleEnd,
+              child: ClipRect(
+                child: OverflowBox(
+                  alignment: Alignment.topLeft,
+                  minWidth: box.maxWidth,
+                  maxWidth: box.maxWidth,
+                  minHeight: _contentHeight,
+                  maxHeight: _contentHeight,
+                  child: Transform(
+                    transform: Matrix4.identity()
+                      ..translateByDouble(_offset.dx, _offset.dy, 0, 1)
+                      ..scaleByDouble(_scale, _scale, 1, 1),
+                    child: Column(
+                      children: [
+                        const SizedBox(height: _gap),
+                        for (var i = 0; i < widget.pages.length; i++) ...[
+                          SizedBox(
+                            width: pageW,
+                            child: RepaintBoundary(
+                              child: ScorePageView(picture: widget.pictures[i], page: widget.pages[i]),
+                            ),
+                          ),
+                          const SizedBox(height: _gap),
+                        ],
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
