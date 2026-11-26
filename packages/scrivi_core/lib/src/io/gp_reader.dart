@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:archive/archive.dart';
 import 'package:xml/xml.dart';
 
+import '../model/fraction.dart';
 import '../model/pitch.dart';
 import '../model/score.dart';
 import 'gp_binary.dart';
@@ -203,10 +204,23 @@ class _Parser {
           final v = voiceEls[vid];
           if (v == null) continue;
           final beats = <Beat>[];
+          final fermatas = _fermatas(masterBarEls[mi]);
+          var onset = Fraction.zero;
           for (final bid in _ints(_text(v, 'Beats'))) {
             final b = beatEls[bid];
             if (b != null) {
-              beats.add(_beat(b, rhythms, noteEls, transposeSemitones, tuning, masterBars[mi].key.fifths, staff.capo));
+              final beat = _beat(
+                b,
+                rhythms,
+                noteEls,
+                transposeSemitones,
+                tuning,
+                masterBars[mi].key.fifths,
+                staff.capo,
+                fermata: fermatas.contains(onset),
+              );
+              beats.add(beat);
+              if (beat.grace == GraceType.none) onset = onset + beat.duration.length;
             }
           }
           if (beats.isNotEmpty) voices.add(Voice(beats));
@@ -347,11 +361,31 @@ class _Parser {
       final v = int.tryParse(f.getAttribute('fret') ?? '');
       if (s != null && v != null && s >= 0 && s < strings) frets[s] = v;
     }
+    // Barré: derselbe Finger auf demselben Bund über mehrere Saiten
+    final byFinger = <String, List<(int, int)>>{};
+    for (final pos in _children(_child(d, 'Fingering'), 'Position')) {
+      final finger = pos.getAttribute('finger') ?? 'None';
+      final s = int.tryParse(pos.getAttribute('string') ?? '');
+      final f = int.tryParse(pos.getAttribute('fret') ?? '');
+      if (finger == 'None' || s == null || f == null || s < 0 || s >= strings || f <= 0 || f > 30) continue;
+      (byFinger['$finger/$f'] ??= []).add((s, f));
+    }
+    final barres = <ChordBarre>[];
+    for (final list in byFinger.values) {
+      if (list.length < 2) continue;
+      final ss = list.map((e) => e.$1).toList()..sort();
+      // Erst ab vier Saiten als Barré zeichnen, sonst einzelne Punkte.
+      if (ss.last - ss.first < 3) continue;
+      barres.add(ChordBarre(fret: list.first.$2, from: ss.first, to: ss.last));
+    }
+    final show = _children(d, 'Property').where((p) => p.getAttribute('name') == 'ShowDiagram').firstOrNull;
     return ChordDiagram(
       stringCount: strings,
       baseFret: int.tryParse(d.getAttribute('baseFret') ?? '') ?? 0,
       frets: frets,
       fretCount: int.tryParse(d.getAttribute('fretCount') ?? '') ?? 5,
+      barres: barres,
+      visible: show?.getAttribute('value') != 'false',
     );
   }
 
@@ -371,8 +405,9 @@ class _Parser {
     int transpose,
     List<int> tuning,
     int fifths,
-    int capo,
-  ) {
+    int capo, {
+    bool fermata = false,
+  }) {
     final rid = int.tryParse(_child(b, 'Rhythm')?.getAttribute('ref') ?? '');
     final notes = <Note>[];
     for (final nid in _ints(_text(b, 'Notes'))) {
@@ -408,7 +443,25 @@ class _Parser {
         _ => GraceType.none,
       },
       pickStroke: stroke == 'Down' ? 1 : (stroke == 'Up' ? -1 : 0),
+      fermata: fermata,
+      tremolo: switch (_text(b, 'Tremolo')) {
+        '1/8' => 1,
+        '1/16' => 2,
+        '1/32' => 3,
+        _ => 0,
+      },
     );
+  }
+
+  /// Fermaten eines Takts als Stellen im Takt (Bruchteile einer Ganzen).
+  Set<Fraction> _fermatas(XmlElement masterBar) {
+    final out = <Fraction>{};
+    for (final f in _children(_child(masterBar, 'Fermatas'), 'Fermata')) {
+      final parts = _text(f, 'Offset').split('/');
+      final n = int.tryParse(parts.first), d = parts.length > 1 ? int.tryParse(parts[1]) : 1;
+      if (n != null && d != null && d > 0) out.add(Fraction(n, d));
+    }
+    return out;
   }
 
   Dynamic? _dynamic(String s) => switch (s) {

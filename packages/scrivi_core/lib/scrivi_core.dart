@@ -2,6 +2,7 @@
 library;
 
 export 'src/io/gp_reader.dart';
+export 'src/model/chord_library.dart';
 export 'src/model/fraction.dart';
 export 'src/model/pitch.dart';
 export 'src/model/score.dart';

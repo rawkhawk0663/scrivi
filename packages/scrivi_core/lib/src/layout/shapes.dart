@@ -114,3 +114,34 @@ DisplayItem shift(DisplayItem it, double dx, double dy) {
       return PathItem(out, fill: p.fill, thickness: p.thickness);
   }
 }
+
+/// Kreis als Pfad (vier Bézier-Stücke).
+List<double> circle(double cx, double cy, double r) {
+  const k = 0.5523;
+  final c = r * k;
+  return [
+    0, cx + r, cy, //
+    3, cx + r, cy + c, cx + c, cy + r, cx, cy + r,
+    3, cx - c, cy + r, cx - r, cy + c, cx - r, cy,
+    3, cx - r, cy - c, cx - c, cy - r, cx, cy - r,
+    3, cx + c, cy - r, cx + r, cy - c, cx + r, cy,
+    4,
+  ];
+}
+
+/// Ring (offener Kreis) als gefüllte Fläche: äusserer Kreis, innerer gegenläufig.
+/// Gefüllt statt gezogen, damit er auch klein überall gleich rund aussieht.
+List<double> ring(double cx, double cy, double r, double thickness) {
+  final ri = r - thickness / 2, ro = r + thickness / 2;
+  const k = 0.5523;
+  final c = ri * k;
+  return [
+    ...circle(cx, cy, ro),
+    0, cx + ri, cy, //
+    3, cx + ri, cy - c, cx + c, cy - ri, cx, cy - ri,
+    3, cx - c, cy - ri, cx - ri, cy - c, cx - ri, cy,
+    3, cx - ri, cy + c, cx - c, cy + ri, cx, cy + ri,
+    3, cx + c, cy + ri, cx + ri, cy + c, cx + ri, cy,
+    4,
+  ];
+}

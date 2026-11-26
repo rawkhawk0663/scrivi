@@ -355,7 +355,12 @@ class GpBinaryReader {
     }
     final beat = _Beat(NoteDuration(value, dots: (flags & 0x01) != 0 ? 1 : 0, tuplet: tuplet));
     beat.rest = status == 2;
-    if ((flags & 0x02) != 0) beat.chord = _chord(t);
+    if ((flags & 0x02) != 0) {
+      final c = _chord(t);
+      beat.chord = c.name;
+      beat.chordFrets = c.frets;
+      beat.chordBaseFret = c.baseFret;
+    }
     if ((flags & 0x04) != 0) beat.text = r.intByteSizeString();
     var harmonic = false;
     if ((flags & 0x08) != 0) harmonic = _beatEffects(beat);
@@ -379,17 +384,17 @@ class GpBinaryReader {
     return beat;
   }
 
-  String? _chord(_Track t) {
+  /// Akkord eines Schlags: Name und Griffbild (Bünde von der höchsten Saite an, −1 = nicht gespielt).
+  ({String name, List<int>? frets, int baseFret}) _chord(_Track t) {
     final newFormat = r.boolean();
     if (!newFormat) {
       final name = r.intByteSizeString();
       final firstFret = r.i32();
+      List<int>? frets;
       if (firstFret != 0) {
-        for (var i = 0; i < 6; i++) {
-          r.i32();
-        }
+        frets = [for (var i = 0; i < 6; i++) r.i32()];
       }
-      return name;
+      return (name: name, frets: frets, baseFret: firstFret);
     }
     if (_gp3) {
       r.boolean();
@@ -404,15 +409,13 @@ class GpBinaryReader {
       r.i32();
       r.i32();
       r.i32();
-      r.i32(); // erster Bund
-      for (var i = 0; i < 6; i++) {
-        r.i32();
-      }
+      final base = r.i32(); // erster Bund
+      final frets = [for (var i = 0; i < 6; i++) r.i32()];
       r.i32();
       r.skip(4 * 6);
       r.skip(7);
       r.skip(1);
-      return name;
+      return (name: name, frets: frets, baseFret: base);
     }
     r.boolean();
     r.skip(3);
@@ -426,17 +429,15 @@ class GpBinaryReader {
     r.u8();
     r.u8();
     r.u8();
-    r.i32(); // erster Bund
-    for (var i = 0; i < 7; i++) {
-      r.i32();
-    }
+    final base = r.i32(); // erster Bund
+    final frets = [for (var i = 0; i < 7; i++) r.i32()];
     r.u8();
     r.skip(15);
     r.skip(7);
     r.skip(1);
     r.skip(7);
     r.boolean();
-    return name;
+    return (name: name, frets: frets, baseFret: base);
   }
 
   /// Schlag-Effekte; gibt zurück, ob alle Noten Flageolett sind (GP3).
@@ -542,7 +543,7 @@ class GpBinaryReader {
       n.hammer = (f & 0x02) != 0;
       n.letRing = (f & 0x08) != 0;
       if ((f & 0x01) != 0) n.bend = _bend();
-      if ((f & 0x10) != 0) r.skip(4); // Vorschlag
+      if ((f & 0x10) != 0) _grace(n);
       if ((f & 0x04) != 0) n.slide = 1;
       return;
     }
@@ -554,8 +555,8 @@ class GpBinaryReader {
     n.palmMute = (f2 & 0x02) != 0;
     n.vibrato = (f2 & 0x40) != 0;
     if ((f1 & 0x01) != 0) n.bend = _bend();
-    if ((f1 & 0x10) != 0) r.skip(_gp5 ? 5 : 4); // Vorschlag
-    if ((f2 & 0x04) != 0) r.i8(); // Tremolo-Picking
+    if ((f1 & 0x10) != 0) _grace(n);
+    if ((f2 & 0x04) != 0) n.tremolo = r.i8().clamp(0, 3); // Tremolo-Picking
     if ((f2 & 0x08) != 0) {
       if (_gp5) {
         n.slide = r.u8();
@@ -587,6 +588,26 @@ class GpBinaryReader {
     if ((f2 & 0x20) != 0) {
       r.i8();
       r.i8();
+    }
+  }
+
+  /// Vorschlagsnote zu einer Note (Bund auf derselben Saite).
+  void _grace(_Note n) {
+    if (_gp5) {
+      final fret = r.u8();
+      r.u8(); // Lautstärke
+      r.u8(); // Übergang
+      r.u8(); // Dauer
+      final flags = r.u8();
+      n.graceFret = fret;
+      n.graceDead = (flags & 0x01) != 0;
+    } else {
+      final fret = r.i8();
+      r.u8();
+      r.u8();
+      r.i8();
+      n.graceFret = fret < 0 ? 0 : fret;
+      n.graceDead = fret < 0;
     }
   }
 
@@ -667,6 +688,9 @@ class _Note {
   int slide = 0;
   Bend? bend;
   bool tieOrigin = false;
+  int? graceFret;
+  bool graceDead = false;
+  int tremolo = 0;
 }
 
 class _Beat {
@@ -676,10 +700,24 @@ class _Beat {
   final lyrics = <String>[];
   bool rest = false;
   String? chord;
+  List<int>? chordFrets;
+  int chordBaseFret = 0;
   String? text;
   int? tempo;
   int stroke = 0;
   int key = 0;
+}
+
+/// Griffbild aus einer älteren Datei: Bünde von der höchsten Saite an, −1 = nicht gespielt.
+ChordDiagram? _binaryDiagram(List<int>? highFirst, int strings) {
+  if (highFirst == null || strings == 0) return null;
+  final frets = List<int>.filled(strings, -1);
+  for (var i = 0; i < strings && i < highFirst.length; i++) {
+    final f = highFirst[i];
+    frets[strings - 1 - i] = f < 0 || f > 30 ? -1 : f;
+  }
+  if (frets.where((f) => f >= 0).length < 3) return null;
+  return ChordDiagram(stringCount: strings, baseFret: 0, frets: frets);
 }
 
 class _Track {
@@ -737,7 +775,7 @@ class _Track {
           if (name != null && name.isNotEmpty) {
             chordId = chordIds.putIfAbsent(name, () {
               final id = chordIds.length;
-              chords[id] = ChordDef(name: name);
+              chords[id] = ChordDef(name: name, diagram: _binaryDiagram(b.chordFrets, tuning.length));
               return id;
             });
           }
@@ -766,6 +804,32 @@ class _Track {
               ),
             );
           }
+          // Vorschlagsnoten als eigener kleiner Schlag davor
+          final graces = b.notes.where((n) => n.graceFret != null).toList();
+          if (graces.isNotEmpty) {
+            beats.add(
+              Beat(
+                duration: const NoteDuration(NoteValue.eighth),
+                grace: GraceType.beforeBeat,
+                notes: [
+                  for (final n in graces)
+                    () {
+                      final midi = stringed && n.string < tuning.length
+                          ? tuning[n.string] + capo + n.graceFret!
+                          : n.graceFret!;
+                      final p = Pitch.fromMidi(midi, fifths: b.key);
+                      return Note(
+                        pitch: p,
+                        written: transpose == 0 ? null : p.octaves(transpose ~/ 12),
+                        string: stringed ? n.string : null,
+                        fret: stringed ? n.graceFret : null,
+                        dead: n.graceDead,
+                      );
+                    }(),
+                ],
+              ),
+            );
+          }
           beats.add(
             Beat(
               duration: b.duration,
@@ -774,6 +838,7 @@ class _Track {
               text: (b.text?.trim().isEmpty ?? true) ? null : b.text!.trim(),
               lyrics: b.lyrics,
               pickStroke: b.stroke,
+              tremolo: b.notes.fold(0, (m, n) => n.tremolo > m ? n.tremolo : m),
             ),
           );
         }

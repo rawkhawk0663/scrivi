@@ -18,10 +18,13 @@ Scrivi gibt es auf **Deutsch und Englisch**. Es braucht **kein Konto**, sammelt 
 - **Bibliothek:** Notendateien importieren, über *Importieren*, *Ordner importieren* oder einfach ins Fenster ziehen. Scrivi legt eine Kopie in seine eigene Bibliothek, die Originale bleiben unangetastet. Jedes Stück erscheint mit Vorschaubild, Titel und Interpret. Suche nach Titel oder Interpret. Doppelte Dateien erkennt Scrivi. Löschen legt das Stück in den Ordner „Papierkorb“ der Bibliothek, es geht also nichts verloren.
 - **Dateiformate:** Guitar Pro aller Versionen (`.gp`, `.gpx`, `.gp5`, `.gp4`, `.gp3`), MusicXML (`.musicxml`, `.xml`, gepackt `.mxl`) und MIDI (`.mid`). Bei MIDI rastet Scrivi die Töne auf Sechzehntel ein und teilt sie in Takte. Bei MusicXML wird jede Notenzeile eines Instruments zu einer eigenen Spur; eine Tabulatur zum selben Instrument liefert Saiten und Bünde.
 - **Noten mit Tabulatur:** sauber gesetzt auf A4-Seiten, mit den Zeilen so aufgeteilt wie in der Datei vorgesehen. Dazu gehören Titel und Interpret, Tempo, Formteile (Intro, Strophe, Refrain …), Akkordsymbole, Wiederholungen und Häuser, Doppelstriche, Tonart- und Taktwechsel, Haltebögen, Balken, Punktierungen, n-tolen, Vorzeichen, Rhythmus-Schrägstriche, Dynamik und Gabeln, Liedtext und freier Text.
-- **Gitarrentechniken:** Palm Mute (P.M.), gedämpfte Noten (x), Hammer-on und Pull-off (H/P), Slides, Bendings mit Angabe (½, full …), Geisternoten, Akzente, let ring.
+- **Gitarrentechniken:** Palm Mute (P.M.), gedämpfte Noten (x), Hammer-on und Pull-off (H/P), Slides, Bendings mit Angabe (½, full …), Geisternoten, Akzente, let ring, Vibrato, Flageolett, Tapping (T), Anschlag auf und ab, Tremolo-Picking, Fermaten und Vorschlagsnoten.
+- **Griffbilder:** Oben auf der ersten Seite stehen die Griffbilder aller Akkorde des Stücks. Sie kommen aus der Datei; fehlen sie, nimmt Scrivi bei Normalstimmung die üblichen Griffe (offen oder als Barré).
+- **Stimmung und Kapo:** Bei besonderen Stimmungen (z. B. Drop D, Es-Stimmung) stehen die Saitennamen vor der Tabulatur, deutsch mit H. Ein Kapodaster erscheint als „Capo 2“ über den Noten. Gitarren mit 7 und 8 Saiten und Bass gehen auch.
+- **Ansicht wählen:** Noten und Tabulatur, nur Noten oder nur Tabulatur. In der reinen Tabulatur zeigen Hälse und Balken darunter den Rhythmus. Scrivi merkt sich die Wahl.
 - **Ansehen:** blättern mit Mausrad, Wischen, Bild auf/ab, Pfeiltasten oder Pedal. Zoomen mit zwei Fingern, Strg + Mausrad oder den Knöpfen oben. Hat eine Datei mehrere Spuren, wählst du oben die Spur.
 
-Noch nicht: Vorschlagsnoten, Griffbilder in den Noten, mehrere Instrumente gleichzeitig (Partitur). Das kommt in den nächsten Etappen.
+Noch nicht: Abspielen, Schreiben, mehrere Instrumente gleichzeitig (Partitur). Das kommt in den nächsten Etappen.
 
 ## Was Scrivi können soll
 

@@ -1,6 +1,6 @@
 # Scrivi – Bauplan
 
-Stand: 26. November 2026 · Name: **Scrivi** (ital. „schreib!“) · Etappen 0, 1 und 2 fertig
+Stand: 26. November 2026 · Name: **Scrivi** (ital. „schreib!“) · Etappen 0 bis 3 fertig
 
 Scrivi ist ein Notenschreibprogramm für Noten, Tabulatur und Partituren. Es läuft mit Flutter
 auf Windows und Android, später vielleicht auch auf macOS und iPadOS. Es gehört zur gleichen
@@ -191,7 +191,7 @@ Jede Etappe endet mit einem Release, das man ausprobieren kann.
 | 0 | **Grundgerüst** ✅ | Flutter-Projekt, Theme, l10n, Fensterknöpfe, Updater, Fehlerprotokoll, Bau über GitHub Actions, README, CLAUDE.md, Lizenz | Scrivi startet auf Surface und Android und aktualisiert sich selbst | S |
 | 1 | **Guitar-Pro-Dateien öffnen und zeigen** ✅ | Notenmodell; Einlesen von `.gp` (das Format der eigenen Dateien); Bibliothek mit Import und Vorschaubildern; Notensatz für ein Instrument: Schlüssel, Tonart, Taktart, Noten und Pausen, Punkte, Vorzeichen, Hälse, Balken, Haltebögen, Taktstriche, Wiederholungen, Häuser, Formteile, Akkordsymbole; Tabulatur darunter; Zeilen- und Seitenumbruch | die eigenen Stücke sehen in Scrivi sauber gesetzt aus | L |
 | 2 | **Weitere Formate einlesen** ✅ | ältere Guitar-Pro-Dateien (`.gpx`, `.gp5/4/3`), MusicXML (für die Partitur-Dateien), MIDI | alle alten Dateien lassen sich öffnen | M–L |
-| 3 | **Tabulatur vollständig** | alle Spieltechniken in Noten und Tab (Bending-Kurven, Vibrato, Flageolett, Tapping …), alle Stimmungen, Kapo, Rhythmus in der Tab, 7- und 8-saitige Gitarre, Bass | Gitarrenstücke mit allen Spieltechniken sehen vollständig aus | L |
+| 3 | **Tabulatur vollständig** ✅ | alle Spieltechniken in Noten und Tab (Bending-Kurven, Vibrato, Flageolett, Tapping …), alle Stimmungen, Kapo, Rhythmus in der Tab, 7- und 8-saitige Gitarre, Bass | Gitarrenstücke mit allen Spieltechniken sehen vollständig aus | L |
 | 4 | **Abspielen** | Abspiel-Liste, Gitarrenklang, Tempo, Schleife, Einzähler, Metronom, mitlaufende Markierung, Mischpult; danach SoundFont-Klänge | ein Stück klingt richtig, auch mit Wiederholungen, Bends und Slides | M–L |
 | 5 | **Schreiben** | Cursor, Eingabe über Tastatur, Stift und Griffbrett, Auswahl, Kopieren, Rückgängig, Transponieren, Takte einfügen und löschen, Akkordsymbole, Liedtext, Titel | ein Leadsheet und eine Tab lassen sich vollständig in Scrivi schreiben | L |
 | 6 | **Ausgeben** | PDF, PNG/SVG, MusicXML, MIDI, Tonspur (WAV), „An Volti senden“, Drucken | ein PDF ist bereit für Schüler und Band | M |
@@ -249,6 +249,24 @@ Bewusst offen:
   mit der Partitur (Etappe 7).
 - Bei Dateien ohne gespeicherte Tonhöhe (ältere Guitar-Pro-Formate) zählen Bundzahlen ab dem
   Kapodaster. Mit einer echten Datei mit Kapo prüfen.
+
+### Stand nach Etappe 3 (26. November 2026)
+
+Fertig: Vorschlagsnoten (klein, mit Querstrich und Bogen, auch in der Tab), Vibrato,
+Flageolett, Tapping, Anschlag auf/ab, Tremolo-Picking, Fermaten. Griffbilder aller Akkorde oben auf
+der ersten Seite: aus der Datei (`.gp`, `.gpx`, `.gp3/4/5`, mit Barré), sonst aus einer eingebauten
+Sammlung für Normalstimmung (offene Griffe, Schrägstrich-Akkorde wie D/F♯, sonst Barré auf der
+E- oder A-Saite). Saitennamen vor der Tab bei besonderen Stimmungen (deutsch mit H), „Capo n“.
+Drei Ansichten: Noten + Tab, nur Noten, nur Tab mit Rhythmus darunter (Wahl wird gemerkt).
+Geprüft mit allen Spuren aller 198 Testdateien in allen drei Ansichten und den vier eigenen Liedern.
+
+Bewusst offen:
+- Bending-Kurven mit mehreren Punkten (z. B. Bend–Release–Bend) erscheinen vereinfacht als ein
+  Pfeil hinauf und einer hinunter → Feinschliff (Etappe 8).
+- Tremolo-Picking ist nur mit selbst gebauten Beispielen geprüft.
+- Mit Kapo zeigt Scrivi nur Griffbilder aus der Datei (ob die Akkordnamen dann klingend oder als
+  Griff gemeint sind, ist von Datei zu Datei verschieden).
+- Ganze Noten haben in der reinen Tab-Ansicht kein Zeichen darunter.
 
 ## 9. Entscheidungen (26. November 2026)
 

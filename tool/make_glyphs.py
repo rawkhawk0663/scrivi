@@ -59,7 +59,7 @@ GLYPHS = [
     'tupletColon',
     # Verzierungen und Gitarre
     'ornamentTrill', 'wiggleTrill', 'wiggleVibrato', 'guitarVibratoStroke', 'stringsHarmonic',
-    'arrowheadBlackUp', 'arrowheadBlackDown',
+    'arrowheadBlackUp', 'arrowheadBlackDown', 'stringsDownBow', 'stringsUpBow',
     'graceNoteSlashStemUp', 'graceNoteAcciaccaturaStemUp',
 ]
 

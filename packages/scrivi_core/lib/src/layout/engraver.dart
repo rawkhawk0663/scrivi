@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import '../model/chord_library.dart';
 import '../model/fraction.dart';
 import '../model/score.dart';
 import '../render/display.dart';
@@ -17,9 +18,12 @@ class LayoutOptions {
     this.marginTop = 8,
     this.marginBottom = 9,
     this.showTab = true,
+    this.showNotation = true,
     this.tabLineSpacing = 1.5,
     this.systemGap = 3.0,
     this.useLayoutHint = true,
+    this.showChordDiagrams = true,
+    this.germanNoteNames = false,
   });
 
   final double pageWidth;
@@ -31,6 +35,10 @@ class LayoutOptions {
 
   /// Tabulatur unter den Noten zeigen (nur bei Saiteninstrumenten).
   final bool showTab;
+
+  /// Notenzeile zeigen. Ohne sie (bei Saiteninstrumenten) steht der Rhythmus
+  /// als Hälse und Balken unter der Tabulatur.
+  final bool showNotation;
   final double tabLineSpacing;
 
   /// Mindestabstand zwischen zwei Zeilen.
@@ -38,6 +46,12 @@ class LayoutOptions {
 
   /// Takte pro Zeile aus der Datei übernehmen, wo sie passen.
   final bool useLayoutHint;
+
+  /// Griffbilder der verwendeten Akkorde oben auf der ersten Seite.
+  final bool showChordDiagrams;
+
+  /// Deutsche Notennamen für Saiten (H statt B, B statt B♭).
+  final bool germanNoteNames;
 
   double get contentWidth => pageWidth - marginLeft - marginRight;
 }
@@ -68,6 +82,10 @@ const _textSize = 1.35;
 const _lyricsSize = 1.4;
 const _smallSize = 1.0;
 const _techniqueSize = 1.1;
+
+// Vorschlagsnoten: Grösse und Abstand
+const _graceScale = 0.65;
+const _graceStep = 1.4;
 
 class _Head {
   _Head(this.note, this.y, this.glyph);
@@ -109,6 +127,9 @@ class _Ev {
   final tiesIn = <_Tie>[];
   _Ev? nextInVoice;
 
+  /// Vorschlagsnoten vor diesem Schlag.
+  final graces = <Beat>[];
+
   double get x => col.x;
   bool get isRest => beat.isRest;
   NoteValue get value => beat.duration.value;
@@ -132,6 +153,9 @@ class _Col {
   final Fraction onset;
   final evs = <_Ev>[];
   double accW = 0;
+
+  /// Platz für Vorschlagsnoten ganz links in der Spalte (Teil von [accW]).
+  double graceW = 0;
   double minW = 1.6;
   double spring = 0;
   double x = 0;
@@ -191,7 +215,10 @@ class Engraver {
   final TextMeasurer measurer;
 
   late final Track _track = score.tracks[trackIndex];
-  late final bool _tab = options.showTab && _track.staff.isStringed;
+  late final bool _tab = (options.showTab || !options.showNotation) && _track.staff.isStringed;
+
+  /// Nur Tabulatur, mit Rhythmus darunter.
+  late final bool _tabOnly = _tab && !options.showNotation;
   final _measures = <_Meas>[];
 
   ScoreLayout layout() {
@@ -211,7 +238,8 @@ class Engraver {
       final mb = score.masterBars[i];
       final bar = i < _track.bars.length ? _track.bars[i] : Bar(clef: Clef.treble, voices: []);
       final m = _Meas(i, mb, bar);
-      m.keyChange = prevKey != null && prevKey != mb.key;
+      // Ohne Notenzeile gibt es keine Tonart.
+      m.keyChange = !_tabOnly && prevKey != null && prevKey != mb.key;
       m.timeChange = prevTime != null && prevTime != mb.time;
       prevKey = mb.key;
       prevTime = mb.time;
@@ -219,10 +247,16 @@ class Engraver {
       for (var v = 0; v < bar.voices.length; v++) {
         var onset = Fraction.zero;
         final list = <_Ev>[];
+        final pendingGraces = <Beat>[];
         for (final b in bar.voices[v].beats) {
-          // Vorschlagsnoten nehmen keine Zeit (kommen später als kleine Noten).
-          if (b.grace != GraceType.none) continue;
+          // Vorschlagsnoten nehmen keine Zeit: sie hängen am nächsten Schlag.
+          if (b.grace != GraceType.none) {
+            if (b.notes.isNotEmpty) pendingGraces.add(b);
+            continue;
+          }
           final e = _Ev(b, v, i, onset, bar.voices.length);
+          e.graces.addAll(pendingGraces);
+          pendingGraces.clear();
           final col = cols.putIfAbsent(onset, () => _Col(onset));
           col.evs.add(e);
           e.col = col;
@@ -395,7 +429,9 @@ class Engraver {
           maxW = math.max(maxW, -h.accX);
         }
       }
-      c.accW = maxW;
+      final graces = c.evs.fold(0, (m, e) => e.graces.length > m ? e.graces.length : m);
+      c.graceW = graces == 0 ? 0 : graces * _graceStep + 0.5;
+      c.accW = maxW + c.graceW;
     }
   }
 
@@ -538,7 +574,8 @@ class Engraver {
 
   double _headerWidth(_Meas m, bool firstSystem) {
     var w = 0.8 + 2.7 + 0.9;
-    w += _keyWidth(m.mb.key);
+    if (_tabOnly) w += math.max(0.0, _tabClefWidth - 2.7);
+    if (!_tabOnly) w += _keyWidth(m.mb.key);
     if (firstSystem || m.timeChange) w += _timeWidth(m.mb.time);
     return w;
   }
@@ -655,6 +692,8 @@ class Engraver {
     pages.add(page);
     var y = options.marginTop;
     y = _drawHeader(page, y);
+    y = _drawSetup(page, y);
+    y = _drawDiagrams(page, y);
     var prevKey = const KeySignature(0);
     var firstOnPage = true;
     for (var si = 0; si < systems.length; si++) {
@@ -732,6 +771,184 @@ class Engraver {
     return y + 2.5;
   }
 
+  // ───────────────────────── Kapo, Stimmung, Griffbilder ─────────────────────────
+
+  /// TAB-Zeichen: Name und Grösse (auf die Höhe der Tabulatur gestreckt).
+  String get _tabClef => _track.staff.stringCount == 4 ? '4stringTabClef' : '6stringTabClef';
+  double get _tabClefScale =>
+      ((_track.staff.stringCount - 1) * options.tabLineSpacing * 0.82) / Glyphs.get(_tabClef).height;
+  double get _tabClefWidth => Glyphs.get(_tabClef).right * _tabClefScale;
+
+  /// Übliche Stimmungen (tiefste Saite zuerst): dafür braucht es keine Saitennamen.
+  static const _standardTunings = [
+    [40, 45, 50, 55, 59, 64], // Gitarre
+    [35, 40, 45, 50, 55, 59, 64], // 7-saitig
+    [30, 35, 40, 45, 50, 55, 59, 64], // 8-saitig
+    [28, 33, 38, 43], // Bass
+    [23, 28, 33, 38, 43], // 5-saitiger Bass
+    [28, 33, 38, 43, 48], // 5-saitiger Bass mit hoher C-Saite
+    [23, 28, 33, 38, 43, 48], // 6-saitiger Bass
+    [67, 60, 64, 69], // Ukulele
+  ];
+
+  bool get _standardTuning {
+    final t = _track.staff.tuning;
+    return _standardTunings.any(
+      (s) => s.length == t.length && List.generate(s.length, (i) => s[i] == t[i]).every((b) => b),
+    );
+  }
+
+  /// Stimmung mit ♭ schreiben (z. B. E♭ A♭ D♭ G♭ B♭ E♭), sonst mit ♯.
+  late final bool _flatTuning = _track.staff.tuning.any((m) => const {3, 8, 10}.contains(m % 12));
+
+  /// Name einer Saite (Tonklasse ohne Oktave).
+  String _noteName(int midi) {
+    final pc = midi % 12;
+    final names = _flatTuning
+        ? ['C', 'D♭', 'D', 'E♭', 'E', 'F', 'G♭', 'G', 'A♭', 'A', 'B♭', 'B']
+        : ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
+    var n = names[pc];
+    if (options.germanNoteNames) {
+      if (n == 'B') n = 'H';
+      if (n == 'B♭') n = 'B';
+    }
+    return n;
+  }
+
+  /// Kapo und (ohne Tabulatur) eine besondere Stimmung über der ersten Zeile.
+  double _drawSetup(PageDisplay page, double y) {
+    final staff = _track.staff;
+    if (!staff.isStringed) return y;
+    final parts = <String>[];
+    if (staff.capo > 0) parts.add('Capo ${staff.capo}');
+    if (!_tab && !_standardTuning) parts.add(staff.tuning.map(_noteName).join(' '));
+    if (parts.isEmpty) return y;
+    y += 1.4;
+    page.items.add(TextItem(parts.join('   ·   '), options.marginLeft, y, TextRole.text, _textSize, bold: true));
+    return y + 1.6;
+  }
+
+  /// Griffbild für einen Akkord: aus der Datei, sonst aus der eingebauten Sammlung.
+  ChordDiagram? _diagramFor(ChordDef def) {
+    final staff = _track.staff;
+    final d = def.diagram;
+    if (d != null && d.stringCount == staff.stringCount) {
+      if (!d.visible) return null;
+      if (d.played >= 3) return d;
+    }
+    // Die Sammlung gilt für Griffe ohne Kapo.
+    if (staff.capo != 0) return null;
+    return ChordLibrary.lookup(def.name, staff.tuning);
+  }
+
+  double _drawDiagrams(PageDisplay page, double y) {
+    if (!options.showChordDiagrams || !_track.staff.isStringed || _track.chords.isEmpty) return y;
+    // Akkorde in der Reihenfolge ihres ersten Auftretens
+    final names = <String>{};
+    final list = <(String, ChordDiagram)>[];
+    for (final bar in _track.bars) {
+      for (final v in bar.voices) {
+        for (final b in v.beats) {
+          final id = b.chordId;
+          if (id == null) continue;
+          final def = _track.chords[id];
+          if (def == null || def.name.trim().isEmpty || names.contains(def.name)) continue;
+          names.add(def.name);
+          final d = _diagramFor(def);
+          if (d != null) list.add((_chordName(id), d));
+        }
+      }
+    }
+    if (list.isEmpty) return y;
+    const nameSize = 1.35;
+    const fs = 1.0; // Bundabstand
+    const gap = 1.6;
+    final n = _track.staff.stringCount;
+    final ss = n <= 6 ? 0.8 : 0.65; // Saitenabstand
+    const frets = 5;
+    final gridW = (n - 1) * ss;
+    var cw = gridW + 2.6;
+    for (final (name, _) in list) {
+      cw = math.max(cw, measurer.width(name, TextRole.chord, nameSize, bold: true) + 0.6);
+    }
+    final perRow = math.max(1, ((options.contentWidth + gap) / (cw + gap)).floor());
+    final rowH = 2.6 + frets * fs + 1.8;
+    y += 0.8;
+    for (var r = 0; r * perRow < list.length; r++) {
+      final row = list.skip(r * perRow).take(perRow).toList();
+      final total = row.length * cw + (row.length - 1) * gap;
+      var x = options.marginLeft + (options.contentWidth - total) / 2;
+      for (final (name, d) in row) {
+        _diagram(page, name, d, x + (cw - gridW) / 2, y, nameSize, ss, fs, frets);
+        x += cw + gap;
+      }
+      y += rowH;
+    }
+    return y + 0.4;
+  }
+
+  /// Ein Griffbild: Name, darunter leere (o) und nicht gespielte (×) Saiten, Gitter mit Punkten.
+  void _diagram(
+    PageDisplay page,
+    String name,
+    ChordDiagram d,
+    double gx,
+    double y,
+    double nameSize,
+    double ss,
+    double fs,
+    int frets,
+  ) {
+    final items = page.items;
+    final n = d.stringCount;
+    final gridW = (n - 1) * ss;
+    items.add(TextItem(name, gx + gridW / 2, y + 1.1, TextRole.chord, nameSize, align: TextAlign.center, bold: true));
+    final gy = y + 2.6;
+    final pressed = d.frets.where((f) => f > 0);
+    final maxF = pressed.isEmpty ? 0 : pressed.reduce(math.max);
+    final minF = pressed.isEmpty ? 1 : pressed.reduce(math.min);
+    final start = maxF <= frets ? 1 : minF;
+    // Gitter
+    for (var i = 0; i < n; i++) {
+      items.add(LineItem(gx + i * ss, gy, gx + i * ss, gy + frets * fs, 0.09));
+    }
+    for (var k = 0; k <= frets; k++) {
+      items.add(LineItem(gx - 0.045, gy + k * fs, gx + gridW + 0.045, gy + k * fs, 0.09));
+    }
+    if (start == 1) {
+      items.add(LineItem(gx - 0.045, gy - 0.15, gx + gridW + 0.045, gy - 0.15, 0.3));
+    } else {
+      items.add(TextItem('${start}fr', gx + gridW + 0.4, gy + fs * 0.5 + 0.35, TextRole.small, 0.95));
+    }
+    // Barrés
+    final barreAt = <int>{};
+    for (final b in d.barres) {
+      final row = b.fret - start;
+      if (row < 0 || row >= frets) continue;
+      final cy = gy + (row + 0.5) * fs;
+      items.add(LineItem(gx + b.from * ss, cy, gx + b.to * ss, cy, 0.6, roundCap: true));
+      for (var i = b.from; i <= b.to; i++) {
+        if (d.frets[i] == b.fret) barreAt.add(i);
+      }
+    }
+    // Punkte und Markierungen über dem Sattel
+    for (var i = 0; i < n && i < d.frets.length; i++) {
+      final f = d.frets[i];
+      final cx = gx + i * ss;
+      final my = gy - 0.75;
+      if (f < 0) {
+        const r = 0.22;
+        items.add(LineItem(cx - r, my - r, cx + r, my + r, 0.1));
+        items.add(LineItem(cx - r, my + r, cx + r, my - r, 0.1));
+      } else if (f == 0) {
+        items.add(PathItem(ring(cx, my, 0.24, 0.1)));
+      } else if (!barreAt.contains(i)) {
+        final row = f - start;
+        if (row >= 0 && row < frets) items.add(PathItem(circle(cx, gy + (row + 0.5) * fs, 0.3)));
+      }
+    }
+  }
+
   // ───────────────────────── Hilfen ─────────────────────────
 
   String _chordName(int id) {
@@ -740,7 +957,9 @@ class Engraver {
   }
 
   String _fretText(Note n, bool parens) {
-    final t = n.dead ? 'x' : '${n.fret}';
+    var t = n.dead ? 'x' : '${n.fret}';
+    // Flageolett: Bund in spitzen Klammern
+    if (n.harmonic && !n.dead) t = '<$t>';
     return (parens || n.ghost) ? '($t)' : t;
   }
 }
@@ -823,6 +1042,7 @@ class _SystemBuilder {
   }
 
   ({List<DisplayItem> items, double top, double bottom}) build(KeySignature prevKey) {
+    if (e._tabOnly) return _buildTabOnly();
     _staff();
     _header();
     for (var j = 0; j < s.measures.length; j++) {
@@ -843,6 +1063,150 @@ class _SystemBuilder {
     // Linie links über alle Notensysteme der Zeile
     if (e._tab) line(s.x0, 0 - _staffLineT / 2, s.x0, _tabBottom + _staffLineT / 2, _thinT);
     return (items: items, top: top, bottom: bottom);
+  }
+
+  /// Zeile nur mit Tabulatur: Rhythmus darunter, Akkorde und Formteile darüber.
+  ({List<DisplayItem> items, double top, double bottom}) _buildTabOnly() {
+    _tabStaff();
+    final m0 = s.measures.first;
+    final x = s.x0 + 0.8 + math.max(2.7, e._tabClefWidth) + 0.9;
+    final mid = (_tabTop + _tabBottom) / 2;
+    if (s.first || m0.timeChange) _timeSig(m0.mb.time, x, center: mid);
+    for (var j = 1; j < s.measures.length; j++) {
+      final m = s.measures[j];
+      if (m.timeChange) _timeSig(m.mb.time, m.x + 0.3, center: mid);
+    }
+    if (m0.index > 0) text('${m0.index + 1}', s.x0, _tabTop - 1.0, TextRole.barNumber, _smallSize);
+    final rhythmBottom = _tabRhythm();
+    // Anschlag und Fermate über der Tabulatur
+    final aboveY = top - 0.6;
+    for (final ev in events) {
+      if (ev.voice != 0) continue;
+      var y = aboveY;
+      final cx = ev.x + ev.headW / 2;
+      if (ev.beat.pickStroke != 0) {
+        final name = ev.beat.pickStroke > 0 ? 'stringsDownBow' : 'stringsUpBow';
+        final g = Glyphs.get(name);
+        glyph(name, cx - g.right / 2, y);
+        y -= g.height + 0.4;
+      }
+      if (ev.beat.fermata) {
+        final g = Glyphs.get('fermataAbove');
+        glyph('fermataAbove', cx - g.right / 2, y);
+      }
+    }
+    _above(top);
+    _below(rhythmBottom);
+    return (items: items, top: top, bottom: bottom);
+  }
+
+  /// Rhythmus unter der Tabulatur (Hauptstimme): Hälse nach unten, waagrechte Balken.
+  /// Gibt die Unterkante zurück.
+  double _tabRhythm() {
+    final y0 = _tabBottom + 1.0;
+    final yEnd = _tabBottom + 3.6;
+    final restY = (y0 + yEnd) / 2;
+    double stemX(_Ev ev) => ev.x + ev.headW / 2;
+    for (final ev in events) {
+      if (ev.voice != 0) continue;
+      final v = ev.value;
+      if (ev.isRest) {
+        if (ev.fullBarRest) {
+          final m = s.measures.firstWhere((m) => m.index == ev.bar);
+          final start = m == s.measures.first ? _contentStart : m.x;
+          final mid = (start + m.x + m.w) / 2;
+          glyph('restWhole', mid - Glyphs.get('restWhole').right * 0.8 / 2, restY - 0.5, scale: 0.8);
+          continue;
+        }
+        final name = switch (v) {
+          NoteValue.doubleWhole => 'restDoubleWhole',
+          NoteValue.whole => 'restWhole',
+          NoteValue.half => 'restHalf',
+          NoteValue.quarter => 'restQuarter',
+          NoteValue.eighth => 'rest8th',
+          NoteValue.sixteenth => 'rest16th',
+          NoteValue.thirtySecond => 'rest32nd',
+          NoteValue.sixtyFourth => 'rest64th',
+          NoteValue.hundredTwentyEighth => 'rest128th',
+        };
+        final g = Glyphs.get(name);
+        final y = v == NoteValue.whole || v == NoteValue.doubleWhole ? restY - 0.5 : restY;
+        glyph(name, ev.x + ev.headW / 2 - g.right * 0.8 / 2, y, scale: 0.8);
+        for (var d = 0; d < ev.beat.duration.dots; d++) {
+          glyph('augmentationDot', ev.x + ev.headW / 2 + g.right * 0.4 + 0.3 + d * 0.5, restY - 0.5);
+        }
+        continue;
+      }
+      if (v.log2 < 1) {
+        // Ganze: nur Punkte, kein Hals
+        ev.stemTip = y0;
+        continue;
+      }
+      final x = stemX(ev);
+      // Halbe: kurzer Hals
+      final from = v == NoteValue.half ? restY : y0;
+      line(x, from, x, yEnd, _stemT);
+      ev.stemBase = from;
+      ev.stemTip = yEnd;
+      if (ev.beam == null && v.hasFlag) {
+        final name = switch (v.flagCount) {
+          1 => 'flag8thDown',
+          2 => 'flag16thDown',
+          3 => 'flag32ndDown',
+          4 => 'flag64thDown',
+          _ => 'flag128thDown',
+        };
+        final a = Glyphs.get(name).anchors['stemDownSW'] ?? const Pt(0, 0);
+        glyph(name, x - _stemT / 2 - a.x, yEnd + a.y);
+      }
+      for (var d = 0; d < ev.beat.duration.dots; d++) {
+        glyph('augmentationDot', x + 0.45 + d * 0.5, (from + yEnd) / 2 - 0.2);
+      }
+      // Tremolo-Picking: Striche am Hals
+      final n = ev.beat.tremolo;
+      for (var k = 0; k < n; k++) {
+        final yy = (from + yEnd) / 2 + (k - (n - 1) / 2) * 0.7;
+        add(PathItem([0, x - 0.5, yy + 0.2, 1, x + 0.5, yy - 0.15, 1, x + 0.5, yy - 0.4, 1, x - 0.5, yy - 0.05, 4]));
+      }
+    }
+    // Balken, waagrecht am Halsende
+    for (final m in s.measures) {
+      for (final g in m.beams) {
+        final evs = g.evs.where((ev) => ev.voice == 0 && !ev.isRest).toList();
+        if (evs.length < 2) continue;
+        final maxFlags = evs.map((ev) => ev.value.flagCount).reduce(math.max);
+        add(beam(stemX(evs.first) - _stemT / 2, yEnd, stemX(evs.last) + _stemT / 2, yEnd, _beamT, down: false));
+        for (var level = 2; level <= maxFlags; level++) {
+          final y = yEnd - (level - 1) * (_beamT + _beamGap);
+          var k = 0;
+          while (k < evs.length) {
+            if (evs[k].value.flagCount < level) {
+              k++;
+              continue;
+            }
+            var j = k;
+            while (j + 1 < evs.length && evs[j + 1].value.flagCount >= level) {
+              j++;
+            }
+            double xa, xb;
+            if (j > k) {
+              xa = stemX(evs[k]) - _stemT / 2;
+              xb = stemX(evs[j]) + _stemT / 2;
+            } else {
+              final ev = evs[k];
+              final toLeft =
+                  k == evs.length - 1 || (k > 0 && ev.beat.duration.dots == 0 && evs[k - 1].beat.duration.dots > 0);
+              xa = toLeft ? stemX(ev) + _stemT / 2 - 1.1 : stemX(ev) - _stemT / 2;
+              xb = xa + 1.1;
+            }
+            add(beam(xa, y, xb, y, _beamT, down: false));
+            k = j + 1;
+          }
+        }
+      }
+    }
+    _tuplets(belowY: yEnd + 0.2);
+    return yEnd + 0.5;
   }
 
   // ── Notensystem ──
@@ -876,7 +1240,7 @@ class _SystemBuilder {
     return n * 1.0;
   }
 
-  void _timeSig(TimeSignature t, double x) {
+  void _timeSig(TimeSignature t, double x, {double center = 2}) {
     void number(String digits, double y) {
       final w = digits.length * 1.8;
       var cx = x + (math.max(t.beats.toString().length, t.beatType.toString().length) * 1.8 - w) / 2;
@@ -886,8 +1250,8 @@ class _SystemBuilder {
       }
     }
 
-    number('${t.beats}', 1);
-    number('${t.beatType}', 3);
+    number('${t.beats}', center - 1);
+    number('${t.beatType}', center + 1);
   }
 
   String _clefGlyph(Clef c) => switch (c) {
@@ -1150,6 +1514,7 @@ class _SystemBuilder {
       }
       return;
     }
+    _graceNotes(ev);
     // Hilfslinien
     final hw = ev.headW;
     var minX = x + ev.heads.map((h) => h.dx).reduce(math.min);
@@ -1208,6 +1573,102 @@ class _SystemBuilder {
       if (acc & 16 != 0) art('articTenuto');
       if (acc & 8 != 0) art('articAccent');
       if (acc & 4 != 0) art('articMarcato');
+    }
+    _aboveNote(ev);
+    _tremolo(ev);
+  }
+
+  /// Anschlag (auf/ab), Fermate und – ohne Tabulatur – Vibrato über der Note.
+  void _aboveNote(_Ev ev) {
+    var y = math.min(ev.top - 1.0, -0.6);
+    if (ev.stemUp && ev.hasStem) y = math.min(y, ev.stemTip - 0.6);
+    final cx = ev.x + ev.headW / 2;
+    if (ev.beat.pickStroke != 0) {
+      final name = ev.beat.pickStroke > 0 ? 'stringsDownBow' : 'stringsUpBow';
+      final g = Glyphs.get(name);
+      glyph(name, cx - g.right / 2, y);
+      y -= g.height + 0.4;
+    }
+    if (ev.beat.fermata) {
+      final g = Glyphs.get('fermataAbove');
+      glyph('fermataAbove', cx - g.right / 2, y);
+      y -= g.height + 0.3;
+    }
+    if (!e._tab && ev.beat.notes.any((n) => n.vibrato)) {
+      final end = ev.nextInVoice != null && inSystem(ev.nextInVoice!) ? ev.nextInVoice!.x - 0.4 : ev.x + 3.0;
+      add(_wavy(ev.x, end, y - 0.3));
+    }
+  }
+
+  /// Wellenlinie (Vibrato) von x1 bis x2.
+  PathItem _wavy(double x1, double x2, double y) {
+    final c = <double>[0, x1, y];
+    var x = x1;
+    var up = true;
+    while (x + 0.35 <= x2) {
+      x += 0.35;
+      c.addAll([1, x, y + (up ? -0.28 : 0.28)]);
+      up = !up;
+    }
+    return PathItem(c, fill: false, thickness: 0.16);
+  }
+
+  /// Tremolo-Picking: schräge Striche am Hals (bei Ganzen über dem Kopf).
+  void _tremolo(_Ev ev) {
+    final n = ev.beat.tremolo;
+    if (n <= 0 || ev.heads.isEmpty) return;
+    final cx = ev.hasStem ? ev.stemX : ev.x + ev.headW / 2;
+    final up = ev.stemUp;
+    // Mitte zwischen Kopf und Halsende (bzw. über dem Kopf ohne Hals)
+    final yMid = ev.hasStem ? (ev.stemBase + ev.stemTip) / 2 : ev.top - 1.6;
+    for (var k = 0; k < n; k++) {
+      final yy = yMid + (k - (n - 1) / 2) * 0.75 * (up ? 1 : -1);
+      add(
+        PathItem([0, cx - 0.6, yy + 0.25, 1, cx + 0.6, yy - 0.15, 1, cx + 0.6, yy - 0.45, 1, cx - 0.6, yy - 0.05, 4]),
+      );
+    }
+  }
+
+  /// Kleine Noten mit Querstrich vor dem Schlag, mit Bogen zur Hauptnote.
+  void _graceNotes(_Ev ev) {
+    if (ev.graces.isEmpty) return;
+    final top = e._topDiatonic(track.bars[ev.bar].clef);
+    final start = ev.col.x - ev.col.accW + 0.25;
+    final head = Glyphs.get('noteheadBlack');
+    final hw = head.right * _graceScale;
+    for (var k = 0; k < ev.graces.length; k++) {
+      final g = ev.graces[k];
+      final x = start + k * _graceStep;
+      final ys = [for (final n in g.notes) (top - n.shown.diatonic) / 2]..sort();
+      if (ys.isEmpty) continue;
+      // Hilfslinien
+      for (final y in ys) {
+        for (var ly = -1.0; ly >= y - 0.01; ly -= 1) {
+          line(x - 0.25, ly, x + hw + 0.25, ly, _ledgerT * 0.8);
+        }
+        for (var ly = 5.0; ly <= y + 0.01; ly += 1) {
+          line(x - 0.25, ly, x + hw + 0.25, ly, _ledgerT * 0.8);
+        }
+      }
+      for (var i = 0; i < g.notes.length; i++) {
+        final n = g.notes[i];
+        final y = (top - n.shown.diatonic) / 2;
+        glyph(n.dead ? 'noteheadXBlack' : 'noteheadBlack', x, y, scale: _graceScale);
+      }
+      // Hals nach oben mit Fähnchen und Querstrich
+      final sx = x + hw - _stemT * 0.4;
+      final tip = ys.first - 2.6;
+      line(sx, ys.last - 0.12, sx, tip, _stemT * 0.8);
+      final flag = Glyphs.get('flag8thUp');
+      final a = flag.anchors['stemUpNW'] ?? const Pt(0, 0);
+      glyph('flag8thUp', sx - _stemT * 0.4 - a.x * _graceScale, tip + a.y * _graceScale, scale: _graceScale);
+      if (g.grace == GraceType.beforeBeat) line(sx - 0.55, tip + 1.7, sx + 0.8, tip + 0.6, 0.12);
+      // Bogen zur Hauptnote
+      if (k == ev.graces.length - 1 && ev.heads.isNotEmpty) {
+        final yb = math.max(ys.last, ev.bottom) + 0.7;
+        final x2 = ev.x + ev.heads.map((h) => h.dx).reduce(math.min) + 0.4;
+        if (x2 > x + 0.6) add(arc(x + hw / 2, ys.last + 0.6, x2, yb, up: false, height: 0.5, thickness: 0.18));
+      }
     }
   }
 
@@ -1283,9 +1744,9 @@ class _SystemBuilder {
 
   // ── n-tolen ──
 
-  void _tuplets() {
+  void _tuplets({double? belowY}) {
     for (final m in s.measures) {
-      for (final voice in m.voices) {
+      for (final voice in belowY == null ? m.voices : m.voices.take(1)) {
         var k = 0;
         while (k < voice.length) {
           final t = voice[k].beat.duration.tuplet;
@@ -1307,7 +1768,9 @@ class _SystemBuilder {
           final up = notes.isEmpty ? true : notes.first.stemUp;
           final xa = group.first.x, xb = group.last.x + group.last.headW;
           double y;
-          if (notes.isEmpty) {
+          if (belowY != null) {
+            y = belowY;
+          } else if (notes.isEmpty) {
             y = up ? -1.0 : 5.5;
           } else if (up) {
             y = notes.map((ev) => math.min(ev.stemTip, ev.top)).reduce(math.min) - 1.6;
@@ -1574,7 +2037,7 @@ class _SystemBuilder {
     final voice0 = events.toList();
     final hasPm = voice0.any((ev) => ev.beat.notes.any((x) => x.palmMuted || x.letRing));
     final hasBend = voice0.any((ev) => ev.beat.notes.any((x) => x.bend != null));
-    var y = math.max(bottom, 4.0) + 2.2;
+    var y = e._tabOnly ? 0.0 : math.max(bottom, 4.0) + 2.2;
     if (hasPm) y += 1.4;
     if (hasBend) y += 2.0;
     _tabTop = y;
@@ -1583,10 +2046,17 @@ class _SystemBuilder {
       line(s.x0, _tabTop + k * sp, s.x1, _tabTop + k * sp, _staffLineT);
     }
     // TAB-Schlüssel, auf die Höhe der Tabulatur gestreckt
-    final clef = n == 4 ? '4stringTabClef' : '6stringTabClef';
+    final clef = e._tabClef;
     final g = Glyphs.get(clef);
-    final scale = ((n - 1) * sp * 0.82) / g.height;
+    final scale = e._tabClefScale;
     glyph(clef, s.x0 + 0.9, (_tabTop + _tabBottom) / 2 - (g.top + g.bottom) / 2 * scale, scale: scale);
+    // Besondere Stimmung: Saitennamen vor der ersten Zeile
+    if (s.first && !e._standardTuning) {
+      for (var k = 0; k < n; k++) {
+        final ly = _stringY(k);
+        text(e._noteName(track.staff.tuning[k]), s.x0 - 0.5, ly + 0.36, TextRole.small, 1.0, align: TextAlign.right);
+      }
+    }
     // Taktlinien und Wiederholungen
     for (var j = 0; j < s.measures.length; j++) {
       final m = s.measures[j];
@@ -1595,6 +2065,33 @@ class _SystemBuilder {
     }
     // P.M. und let ring
     if (hasPm) _techniqueLines(_tabTop - (hasBend ? 3.2 : 1.2));
+    // Vibrato: Wellenlinie über der Tabulatur
+    for (final ev in events) {
+      if (!ev.beat.notes.any((n) => n.vibrato)) continue;
+      final next = ev.nextInVoice;
+      final end = next != null && inSystem(next) ? next.x - 0.3 : math.min(ev.x + 3.0, s.x1 - 0.3);
+      if (end > ev.x + 0.8) add(_wavy(ev.x, end, _tabTop - 0.6));
+    }
+    // Zahlen der Vorschlagsnoten (klein, mit Bogen zur Hauptnote)
+    for (final ev in events) {
+      if (ev.graces.isEmpty || ev.beat.slashed) continue;
+      final start = ev.col.x - ev.col.accW + 0.25;
+      for (var k = 0; k < ev.graces.length; k++) {
+        final cx = start + k * _graceStep + 0.4;
+        for (final nt in ev.graces[k].notes) {
+          if (nt.string == null || nt.fret == null) continue;
+          final ly = _stringY(nt.string!);
+          final t = nt.dead ? 'x' : '${nt.fret}';
+          final w = tw(t, TextRole.tab, _tabSize * 0.72);
+          add(RectItem(cx - w / 2 - 0.1, ly - 0.45, w + 0.2, 0.9, background: true));
+          text(t, cx, ly + _tabSize * 0.72 * 0.36, TextRole.tab, _tabSize * 0.72, align: TextAlign.center);
+          if (k == ev.graces.length - 1 && ev.beat.notes.any((m) => m.string == nt.string)) {
+            final x2 = ev.x + ev.headW / 2;
+            if (x2 > cx + 0.8) add(arc(cx, ly - 0.65, x2, ly - 0.75, up: true, height: 0.45, thickness: 0.18));
+          }
+        }
+      }
+    }
     // Zahlen
     for (final ev in events) {
       if (ev.isRest || ev.beat.slashed) continue;
@@ -1610,6 +2107,8 @@ class _SystemBuilder {
           continue;
         }
         _fret(e._fretText(nt, false), cx, ly);
+        // Tapping: T über der Zahl
+        if (nt.tapped) text('T', cx, ly - 0.9, TextRole.technique, 0.95, align: TextAlign.center);
       }
     }
     _tabConnections();

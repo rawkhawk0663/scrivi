@@ -227,15 +227,39 @@ class ChordDef {
 }
 
 class ChordDiagram {
-  const ChordDiagram({required this.stringCount, required this.baseFret, required this.frets, this.fretCount = 5});
+  const ChordDiagram({
+    required this.stringCount,
+    required this.baseFret,
+    required this.frets,
+    this.fretCount = 5,
+    this.barres = const [],
+    this.visible = true,
+  });
   final int stringCount;
 
-  /// Erster gezeigter Bund (0 = Sattel).
+  /// Erster gezeigter Bund (0 = Sattel). Die Bünde in [frets] sind immer absolut.
   final int baseFret;
 
   /// Bund pro Saite (tiefste zuerst), −1 = nicht gespielt, 0 = leer.
   final List<int> frets;
   final int fretCount;
+
+  /// Barrés (ein Finger über mehrere Saiten).
+  final List<ChordBarre> barres;
+
+  /// In der Datei als sichtbar markiert.
+  final bool visible;
+
+  /// Anzahl gespielter Saiten.
+  int get played => frets.where((f) => f >= 0).length;
+}
+
+/// Ein Finger über mehrere Saiten auf demselben Bund (Saiten wie im Modell: 0 = tiefste).
+class ChordBarre {
+  const ChordBarre({required this.fret, required this.from, required this.to});
+  final int fret;
+  final int from;
+  final int to;
 }
 
 enum Clef { treble, treble8vb, bass, alto, tenor, neutral }
@@ -324,6 +348,7 @@ class Beat {
     this.fermata = false,
     this.pickStroke = 0,
     this.letRingText = false,
+    this.tremolo = 0,
   }) : notes = notes ?? [],
        lyrics = lyrics ?? [];
 
@@ -349,6 +374,9 @@ class Beat {
   /// Anschlag: 0 keiner, 1 abwärts, −1 aufwärts.
   final int pickStroke;
   final bool letRingText;
+
+  /// Tremolo-Picking: Anzahl Striche am Hals (1 = Achtel, 2 = Sechzehntel, 3 = Zweiunddreissigstel).
+  final int tremolo;
 
   bool get isRest => notes.isEmpty;
 }

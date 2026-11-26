@@ -18,10 +18,13 @@ Scrivi is available in **German and English**. It needs **no account**, collects
 - **Library:** import music files with *Import*, *Import folder* or simply by dragging them into the window. Scrivi keeps a copy in its own library and leaves the originals untouched. Each piece appears with a preview, title and artist. Search by title or artist. Scrivi spots duplicate files. Deleting moves the piece into the library’s “Papierkorb” (bin) folder, so nothing is lost.
 - **File formats:** Guitar Pro of all versions (`.gp`, `.gpx`, `.gp5`, `.gp4`, `.gp3`), MusicXML (`.musicxml`, `.xml`, compressed `.mxl`) and MIDI (`.mid`). For MIDI, Scrivi snaps the notes to sixteenths and splits them into bars. For MusicXML, every staff of an instrument becomes a track of its own; a tablature staff for the same instrument supplies strings and frets.
 - **Notation with tablature:** neatly engraved on A4 pages, with the systems split the way the file intends. This includes title and artist, tempo, sections (intro, verse, chorus …), chord symbols, repeats and endings, double bars, key and time changes, ties, beams, dots, tuplets, accidentals, rhythm slashes, dynamics and hairpins, lyrics and free text.
-- **Guitar techniques:** palm mute (P.M.), dead notes (x), hammer-ons and pull-offs (H/P), slides, bends with amount (½, full …), ghost notes, accents, let ring.
+- **Guitar techniques:** palm mute (P.M.), dead notes (x), hammer-ons and pull-offs (H/P), slides, bends with amount (½, full …), ghost notes, accents, let ring, vibrato, harmonics, tapping (T), up and down strokes, tremolo picking, fermatas and grace notes.
+- **Chord diagrams:** the top of the first page shows the diagrams of all chords in the piece. They come from the file; where they are missing, Scrivi uses the usual shapes for standard tuning (open or barre).
+- **Tunings and capo:** for special tunings (e.g. drop D, E♭ tuning) the string names stand in front of the tab. A capo appears as “Capo 2” above the music. 7- and 8-string guitars and bass work too.
+- **Choose the view:** notation and tab, notation only or tab only. In tab only, stems and beams underneath show the rhythm. Scrivi remembers your choice.
 - **Viewing:** scroll with the mouse wheel, swipes, Page Up/Down, arrow keys or a pedal. Zoom with two fingers, Ctrl + mouse wheel or the buttons at the top. If a file has several tracks, choose the track at the top.
 
-Not yet: grace notes, chord diagrams in the notation, several instruments at once (full score). These come in the next stages.
+Not yet: playback, writing, several instruments at once (full score). These come in the next stages.
 
 ## What Scrivi is meant to do
 

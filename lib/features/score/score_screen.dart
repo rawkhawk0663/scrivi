@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:scrivi_core/scrivi_core.dart' as core;
 
+import '../../app/device_settings.dart';
 import '../../app/error_log.dart';
 import '../../app/l10n.dart';
 import '../../app/theme.dart';
@@ -28,12 +29,29 @@ class _ScoreScreenState extends State<ScoreScreen> {
   List<ui.Picture>? _pictures;
   Object? _error;
   int _track = 0;
+  ScoreView _view = ScoreView.both;
   final _viewer = GlobalKey<_PagesViewerState>();
 
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  DeviceSettings? get _settings => context.getInheritedWidgetOfExactType<SettingsScope>()?.settings;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _view = _settings?.scoreView.value ?? ScoreView.both;
+  }
+
+  bool get _stringed => _score != null && _score!.tracks.isNotEmpty && _score!.tracks[_track].staff.isStringed;
+
+  void _setView(ScoreView v) {
+    _view = v;
+    _settings?.setScoreView(v);
+    _engrave();
   }
 
   Future<void> _load() async {
@@ -53,7 +71,17 @@ class _ScoreScreenState extends State<ScoreScreen> {
     final score = _score;
     if (score == null) return;
     try {
-      final layout = core.Engraver(score, trackIndex: _track, measurer: FlutterTextMeasurer()).layout();
+      final options = core.LayoutOptions(
+        showTab: _view != ScoreView.notation,
+        showNotation: _view != ScoreView.tab,
+        germanNoteNames: !L10n.isEnglish,
+      );
+      final layout = core.Engraver(
+        score,
+        trackIndex: _track,
+        options: options,
+        measurer: FlutterTextMeasurer(),
+      ).layout();
       final pictures = layout.pages.map(PagePictures.record).toList();
       final old = _pictures;
       setState(() {
@@ -71,6 +99,12 @@ class _ScoreScreenState extends State<ScoreScreen> {
       if (mounted) setState(() => _error = e);
     }
   }
+
+  String _viewName(ScoreView v) => switch (v) {
+    ScoreView.both => tr('Noten und Tabulatur', 'Notation and tab'),
+    ScoreView.notation => tr('Nur Noten', 'Notation only'),
+    ScoreView.tab => tr('Nur Tabulatur', 'Tab only'),
+  };
 
   String _trackName(int i) {
     final n = _score!.tracks[i].name;
@@ -136,6 +170,17 @@ class _ScoreScreenState extends State<ScoreScreen> {
                   ],
                 ),
               ),
+            ),
+          if (_pages != null && _stringed)
+            PopupMenuButton<ScoreView>(
+              tooltip: tr('Ansicht', 'View'),
+              initialValue: _view,
+              icon: const Icon(Icons.view_agenda_outlined),
+              onSelected: _setView,
+              itemBuilder: (context) => [
+                for (final v in ScoreView.values)
+                  CheckedPopupMenuItem(value: v, checked: v == _view, child: Text(_viewName(v))),
+              ],
             ),
           if (_pages != null) ...[
             IconButton(

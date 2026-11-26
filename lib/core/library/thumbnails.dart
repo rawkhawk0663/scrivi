@@ -20,12 +20,16 @@ class Thumbnails {
   static const crop = 0.5;
   static const width = 420;
 
+  /// Stand des Notensatzes: erhöhen, wenn die Noten anders aussehen, damit die
+  /// Vorschaubilder neu entstehen.
+  static const style = 2;
+
   final _jobs = <String, Future<File?>>{};
   Future<void> _queue = Future.value();
 
   String _keyFor(Piece piece) {
     final safe = piece.fileName.replaceAll(RegExp(r'[^\w\-. ]'), '_');
-    return '$safe-${piece.size}-${piece.modified.millisecondsSinceEpoch}.png';
+    return '$safe-${piece.size}-${piece.modified.millisecondsSinceEpoch}-v$style.png';
   }
 
   Future<File?> forPiece(Piece piece) {

@@ -135,6 +135,8 @@ class _Ev {
   Hairpin hairpin = Hairpin.none;
   final lyrics = <int, String>{};
   bool fermata = false;
+  GraceType grace = GraceType.none;
+  int tremolo = 0;
 }
 
 class _N {
@@ -337,7 +339,8 @@ class _Parser {
           case 'forward':
             pos += _int(el, 'duration') ?? 0;
           case 'note':
-            if (_child(el, 'grace') != null || _child(el, 'cue') != null) continue;
+            if (_child(el, 'cue') != null) continue;
+            final graceEl = _child(el, 'grace');
             final staff = _int(el, 'staff') ?? 1;
             final voice = '$staff/${_text(el, 'voice').isEmpty ? '1' : _text(el, 'voice')}';
             final dur = _int(el, 'duration') ?? 0;
@@ -345,6 +348,20 @@ class _Parser {
             final voices = ((events[staff] ??= {})[bar] ??= {});
             final list = voices[voice] ??= [];
             _Ev ev;
+            if (graceEl != null) {
+              // Vorschlagsnote: nimmt keine Zeit, steht vor der nächsten Note
+              if (isChord && list.isNotEmpty && list.last.grace != GraceType.none) {
+                ev = list.last;
+              } else {
+                final v = _value(_text(el, 'type')) ?? NoteValue.eighth;
+                ev = _Ev(Fraction(pos, divisions * 4), NoteDuration(v), 0)
+                  ..grace = graceEl.getAttribute('slash') == 'yes' ? GraceType.beforeBeat : GraceType.onBeat;
+                list.add(ev);
+              }
+              final n = _note(el);
+              if (n != null) ev.notes.add(n);
+              continue;
+            }
             if (isChord && list.isNotEmpty) {
               ev = list.last;
             } else {
@@ -373,6 +390,10 @@ class _Parser {
             }
             final notations = _child(el, 'notations');
             if (notations != null && _child(notations, 'fermata') != null) ev.fermata = true;
+            final trem = _child(_child(notations, 'ornaments'), 'tremolo');
+            if (trem != null && trem.getAttribute('type') != 'start' && trem.getAttribute('type') != 'stop') {
+              ev.tremolo = int.tryParse(trem.innerText.trim()) ?? 1;
+            }
             for (final ly in _children(el, 'lyric')) {
               final number = int.tryParse(ly.getAttribute('number') ?? '') ?? 1;
               var t = _text(ly, 'text');
@@ -602,6 +623,7 @@ class _Parser {
     grace: b.grace,
     fermata: b.fermata,
     pickStroke: b.pickStroke,
+    tremolo: b.tremolo,
   );
 
   Clef? _clefAt(Map<int, Clef>? m, int bar) {
@@ -623,7 +645,12 @@ class _Parser {
     bool fromTab,
     Map<String, List<_Ev>>? tabVoices,
   ) {
-    evs.sort((a, b) => a.onset.compareTo(b.onset));
+    // Stabil sortieren: Vorschläge bleiben vor ihrer Hauptnote
+    final order = {for (var i = 0; i < evs.length; i++) evs[i]: i};
+    evs.sort((a, b) {
+      final c = a.onset.compareTo(b.onset);
+      return c != 0 ? c : order[a]!.compareTo(order[b]!);
+    });
     final out = <Beat>[];
     var t = Fraction.zero;
     for (final ev in evs) {
@@ -632,6 +659,7 @@ class _Parser {
         for (final d in _fill(ev.onset - t)) {
           out.add(Beat(duration: d));
         }
+        t = ev.onset;
       }
       final notes = <Note>[];
       for (final n in ev.notes) {
@@ -712,10 +740,12 @@ class _Parser {
         hairpin: ev.hairpin,
         lyrics: lyrics,
         fermata: ev.fermata,
+        grace: ev.grace,
+        tremolo: ev.tremolo,
       );
       if (ev.chord != null) _pendingChordNames[beat] = ev.chord!;
       out.add(beat);
-      t = ev.onset + ev.duration.length;
+      if (ev.grace == GraceType.none) t = ev.onset + ev.duration.length;
     }
     return out;
   }

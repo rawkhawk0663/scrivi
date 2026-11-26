@@ -25,7 +25,8 @@ Der Plan mit allen Etappen steht in **`BAUPLAN.md`**. Nach jeder Etappe dort den
 ## Aufbau
 ```
 packages/scrivi_core/   Herz von Scrivi, reines Dart ohne Flutter (eigene Tests: dart test)
-  model/      Fraction (genaue Notenlängen), Pitch (mit Schreibweise), Score/MasterBar/Track/Bar/Voice/Beat/Note
+  model/      Fraction (genaue Notenlängen), Pitch (mit Schreibweise), Score/MasterBar/Track/Bar/Voice/Beat/Note,
+              ChordLibrary (eingebaute Griffbilder)
   io/         GpReader.read: erkennt das Format und liest .gp (ZIP mit score.gpif), .gpx (GpxContainer:
               BCFZ entpacken, BCFS-Dateisystem), .gp3/.gp4/.gp5 (GpBinaryReader), MusicXML
               (MusicXmlReader, auch .mxl und „timewise“), MIDI (MidiReader)
@@ -52,7 +53,10 @@ tool/         make_icon.py (Symbol), make_glyphs.py (Notenzeichen aus Bravura)
 - **Zeilen:** Die Takte pro Zeile aus der Datei (`SystemsLayout`) werden übernommen, solange sie passen; sonst wird gefüllt. Jede Zeile im Blocksatz.
 - **Tabulatur:** Saite 0 = tiefste. Schläge mit Rhythmus-Schrägstrichen zeigen in der Tab nichts. Gehaltene Noten nur am Zeilenanfang in Klammern.
 - **Dynamik** erscheint nur bei Wechseln (die Dateien schreiben „mf“ an jeden Schlag).
-- Vorschlagsnoten werden noch übersprungen (nehmen keine Zeit).
+- **Vorschlagsnoten** nehmen keine Zeit: der Notensatz hängt sie an den nächsten Schlag (`_Ev.graces`) und reserviert vorne in der Spalte Platz (`_Col.graceW`).
+- **Ansichten** (`LayoutOptions.showTab`/`showNotation`): ohne Notenzeile steht die Tab bei y = 0, der Rhythmus der Hauptstimme darunter (`_buildTabOnly`, `_tabRhythm`); ohne Saiten immer Noten. Die Wahl steht in `einstellungen.json` (`ansicht`).
+- **Griffbilder** oben auf Seite 1 (`_drawDiagrams`): aus der Datei, wenn mindestens drei Saiten belegt sind; sonst `ChordLibrary` (nur sechs Saiten in Normalstimmung und ohne Kapo). Barré in GP-Dateien: gleicher Finger auf gleichem Bund über mindestens vier Saiten.
+- **Saitennamen** nur bei besonderen Stimmungen (Liste `_standardTunings`), mit ♭ wenn die Stimmung E♭/A♭/B♭ enthält; deutsche Namen (H, B) über `LayoutOptions.germanNoteNames` nach der App-Sprache.
 
 ## Dateiformate (packages/scrivi_core/lib/src/io)
 - `GpReader.read(bytes)` ist der einzige Einstieg: erkennt das Format am Inhalt, nicht an der Endung.
@@ -64,7 +68,7 @@ tool/         make_icon.py (Symbol), make_glyphs.py (Notenzeichen aus Bravura)
 - Testdateien fremder Herkunft (alphaTab, MPL-2.0) nur lokal ausserhalb des Projekts verwenden; im Projekt bauen die Tests ihre Beispiele selbst (`test/formats_test.dart`).
 
 ## Bibliothek
-- `<ApplicationSupport>/Bibliothek/Stücke/` enthält Kopien der importierten Dateien (alle lesbaren Formate, Endung bleibt; fehlt sie, wird sie aus dem Inhalt bestimmt), `Bibliothek/Papierkorb/` Gelöschtes, `Bibliothek/.scrivi/index.json` (Format `scrivi-library` v1: Titel, Interpret, Takte, Grösse, Änderungszeit pro Datei) und `.scrivi/vorschau/` (Vorschaubilder, Name mit Grösse und Änderungszeit).
+- `<ApplicationSupport>/Bibliothek/Stücke/` enthält Kopien der importierten Dateien (alle lesbaren Formate, Endung bleibt; fehlt sie, wird sie aus dem Inhalt bestimmt), `Bibliothek/Papierkorb/` Gelöschtes, `Bibliothek/.scrivi/index.json` (Format `scrivi-library` v1: Titel, Interpret, Takte, Grösse, Änderungszeit pro Datei) und `.scrivi/vorschau/` (Vorschaubilder, Name mit Grösse, Änderungszeit und `Thumbnails.style`; diese Zahl erhöhen, wenn sich der Notensatz sichtbar ändert).
 - Import prüft jede Datei (im Hintergrund) und erkennt Doppelte (gleicher Inhalt).
 - Das eigene Format `.scrivi` kommt mit dem Schreiben (Etappe 5).
 
@@ -72,7 +76,7 @@ tool/         make_icon.py (Symbol), make_glyphs.py (Notenzeichen aus Bravura)
 1. **Kein Konto, keine Daten sammeln, keine Werbung, funktioniert ohne Internet.** Internet nur für Updates und (später) den eigenen Dropbox-Abgleich.
 2. **Nie Daten verlieren:** Dateien erst in eine Zwischendatei schreiben, dann umbenennen. Alte Formate bleiben lesbar.
 3. **Scrivi verwaltet seine Stücke selbst** in einer Bibliothek im Datenordner (Wunsch des Besitzers, wie Volti), dazu Import und Export einzelner Dateien.
-4. **Gerätespezifisch** (nie abgeglichen): `<ApplicationSupport>/einstellungen.json` (Darstellung, Sprache), `fehler.log`, `update.log`.
+4. **Gerätespezifisch** (nie abgeglichen): `<ApplicationSupport>/einstellungen.json` (Darstellung, Sprache, Notenansicht), `fehler.log`, `update.log`.
 5. **Bedienbar mit Stift, Finger, Maus und Tastatur.** Langes Drücken = Rechtsklick.
 6. **Flüssig auf dem Surface:** messen statt raten; fertige Teile als Bild zwischenspeichern, keine Schatten und Durchsichtigkeit auf grossen Flächen (Erfahrung aus Volti).
 

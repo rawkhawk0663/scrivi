@@ -13,6 +13,7 @@ class DeviceSettings {
   DeviceSettings._(this._file, Map<String, dynamic> data) : _data = data {
     themeMode.value = _themeFrom(data['theme'] as String?);
     language.value = AppLanguage.fromCode(data['language'] as String?);
+    scoreView.value = ScoreView.fromName(data['ansicht'] as String?);
   }
 
   final File? _file;
@@ -23,6 +24,9 @@ class DeviceSettings {
 
   /// Gewählte Sprache (null = wie das System).
   final language = ValueNotifier<AppLanguage?>(null);
+
+  /// Ansicht der Noten bei Saiteninstrumenten.
+  final scoreView = ValueNotifier<ScoreView>(ScoreView.both);
 
   /// Sprache, die gerade gilt.
   AppLanguage get effectiveLanguage => language.value ?? AppLanguage.system;
@@ -63,6 +67,12 @@ class DeviceSettings {
     await _save();
   }
 
+  Future<void> setScoreView(ScoreView v) async {
+    scoreView.value = v;
+    _data['ansicht'] = v.name;
+    await _save();
+  }
+
   static ThemeMode _themeFrom(String? name) {
     for (final m in ThemeMode.values) {
       if (m.name == name) return m;
@@ -96,4 +106,23 @@ class SettingsScope extends InheritedWidget {
 
   @override
   bool updateShouldNotify(SettingsScope old) => old.settings != settings;
+}
+
+/// Was bei Saiteninstrumenten zu sehen ist.
+enum ScoreView {
+  /// Noten und Tabulatur
+  both,
+
+  /// Nur Noten
+  notation,
+
+  /// Nur Tabulatur, mit Rhythmus darunter
+  tab;
+
+  static ScoreView fromName(String? name) {
+    for (final v in values) {
+      if (v.name == name) return v;
+    }
+    return both;
+  }
 }
