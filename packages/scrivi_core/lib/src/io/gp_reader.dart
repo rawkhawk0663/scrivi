@@ -6,6 +6,10 @@ import 'package:xml/xml.dart';
 
 import '../model/pitch.dart';
 import '../model/score.dart';
+import 'gp_binary.dart';
+import 'gpx.dart';
+import 'midi_reader.dart';
+import 'musicxml_reader.dart';
 
 /// Warum sich eine Datei nicht öffnen liess (die App macht daraus einen Text).
 enum ScoreFileProblem {
@@ -33,7 +37,8 @@ class ScoreFileException implements Exception {
 class GpReader {
   GpReader._();
 
-  /// Datei-Inhalt lesen. Erkennt das Format am Anfang der Datei.
+  /// Datei-Inhalt lesen. Erkennt das Format am Anfang der Datei: Guitar Pro
+  /// (.gp, .gpx, .gp5/.gp4/.gp3), MusicXML (.musicxml, .xml, .mxl) und MIDI (.mid).
   static Score read(Uint8List bytes) {
     if (bytes.length >= 4 && bytes[0] == 0x50 && bytes[1] == 0x4B) {
       final Archive zip;
@@ -43,16 +48,22 @@ class GpReader {
         throw ScoreFileException(ScoreFileProblem.damaged, 'ZIP: $e');
       }
       final entry = zip.findFile('Content/score.gpif');
-      if (entry == null) throw const ScoreFileException(ScoreFileProblem.unknownFormat, 'score.gpif fehlt');
-      return readGpif(utf8.decode(entry.content, allowMalformed: true));
+      if (entry != null) return readGpif(utf8.decode(entry.content, allowMalformed: true));
+      return MusicXmlReader.readMxl(zip);
     }
-    final head = String.fromCharCodes(bytes.take(32));
-    if (head.startsWith('BCFZ') || head.startsWith('BCFS')) {
-      throw const ScoreFileException(ScoreFileProblem.olderGuitarPro, 'gpx');
+    if (GpxContainer.looksLike(bytes)) {
+      try {
+        return readGpif(GpxContainer.scoreXml(bytes));
+      } on ScoreFileException {
+        rethrow;
+      } catch (e) {
+        throw ScoreFileException(ScoreFileProblem.damaged, 'gpx: $e');
+      }
     }
-    if (head.contains('FICHIER GUITAR PRO') || head.contains('FICHIER GUITAR')) {
-      throw const ScoreFileException(ScoreFileProblem.olderGuitarPro, 'gp3/4/5');
-    }
+    if (GpBinaryReader.looksLike(bytes)) return GpBinaryReader.read(bytes);
+    if (MidiReader.looksLike(bytes)) return MidiReader.read(bytes);
+    final head = String.fromCharCodes(bytes.take(2000));
+    if (MusicXmlReader.looksLikeXml(head)) return MusicXmlReader.readBytes(bytes);
     final text = utf8.decode(bytes, allowMalformed: true).trimLeft();
     if (text.startsWith('<?xml') || text.startsWith('<GPIF')) return readGpif(text);
     throw const ScoreFileException(ScoreFileProblem.unknownFormat);
@@ -152,9 +163,13 @@ class _Parser {
       final transpose = _child(t, 'Transpose');
       final chromatic = int.tryParse(_text(transpose, 'Chromatic')) ?? 0;
       final octave = int.tryParse(_text(transpose, 'Octave')) ?? 0;
-      final transposeSemitones = -(chromatic + octave * 12);
+      var transposeSemitones = -(chromatic + octave * 12);
+      // Guitar Pro 6: Transposition unter <PartSounding>
+      final sounding = int.tryParse(_text(_child(t, 'PartSounding'), 'TranspositionPitch'));
+      if (transpose == null && sounding != null) transposeSemitones = -sounding;
       final staffEl = _children(_child(t, 'Staves'), 'Staff').firstOrNull;
-      final staffProps = staffEl == null ? <String, XmlElement>{} : _props(staffEl);
+      // Guitar Pro 6: Stimmung und Akkorde direkt bei der Spur
+      final staffProps = staffEl == null ? _props(t) : _props(staffEl);
       final tuning = _ints(staffProps['Tuning'] == null ? '' : _text(staffProps['Tuning'], 'Pitches'));
       final staff = StaffDef(
         tuning: tuning,
@@ -163,7 +178,10 @@ class _Parser {
         tuningName: staffEl == null ? '' : _text(staffEl, 'Name'),
       );
       final chords = <int, ChordDef>{};
-      for (final item in _children(_child(staffProps['DiagramCollection'] ?? XmlElement(XmlName('x')), 'Items'), 'Item')) {
+      for (final item in _children(
+        _child(staffProps['DiagramCollection'] ?? XmlElement(XmlName('x')), 'Items'),
+        'Item',
+      )) {
         final id = int.tryParse(item.getAttribute('id') ?? '');
         if (id == null) continue;
         chords[id] = ChordDef(name: item.getAttribute('name') ?? '', diagram: _diagram(_child(item, 'Diagram')));
@@ -187,7 +205,9 @@ class _Parser {
           final beats = <Beat>[];
           for (final bid in _ints(_text(v, 'Beats'))) {
             final b = beatEls[bid];
-            if (b != null) beats.add(_beat(b, rhythms, noteEls, transposeSemitones, tuning));
+            if (b != null) {
+              beats.add(_beat(b, rhythms, noteEls, transposeSemitones, tuning, masterBars[mi].key.fifths, staff.capo));
+            }
           }
           if (beats.isNotEmpty) voices.add(Voice(beats));
         }
@@ -214,7 +234,10 @@ class _Parser {
 
   List<TempoMark> _tempos() {
     final list = <TempoMark>[];
-    for (final a in _children(_child(_child(root, 'MasterTrack') ?? XmlElement(XmlName('x')), 'Automations'), 'Automation')) {
+    for (final a in _children(
+      _child(_child(root, 'MasterTrack') ?? XmlElement(XmlName('x')), 'Automations'),
+      'Automation',
+    )) {
       if (_text(a, 'Type') != 'Tempo') continue;
       final v = _text(a, 'Value').split(RegExp(r'\s+'));
       final bpm = double.tryParse(v.first) ?? 120;
@@ -290,7 +313,10 @@ class _Parser {
           'DaCapoAlCoda' || 'DaCapoAlDoubleCoda' => Direction.daCapoAlCoda,
           'DaSegno' || 'DaSegnoSegno' => Direction.dalSegno,
           'DaSegnoAlFine' || 'DaSegnoSegnoAlFine' => Direction.dalSegnoAlFine,
-          'DaSegnoAlCoda' || 'DaSegnoAlDoubleCoda' || 'DaSegnoSegnoAlCoda' || 'DaSegnoSegnoAlDoubleCoda' => Direction.dalSegnoAlCoda,
+          'DaSegnoAlCoda' ||
+          'DaSegnoAlDoubleCoda' ||
+          'DaSegnoSegnoAlCoda' ||
+          'DaSegnoSegnoAlDoubleCoda' => Direction.dalSegnoAlCoda,
           'DaCoda' || 'DaDoubleCoda' => Direction.toCoda,
           _ => null,
         };
@@ -301,7 +327,9 @@ class _Parser {
       time: time,
       key: KeySignature(int.tryParse(_text(key, 'AccidentalCount')) ?? 0, minor: _text(key, 'Mode') == 'Minor'),
       repeatStart: rep?.getAttribute('start') == 'true',
-      repeatEnd: rep?.getAttribute('end') == 'true' ? (int.tryParse(rep?.getAttribute('count') ?? '') ?? 2).clamp(2, 99) : 0,
+      repeatEnd: rep?.getAttribute('end') == 'true'
+          ? (int.tryParse(rep?.getAttribute('count') ?? '') ?? 2).clamp(2, 99)
+          : 0,
       endings: _ints(_text(m, 'AlternateEndings')).where((x) => x > 0).toSet(),
       section: sec == null ? null : Section(letter: _text(sec, 'Letter'), text: _text(sec, 'Text')),
       doubleBar: _child(m, 'DoubleBar') != null,
@@ -336,13 +364,21 @@ class _Parser {
     _ => transpose == 12 ? Clef.treble8vb : Clef.treble,
   };
 
-  Beat _beat(XmlElement b, Map<int, NoteDuration> rhythms, Map<int, XmlElement> noteEls, int transpose, List<int> tuning) {
+  Beat _beat(
+    XmlElement b,
+    Map<int, NoteDuration> rhythms,
+    Map<int, XmlElement> noteEls,
+    int transpose,
+    List<int> tuning,
+    int fifths,
+    int capo,
+  ) {
     final rid = int.tryParse(_child(b, 'Rhythm')?.getAttribute('ref') ?? '');
     final notes = <Note>[];
     for (final nid in _ints(_text(b, 'Notes'))) {
       final n = noteEls[nid];
       if (n != null) {
-        final note = _note(n, transpose, tuning);
+        final note = _note(n, transpose, tuning, fifths, capo);
         if (note != null) notes.add(note);
       }
     }
@@ -399,12 +435,16 @@ class _Parser {
     _ => 0,
   };
 
-  Note? _note(XmlElement n, int transpose, List<int> tuning) {
+  Note? _note(XmlElement n, int transpose, List<int> tuning, int fifths, int capo) {
     final p = _props(n);
     final string = int.tryParse(_text(p['String'], 'String'));
     final fret = int.tryParse(_text(p['Fret'], 'Fret'));
     var midi = int.tryParse(_text(p['Midi'], 'Number'));
-    if (midi == null && string != null && fret != null && string < tuning.length) midi = tuning[string] + fret;
+    if (midi == null && string != null && fret != null && string < tuning.length) midi = tuning[string] + capo + fret;
+    // Guitar Pro 6 ohne Saiten: Ton (0–11) und Oktave
+    final tone = int.tryParse(_text(p['Tone'], 'Step'));
+    final toneOctave = int.tryParse(_text(p['Octave'], 'Number'));
+    if (midi == null && tone != null && toneOctave != null) midi = toneOctave * 12 + tone;
     if (midi == null) {
       // Nur Tonhöhe angegeben (ohne Saite): aus der Schreibweise rechnen.
       final cp = _child(p['ConcertPitch'] ?? XmlElement(XmlName('x')), 'Pitch');
@@ -417,7 +457,7 @@ class _Parser {
     }
     Pitch spelled(String propName, int m) {
       final el = _child(p[propName] ?? XmlElement(XmlName('x')), 'Pitch');
-      if (el == null) return Pitch.fromMidi(m);
+      if (el == null) return Pitch.fromMidi(m, fifths: fifths);
       return Pitch.fromMidiSpelled(m, _stepOf(_text(el, 'Step')), _alterOf(_text(el, 'Accidental')));
     }
 
@@ -426,7 +466,9 @@ class _Parser {
     if (transpose != 0) {
       final hasWritten = _child(p['TransposedPitch'] ?? XmlElement(XmlName('x')), 'Pitch') != null;
       // Fehlt die geschriebene Tonhöhe: bei ganzen Oktaven die Schreibweise übernehmen.
-      written = hasWritten || transpose % 12 != 0 ? spelled('TransposedPitch', midi + transpose) : concert.octaves(transpose ~/ 12);
+      written = hasWritten || transpose % 12 != 0
+          ? spelled('TransposedPitch', midi + transpose)
+          : concert.octaves(transpose ~/ 12);
     }
 
     final tie = _child(n, 'Tie');

@@ -46,7 +46,14 @@ class ScoreInfo {
 
 /// Tempo: [bpm] Schläge pro Minute, ein Schlag ist [unit] lang (punktiert bei [dotted]).
 class TempoMark {
-  const TempoMark({required this.bar, this.position = 0, required this.bpm, this.unit = NoteValue.quarter, this.dotted = false, this.visible = true});
+  const TempoMark({
+    required this.bar,
+    this.position = 0,
+    required this.bpm,
+    this.unit = NoteValue.quarter,
+    this.dotted = false,
+    this.visible = true,
+  });
 
   final int bar;
 
@@ -72,7 +79,8 @@ class TimeSignature {
   bool get compound => beatType >= 8 && beats % 3 == 0 && beats > 3;
 
   @override
-  bool operator ==(Object other) => other is TimeSignature && other.beats == beats && other.beatType == beatType && other.common == common;
+  bool operator ==(Object other) =>
+      other is TimeSignature && other.beats == beats && other.beatType == beatType && other.common == common;
 
   @override
   int get hashCode => Object.hash(beats, beatType, common);
@@ -114,7 +122,20 @@ class Section {
 }
 
 /// Sprungzeichen und Ziele (Segno, Coda, D.C. …).
-enum Direction { segno, segnoSegno, coda, doubleCoda, fine, daCapo, daCapoAlFine, daCapoAlCoda, dalSegno, dalSegnoAlFine, dalSegnoAlCoda, toCoda }
+enum Direction {
+  segno,
+  segnoSegno,
+  coda,
+  doubleCoda,
+  fine,
+  daCapo,
+  daCapoAlFine,
+  daCapoAlCoda,
+  dalSegno,
+  dalSegnoAlFine,
+  dalSegnoAlCoda,
+  toCoda,
+}
 
 /// Angaben, die für einen Takt in allen Instrumenten gelten.
 class MasterBar {
@@ -177,7 +198,14 @@ class Track {
 
 /// Angaben zum Notensystem eines Instruments.
 class StaffDef {
-  const StaffDef({this.tuning = const [], this.capo = 0, this.fretCount = 24, this.showNotation = true, this.showTab = true, this.tuningName = ''});
+  const StaffDef({
+    this.tuning = const [],
+    this.capo = 0,
+    this.fretCount = 24,
+    this.showNotation = true,
+    this.showTab = true,
+    this.tuningName = '',
+  });
 
   /// Stimmung, tiefste Saite zuerst (MIDI). Leer = kein Saiteninstrument.
   final List<int> tuning;

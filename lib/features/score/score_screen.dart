@@ -72,6 +72,11 @@ class _ScoreScreenState extends State<ScoreScreen> {
     }
   }
 
+  String _trackName(int i) {
+    final n = _score!.tracks[i].name;
+    return n.isEmpty ? tr('Spur ${i + 1}', 'Track ${i + 1}') : n;
+  }
+
   @override
   void dispose() {
     for (final p in _pictures ?? const <ui.Picture>[]) {
@@ -126,7 +131,7 @@ class _ScoreScreenState extends State<ScoreScreen> {
                   children: [
                     const Icon(Icons.queue_music_outlined),
                     const SizedBox(width: 6),
-                    Text(_score!.tracks[_track].name),
+                    Text(_trackName(_track)),
                     const Icon(Icons.arrow_drop_down),
                   ],
                 ),

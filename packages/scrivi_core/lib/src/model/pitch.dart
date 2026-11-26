@@ -42,7 +42,8 @@ class Pitch {
   String get letter => _letters[step];
 
   @override
-  bool operator ==(Object other) => other is Pitch && other.step == step && other.alter == alter && other.octave == octave;
+  bool operator ==(Object other) =>
+      other is Pitch && other.step == step && other.alter == alter && other.octave == octave;
 
   @override
   int get hashCode => Object.hash(step, alter, octave);

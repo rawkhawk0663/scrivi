@@ -7,7 +7,9 @@ String pageToSvg(PageDisplay page, {double unit = 10, Map<TextRole, String>? fon
   final b = StringBuffer();
   final w = page.width * unit, h = page.height * unit;
   String n(double v) => (v * unit).toStringAsFixed(2);
-  b.writeln('<svg xmlns="http://www.w3.org/2000/svg" width="${w.toStringAsFixed(0)}" height="${h.toStringAsFixed(0)}" viewBox="0 0 ${w.toStringAsFixed(0)} ${h.toStringAsFixed(0)}">');
+  b.writeln(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="${w.toStringAsFixed(0)}" height="${h.toStringAsFixed(0)}" viewBox="0 0 ${w.toStringAsFixed(0)} ${h.toStringAsFixed(0)}">',
+  );
   b.writeln('<rect width="100%" height="100%" fill="#fff"/>');
   final defs = <String>{};
   for (final it in page.items) {
@@ -22,21 +24,31 @@ String pageToSvg(PageDisplay page, {double unit = 10, Map<TextRole, String>? fon
     switch (it) {
       case GlyphItem g:
         final s = unit * g.scale;
-        b.writeln('<use href="#g_${g.name}" transform="translate(${n(g.x)} ${n(g.y)}) scale(${s.toStringAsFixed(3)} ${(-s).toStringAsFixed(3)})"/>');
+        b.writeln(
+          '<use href="#g_${g.name}" transform="translate(${n(g.x)} ${n(g.y)}) scale(${s.toStringAsFixed(3)} ${(-s).toStringAsFixed(3)})"/>',
+        );
       case LineItem l:
         final dash = l.dash == null ? '' : ' stroke-dasharray="${n(l.dash!.$1)} ${n(l.dash!.$2)}"';
-        b.writeln('<line x1="${n(l.x1)}" y1="${n(l.y1)}" x2="${n(l.x2)}" y2="${n(l.y2)}" stroke="#000" stroke-width="${n(l.thickness)}"$dash/>');
+        b.writeln(
+          '<line x1="${n(l.x1)}" y1="${n(l.y1)}" x2="${n(l.x2)}" y2="${n(l.y2)}" stroke="#000" stroke-width="${n(l.thickness)}"$dash/>',
+        );
       case RectItem r:
         if (r.background) {
           b.writeln('<rect x="${n(r.x)}" y="${n(r.y)}" width="${n(r.width)}" height="${n(r.height)}" fill="#fff"/>');
         } else if (r.fill) {
           b.writeln('<rect x="${n(r.x)}" y="${n(r.y)}" width="${n(r.width)}" height="${n(r.height)}" fill="#000"/>');
         } else {
-          b.writeln('<rect x="${n(r.x)}" y="${n(r.y)}" width="${n(r.width)}" height="${n(r.height)}" fill="none" stroke="#000" stroke-width="${n(r.thickness)}"/>');
+          b.writeln(
+            '<rect x="${n(r.x)}" y="${n(r.y)}" width="${n(r.width)}" height="${n(r.height)}" fill="none" stroke="#000" stroke-width="${n(r.thickness)}"/>',
+          );
         }
       case PathItem p:
         final d = _pathData(p.commands, (v) => n(v));
-        b.writeln(p.fill ? '<path d="$d" fill="#000"/>' : '<path d="$d" fill="none" stroke="#000" stroke-width="${n(p.thickness)}"/>');
+        b.writeln(
+          p.fill
+              ? '<path d="$d" fill="#000"/>'
+              : '<path d="$d" fill="none" stroke="#000" stroke-width="${n(p.thickness)}"/>',
+        );
       case TextItem t:
         final anchor = switch (t.align) {
           TextAlign.left => 'start',
@@ -46,7 +58,9 @@ String pageToSvg(PageDisplay page, {double unit = 10, Map<TextRole, String>? fon
         final family = fonts?[t.role] ?? 'sans-serif';
         final weight = t.bold ? ' font-weight="bold"' : '';
         final style = t.italic ? ' font-style="italic"' : '';
-        b.writeln('<text x="${n(t.x)}" y="${n(t.y)}" font-family="$family" font-size="${n(t.size)}" text-anchor="$anchor"$weight$style>${_esc(t.text)}</text>');
+        b.writeln(
+          '<text x="${n(t.x)}" y="${n(t.y)}" font-family="$family" font-size="${n(t.size)}" text-anchor="$anchor"$weight$style>${_esc(t.text)}</text>',
+        );
     }
   }
   b.writeln('</svg>');

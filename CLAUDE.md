@@ -26,7 +26,9 @@ Der Plan mit allen Etappen steht in **`BAUPLAN.md`**. Nach jeder Etappe dort den
 ```
 packages/scrivi_core/   Herz von Scrivi, reines Dart ohne Flutter (eigene Tests: dart test)
   model/      Fraction (genaue Notenlängen), Pitch (mit Schreibweise), Score/MasterBar/Track/Bar/Voice/Beat/Note
-  io/         GpReader: .gp (ZIP mit Content/score.gpif)
+  io/         GpReader.read: erkennt das Format und liest .gp (ZIP mit score.gpif), .gpx (GpxContainer:
+              BCFZ entpacken, BCFS-Dateisystem), .gp3/.gp4/.gp5 (GpBinaryReader), MusicXML
+              (MusicXmlReader, auch .mxl und „timewise“), MIDI (MidiReader)
   layout/     Engraver (Notensatz → Seiten), shapes (Bögen, Balken, Gabeln)
   render/     Zeichenliste (DisplayItem), Glyphs (Bravura-Umrisse, erzeugt), SVG-Ausgabe
 lib/
@@ -52,9 +54,18 @@ tool/         make_icon.py (Symbol), make_glyphs.py (Notenzeichen aus Bravura)
 - **Dynamik** erscheint nur bei Wechseln (die Dateien schreiben „mf“ an jeden Schlag).
 - Vorschlagsnoten werden noch übersprungen (nehmen keine Zeit).
 
+## Dateiformate (packages/scrivi_core/lib/src/io)
+- `GpReader.read(bytes)` ist der einzige Einstieg: erkennt das Format am Inhalt, nicht an der Endung.
+- **.gp3/.gp4/.gp5:** Aufbau nach der Beschreibung von PyGuitarPro (LGPL). Saiten in der Datei von oben gezählt (1 = höchste), im Modell von unten (0 = tiefste). Bend-Werte: 100 = Ganzton (also /50 = Halbtöne), Stellen 0..60. Bei GP5 fehlt am Dateiende manchmal das letzte Byte (Zeilenumbruch): kein Fehler. Gehaltene Noten (Typ 2) übernehmen den Bund der vorigen Note auf der Saite.
+- **.gpx:** Bitstrom („BCFZ“) darf vor der angekündigten Länge enden. Stimmung, Kapo und Akkorde liegen bei GP6 in den Eigenschaften der Spur (nicht unter `<Staves>`), die Transposition unter `<PartSounding>`; Noten haben oft nur Saite und Bund.
+- **Bundzahlen ohne gespeicherte Tonhöhe** zählen ab dem Kapodaster (klingend = Stimmung + Kapo + Bund). Noch nicht mit echter Datei geprüft.
+- **MusicXML:** Jede Notenzeile (`<staff>`) eines Instruments wird eine Spur; eine TAB-Zeile desselben Instruments liefert Saite/Bund (über Zeitpunkt und Tonhöhe zugeordnet). Ohne Saitenangabe wählt Scrivi die tiefste Lage bis Bund 12. Noten sind geschrieben; klingend = geschrieben − Transposition − Oktavierung des Schlüssels. Lücken in einer Stimme werden Pausen. Beim Ordner-Import werden fremde `.xml`-Dateien still übersprungen.
+- **MIDI:** Raster Sechzehntel; Takte aus den Taktarten, Töne über den Taktstrich mit Haltebogen; Gitarre (Programm 24–31) und Bass (32–39) bekommen Tabulatur und Oktav-Transposition, Kanal 10 ist Schlagzeug.
+- Testdateien fremder Herkunft (alphaTab, MPL-2.0) nur lokal ausserhalb des Projekts verwenden; im Projekt bauen die Tests ihre Beispiele selbst (`test/formats_test.dart`).
+
 ## Bibliothek
-- `<ApplicationSupport>/Bibliothek/Stücke/` enthält Kopien der importierten Dateien (heute `.gp`), `Bibliothek/Papierkorb/` Gelöschtes, `Bibliothek/.scrivi/index.json` (Format `scrivi-library` v1: Titel, Interpret, Takte, Grösse, Änderungszeit pro Datei) und `.scrivi/vorschau/` (Vorschaubilder, Name mit Grösse und Änderungszeit).
-- Import prüft jede Datei (im Hintergrund), erkennt Doppelte (gleicher Inhalt) und meldet ältere Formate als „kommt bald“.
+- `<ApplicationSupport>/Bibliothek/Stücke/` enthält Kopien der importierten Dateien (alle lesbaren Formate, Endung bleibt; fehlt sie, wird sie aus dem Inhalt bestimmt), `Bibliothek/Papierkorb/` Gelöschtes, `Bibliothek/.scrivi/index.json` (Format `scrivi-library` v1: Titel, Interpret, Takte, Grösse, Änderungszeit pro Datei) und `.scrivi/vorschau/` (Vorschaubilder, Name mit Grösse und Änderungszeit).
+- Import prüft jede Datei (im Hintergrund) und erkennt Doppelte (gleicher Inhalt).
 - Das eigene Format `.scrivi` kommt mit dem Schreiben (Etappe 5).
 
 ## Grundsätze

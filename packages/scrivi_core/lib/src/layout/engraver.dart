@@ -178,7 +178,12 @@ class _System {
 
 /// Setzt eine Spur eines Stücks als Noten mit Tabulatur auf Seiten.
 class Engraver {
-  Engraver(this.score, {this.trackIndex = 0, this.options = const LayoutOptions(), this.measurer = const ApproxTextMeasurer()});
+  Engraver(
+    this.score, {
+    this.trackIndex = 0,
+    this.options = const LayoutOptions(),
+    this.measurer = const ApproxTextMeasurer(),
+  });
 
   final Score score;
   final int trackIndex;
@@ -225,7 +230,9 @@ class Engraver {
           (seqs[v] ??= []).add(e);
           onset = onset + b.duration.length;
         }
-        if (list.length == 1 && list.first.isRest && (list.first.beat.duration.length >= mb.time.length || list.first.value == NoteValue.whole)) {
+        if (list.length == 1 &&
+            list.first.isRest &&
+            (list.first.beat.duration.length >= mb.time.length || list.first.value == NoteValue.whole)) {
           list.first.fullBarRest = true;
         }
         m.voices.add(list);
@@ -620,7 +627,9 @@ class Engraver {
           if (m.keyChange) cx += _keyWidth(m.mb.key) + 0.4;
           if (m.timeChange) cx += _timeWidth(m.mb.time);
         }
-        m.changeW = j > 0 ? (m.keyChange ? _keyWidth(m.mb.key) + 0.4 : 0) + (m.timeChange ? _timeWidth(m.mb.time) : 0) : 0;
+        m.changeW = j > 0
+            ? (m.keyChange ? _keyWidth(m.mb.key) + 0.4 : 0) + (m.timeChange ? _timeWidth(m.mb.time) : 0)
+            : 0;
         for (final c in m.cols) {
           c.x = cx + c.accW;
           cx += c.natural * factor;
@@ -665,18 +674,38 @@ class Engraver {
       for (final it in out.items) {
         page.items.add(shift(it, 0, dy));
       }
-      page.systems.add(SystemBox(top: top, bottom: top + height, firstBar: s.measures.first.index, lastBar: s.measures.last.index));
+      page.systems.add(
+        SystemBox(top: top, bottom: top + height, firstBar: s.measures.first.index, lastBar: s.measures.last.index),
+      );
       y = top + height;
       firstOnPage = false;
     }
     // Copyright unten auf der ersten Seite, Seitenzahlen
     final cr = score.info.copyright;
     if (cr.isNotEmpty) {
-      pages.first.items.add(TextItem(cr, options.pageWidth / 2, options.pageHeight - options.marginBottom / 2, TextRole.small, _smallSize, align: TextAlign.center));
+      pages.first.items.add(
+        TextItem(
+          cr,
+          options.pageWidth / 2,
+          options.pageHeight - options.marginBottom / 2,
+          TextRole.small,
+          _smallSize,
+          align: TextAlign.center,
+        ),
+      );
     }
     if (pages.length > 1) {
       for (var p = 0; p < pages.length; p++) {
-        pages[p].items.add(TextItem('${p + 1} / ${pages.length}', options.pageWidth - options.marginRight, options.pageHeight - options.marginBottom / 2, TextRole.small, _smallSize, align: TextAlign.right));
+        pages[p].items.add(
+          TextItem(
+            '${p + 1} / ${pages.length}',
+            options.pageWidth - options.marginRight,
+            options.pageHeight - options.marginBottom / 2,
+            TextRole.small,
+            _smallSize,
+            align: TextAlign.right,
+          ),
+        );
       }
     }
     return ScoreLayout(pages);
@@ -707,9 +736,7 @@ class Engraver {
 
   String _chordName(int id) {
     final name = _track.chords[id]?.name ?? '';
-    return name
-        .replaceAll('#', '♯')
-        .replaceAllMapped(RegExp(r'([A-G])b'), (m) => '${m[1]}♭');
+    return name.replaceAll('#', '♯').replaceAllMapped(RegExp(r'([A-G])b'), (m) => '${m[1]}♭');
   }
 
   String _fretText(Note n, bool parens) {
@@ -772,9 +799,18 @@ class _SystemBuilder {
   }
 
   void glyph(String name, double x, double y, {double scale = 1}) => add(GlyphItem(name, x, y, scale: scale));
-  void line(double x1, double y1, double x2, double y2, double t, {(double, double)? dash}) => add(LineItem(x1, y1, x2, y2, t, dash: dash));
-  void text(String t, double x, double y, TextRole role, double size, {TextAlign align = TextAlign.left, bool bold = false, bool italic = false}) =>
-      add(TextItem(t, x, y, role, size, align: align, bold: bold, italic: italic));
+  void line(double x1, double y1, double x2, double y2, double t, {(double, double)? dash}) =>
+      add(LineItem(x1, y1, x2, y2, t, dash: dash));
+  void text(
+    String t,
+    double x,
+    double y,
+    TextRole role,
+    double size, {
+    TextAlign align = TextAlign.left,
+    bool bold = false,
+    bool italic = false,
+  }) => add(TextItem(t, x, y, role, size, align: align, bold: bold, italic: italic));
   double tw(String t, TextRole role, double size, {bool bold = false, bool italic = false}) =>
       e.measurer.width(t, role, size, bold: bold, italic: italic);
 
@@ -1064,7 +1100,8 @@ class _SystemBuilder {
         } else {
           // Einzelne kurze Note: Stummel zum Nachbarn hin
           final ev = evs[k];
-          final toLeft = k == evs.length - 1 || (k > 0 && ev.beat.duration.dots == 0 && evs[k - 1].beat.duration.dots > 0);
+          final toLeft =
+              k == evs.length - 1 || (k > 0 && ev.beat.duration.dots == 0 && evs[k - 1].beat.duration.dots > 0);
           if (toLeft) {
             xb = ev.stemX + _stemT / 2;
             xa = xb - 1.1;
@@ -1377,12 +1414,23 @@ class _SystemBuilder {
         continue;
       }
       var j = k;
-      while (j + 1 < ms.length && _sameSet(ms[j + 1].mb.endings, set) && !ms[j].mb.hasRepeatEnd && !ms[j + 1].mb.repeatStart) {
+      while (j + 1 < ms.length &&
+          _sameSet(ms[j + 1].mb.endings, set) &&
+          !ms[j].mb.hasRepeatEnd &&
+          !ms[j + 1].mb.repeatStart) {
         j++;
       }
       final startM = ms[k], endM = ms[j];
-      final contFromPrev = k == 0 && startM.index > 0 && _sameSet(e.score.masterBars[startM.index - 1].endings, set) && !e.score.masterBars[startM.index - 1].hasRepeatEnd;
-      final contToNext = j == ms.length - 1 && endM.index + 1 < e.score.masterBars.length && _sameSet(e.score.masterBars[endM.index + 1].endings, set) && !endM.mb.hasRepeatEnd;
+      final contFromPrev =
+          k == 0 &&
+          startM.index > 0 &&
+          _sameSet(e.score.masterBars[startM.index - 1].endings, set) &&
+          !e.score.masterBars[startM.index - 1].hasRepeatEnd;
+      final contToNext =
+          j == ms.length - 1 &&
+          endM.index + 1 < e.score.masterBars.length &&
+          _sameSet(e.score.masterBars[endM.index + 1].endings, set) &&
+          !endM.mb.hasRepeatEnd;
       final x1 = (k == 0 ? _contentStart - 0.5 : startM.x) + 0.3;
       final x2 = endM.x + endM.w - 0.4;
       line(x1, y, x2, y, 0.16);
@@ -1470,7 +1518,14 @@ class _SystemBuilder {
         final x2 = math.max(after, endEv.x + 1.5);
         final openStart = startEv.nextInVoice != null && k == 0 && _prevHairpin(startEv) == hp;
         final openEnd = j == voice0.length - 1 && endEv.nextInVoice?.beat.hairpin == hp;
-        for (final l in hairpin(x1, x2, y, crescendo: hp == Hairpin.crescendo, openStart: openStart, openEnd: openEnd)) {
+        for (final l in hairpin(
+          x1,
+          x2,
+          y,
+          crescendo: hp == Hairpin.crescendo,
+          openStart: openStart,
+          openEnd: openEnd,
+        )) {
           add(l);
         }
         k = j + 1;
@@ -1655,7 +1710,14 @@ class _SystemBuilder {
               add(it);
             }
           }
-          text(_bendLabel(b.maxSemitones), b.preBent ? cx : xb, topY - 0.4, TextRole.technique, 1.0, align: TextAlign.center);
+          text(
+            _bendLabel(b.maxSemitones),
+            b.preBent ? cx : xb,
+            topY - 0.4,
+            TextRole.technique,
+            1.0,
+            align: TextAlign.center,
+          );
           if (b.releases) {
             final xr = xb + 1.4;
             for (final it in bendArrow(xb + 0.1, topY + 0.2, xr, ly - 0.7)) {

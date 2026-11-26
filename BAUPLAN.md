@@ -1,6 +1,6 @@
 # Scrivi – Bauplan
 
-Stand: 26. November 2026 · Name: **Scrivi** (ital. „schreib!“) · Etappe 0 und 1 fertig
+Stand: 26. November 2026 · Name: **Scrivi** (ital. „schreib!“) · Etappen 0, 1 und 2 fertig
 
 Scrivi ist ein Notenschreibprogramm für Noten, Tabulatur und Partituren. Es läuft mit Flutter
 auf Windows und Android, später vielleicht auch auf macOS und iPadOS. Es gehört zur gleichen
@@ -190,7 +190,7 @@ Jede Etappe endet mit einem Release, das man ausprobieren kann.
 |---|---|---|---|---|
 | 0 | **Grundgerüst** ✅ | Flutter-Projekt, Theme, l10n, Fensterknöpfe, Updater, Fehlerprotokoll, Bau über GitHub Actions, README, CLAUDE.md, Lizenz | Scrivi startet auf Surface und Android und aktualisiert sich selbst | S |
 | 1 | **Guitar-Pro-Dateien öffnen und zeigen** ✅ | Notenmodell; Einlesen von `.gp` (das Format der eigenen Dateien); Bibliothek mit Import und Vorschaubildern; Notensatz für ein Instrument: Schlüssel, Tonart, Taktart, Noten und Pausen, Punkte, Vorzeichen, Hälse, Balken, Haltebögen, Taktstriche, Wiederholungen, Häuser, Formteile, Akkordsymbole; Tabulatur darunter; Zeilen- und Seitenumbruch | die eigenen Stücke sehen in Scrivi sauber gesetzt aus | L |
-| 2 | **Weitere Formate einlesen** | ältere Guitar-Pro-Dateien (`.gpx`, `.gp5/4/3`), MusicXML (für die Partitur-Dateien), MIDI | alle alten Dateien lassen sich öffnen | M–L |
+| 2 | **Weitere Formate einlesen** ✅ | ältere Guitar-Pro-Dateien (`.gpx`, `.gp5/4/3`), MusicXML (für die Partitur-Dateien), MIDI | alle alten Dateien lassen sich öffnen | M–L |
 | 3 | **Tabulatur vollständig** | alle Spieltechniken in Noten und Tab (Bending-Kurven, Vibrato, Flageolett, Tapping …), alle Stimmungen, Kapo, Rhythmus in der Tab, 7- und 8-saitige Gitarre, Bass | Gitarrenstücke mit allen Spieltechniken sehen vollständig aus | L |
 | 4 | **Abspielen** | Abspiel-Liste, Gitarrenklang, Tempo, Schleife, Einzähler, Metronom, mitlaufende Markierung, Mischpult; danach SoundFont-Klänge | ein Stück klingt richtig, auch mit Wiederholungen, Bends und Slides | M–L |
 | 5 | **Schreiben** | Cursor, Eingabe über Tastatur, Stift und Griffbrett, Auswahl, Kopieren, Rückgängig, Transponieren, Takte einfügen und löschen, Akkordsymbole, Liedtext, Titel | ein Leadsheet und eine Tab lassen sich vollständig in Scrivi schreiben | L |
@@ -233,6 +233,22 @@ Bewusst noch offen (kommt später):
 - Griffbilder über den Noten → Etappe 3
 - Mehrere Stimmen pro System sind angelegt, aber noch kaum geprüft → Etappe 7
 - Ausgabe als PDF/SVG: Die Zeichenliste kann schon SVG, in der App kommt es mit Etappe 6
+
+### Stand nach Etappe 2 (26. November 2026)
+
+Fertig: Guitar Pro 3, 4, 5 (Binärformat), Guitar Pro 6 (`.gpx`), MusicXML (`.musicxml`, `.xml`,
+`.mxl`, auch die seltene „timewise“-Form) und MIDI. Geprüft mit 90 GP3/4/5-, 36 GPX- und 67
+MusicXML-Testdateien aus dem offenen Notenprojekt alphaTab (nur lokal, nicht im Projekt) und
+eigenen Tests für jedes Format. Die Bibliothek nimmt alle Formate an und behält die Endung.
+
+Bewusst offen:
+- **Sibelius-Dateien (`.sib`)** bleiben geschlossen: Weg über MusicXML (siehe oben).
+- MIDI: Triolen werden noch nicht erkannt (auf Sechzehntel eingerastet), Schlagzeug ohne
+  Schlagzeug-Notation.
+- MusicXML: Klavier mit zwei Systemen erscheint als zwei Spuren; die gemeinsame Darstellung kommt
+  mit der Partitur (Etappe 7).
+- Bei Dateien ohne gespeicherte Tonhöhe (ältere Guitar-Pro-Formate) zählen Bundzahlen ab dem
+  Kapodaster. Mit einer echten Datei mit Kapo prüfen.
 
 ## 9. Entscheidungen (26. November 2026)
 

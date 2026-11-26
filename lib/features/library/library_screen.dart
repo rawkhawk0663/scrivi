@@ -43,10 +43,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
   }
 
   Future<void> _importFiles() async {
-    // Auf Android kennt die Dateiauswahl die Endung .gp nicht: alles zeigen, danach prüfen.
-    const gp = XTypeGroup(label: 'Guitar Pro', extensions: ['gp', 'gpx', 'gp5', 'gp4', 'gp3']);
+    // Auf Android kennt die Dateiauswahl diese Endungen nicht: alles zeigen, danach prüfen.
+    final all = XTypeGroup(label: tr('Noten', 'Music'), extensions: LibraryController.readable);
     final files = await openFiles(
-      acceptedTypeGroups: Platform.isAndroid ? const [] : const [gp],
+      acceptedTypeGroups: Platform.isAndroid ? const [] : [all],
       confirmButtonText: tr('Importieren', 'Import'),
     );
     if (files.isEmpty) return;
@@ -103,9 +103,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
     } else if (parts.isNotEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(parts.join(' · '))));
     } else {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(tr('Keine Guitar-Pro-Dateien gefunden.', 'No Guitar Pro files found.'))));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(tr('Keine Notendateien gefunden.', 'No music files found.'))));
     }
   }
 
@@ -185,12 +184,12 @@ class _LibraryScreenState extends State<LibraryScreen> {
         title: tr('Noch keine Stücke', 'No pieces yet'),
         text: _desktop
             ? tr(
-                'Importiere Guitar-Pro-Dateien (.gp) oder ziehe sie einfach hierher. Auch ganze Ordner gehen. Die Originale bleiben, wo sie sind.',
-                'Import Guitar Pro files (.gp) or simply drag them here. Whole folders work too. The originals stay where they are.',
+                'Importiere Guitar-Pro-Dateien (.gp, .gpx, .gp5, .gp4, .gp3), MusicXML oder MIDI, oder ziehe sie einfach hierher. Auch ganze Ordner gehen. Die Originale bleiben, wo sie sind.',
+                'Import Guitar Pro files (.gp, .gpx, .gp5, .gp4, .gp3), MusicXML or MIDI, or simply drag them here. Whole folders work too. The originals stay where they are.',
               )
             : tr(
-                'Importiere Guitar-Pro-Dateien (.gp). Die Originale bleiben, wo sie sind.',
-                'Import Guitar Pro files (.gp). The originals stay where they are.',
+                'Importiere Guitar-Pro-Dateien, MusicXML oder MIDI. Die Originale bleiben, wo sie sind.',
+                'Import Guitar Pro files, MusicXML or MIDI. The originals stay where they are.',
               ),
         action: Wrap(
           spacing: 12,

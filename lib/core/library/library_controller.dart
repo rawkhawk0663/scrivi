@@ -58,7 +58,7 @@ class ImportReport {
   int added = 0;
   int duplicates = 0;
 
-  /// Ältere Formate, die erst später gelesen werden können.
+  /// Formate, die erst später gelesen werden können (heute keine mehr).
   int later = 0;
   final failed = <(String, String)>[];
 }
@@ -68,8 +68,8 @@ String problemText(Object e) {
   if (e is ScoreFileException) {
     return switch (e.problem) {
       ScoreFileProblem.olderGuitarPro => tr(
-        'Ältere Guitar-Pro-Dateien (.gpx, .gp5, .gp4, .gp3) kann Scrivi noch nicht öffnen. Das kommt bald.',
-        'Scrivi can’t open older Guitar Pro files (.gpx, .gp5, .gp4, .gp3) yet. Coming soon.',
+        'Dieses Guitar-Pro-Format kann Scrivi noch nicht öffnen.',
+        'Scrivi can’t open this Guitar Pro format yet.',
       ),
       ScoreFileProblem.unknownFormat => tr('Diese Datei kennt Scrivi nicht.', 'Scrivi doesn’t know this kind of file.'),
       ScoreFileProblem.damaged => tr(
@@ -96,11 +96,8 @@ class LibraryController extends ChangeNotifier {
   final String trashDir;
   final String metaDir;
 
-  /// Dateiendungen, die Scrivi heute öffnet.
-  static const readable = ['gp'];
-
-  /// Ältere Formate, die später dazukommen.
-  static const later = ['gpx', 'gp5', 'gp4', 'gp3'];
+  /// Dateiendungen, die Scrivi öffnet: Guitar Pro, MusicXML, MIDI.
+  static const readable = ['gp', 'gpx', 'gp5', 'gp4', 'gp3', 'musicxml', 'mxl', 'xml', 'mid', 'midi'];
 
   final List<Piece> _pieces = [];
   bool loading = true;
@@ -168,8 +165,25 @@ class LibraryController extends ChangeNotifier {
     notifyListeners();
   }
 
-  bool _isReadable(String path) => readable.contains(p.extension(path).toLowerCase().replaceFirst('.', ''));
-  bool _isLater(String path) => later.contains(p.extension(path).toLowerCase().replaceFirst('.', ''));
+  static String _ext(String path) => p.extension(path).toLowerCase().replaceFirst('.', '');
+  bool _isReadable(String path) => readable.contains(_ext(path));
+
+  /// Endung für die Kopie in der Bibliothek: die bisherige, sonst nach Inhalt.
+  static String _targetExtension(String path, Uint8List b) {
+    final ext = _ext(path);
+    if (readable.contains(ext)) return ext;
+    bool starts(String s) => b.length >= s.length && String.fromCharCodes(b.sublist(0, s.length)) == s;
+    if (starts('PK')) {
+      return String.fromCharCodes(b.take(4096)).contains('Content/score.gpif') ? 'gp' : 'mxl';
+    }
+    if (starts('BCF')) return 'gpx';
+    if (starts('MThd')) return 'mid';
+    if (b.length > 20 && String.fromCharCodes(b.sublist(1, 20)).startsWith('FICHIER GUITAR PRO')) {
+      final v = String.fromCharCodes(b.sublist(1, 30));
+      return v.contains('v3') ? 'gp3' : (v.contains('v4') ? 'gp4' : 'gp5');
+    }
+    return 'musicxml';
+  }
 
   void _sort() => _pieces.sort((a, b) => a.displayTitle.toLowerCase().compareTo(b.displayTitle.toLowerCase()));
 
@@ -213,7 +227,7 @@ class LibraryController extends ChangeNotifier {
     for (final path in paths) {
       if (await FileSystemEntity.isDirectory(path)) {
         await for (final e in Directory(path).list(recursive: true, followLinks: false)) {
-          if (e is File && (_isReadable(e.path) || _isLater(e.path))) files.add(e.path);
+          if (e is File && _isReadable(e.path)) files.add(e.path);
         }
       } else {
         files.add(path);
@@ -228,8 +242,10 @@ class LibraryController extends ChangeNotifier {
           continue;
         }
         final meta = await _readMeta(bytes);
-        // Neuere Guitar-Pro-Dateien kommen immer als .gp in die Bibliothek.
-        final target = await _uniqueName(piecesDir, '${p.basenameWithoutExtension(name)}.gp');
+        final target = await _uniqueName(
+          piecesDir,
+          '${p.basenameWithoutExtension(name)}.${_targetExtension(path, bytes)}',
+        );
         final tmp = File('$target.neu');
         await tmp.writeAsBytes(bytes, flush: true);
         await tmp.rename(target);
@@ -247,11 +263,9 @@ class LibraryController extends ChangeNotifier {
         );
         report.added++;
       } on ScoreFileException catch (e) {
-        if (e.problem == ScoreFileProblem.olderGuitarPro || _isLater(path)) {
-          report.later++;
-        } else {
-          report.failed.add((name, problemText(e)));
-        }
+        // Beim Ordner-Import sind andere XML-Dateien normal: still überspringen.
+        if (e.problem == ScoreFileProblem.unknownFormat && _ext(path) == 'xml' && !paths.contains(path)) continue;
+        report.failed.add((name, problemText(e)));
       } catch (e, st) {
         ErrorLog.record(e, st, where: 'Import: $name');
         report.failed.add((name, problemText(e)));

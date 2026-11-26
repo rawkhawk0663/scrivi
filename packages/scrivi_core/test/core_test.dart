@@ -151,16 +151,18 @@ void main() {
       expect(n1.hammerOrigin, isTrue);
       expect(beats[1].notes.single.slide, 2);
       expect(beats[2].notes.single.dead, isTrue);
-      expect(beats[2].notes.single.pitch.midi, 50); // aus Saite und Bund
+      // aus Saite und Bund; Bundzahlen zählen ab dem Kapodaster (hier Bund 2)
+      expect(beats[2].notes.single.pitch.midi, 52);
       final bend = t.bars[1].voices.single.beats.single.notes.single.bend!;
       expect(bend.maxSemitones, 2);
       expect(t.bars[1].voices.single.beats.single.hairpin, Hairpin.crescendo);
     });
 
     test('erkennt fremde und ältere Formate', () {
+      // Kaputte Guitar-Pro-6-Datei
       expect(
         () => GpReader.read(Uint8List.fromList('BCFZ0000'.codeUnits)),
-        throwsA(isA<ScoreFileException>().having((e) => e.problem, 'problem', ScoreFileProblem.olderGuitarPro)),
+        throwsA(isA<ScoreFileException>().having((e) => e.problem, 'problem', ScoreFileProblem.damaged)),
       );
       expect(
         () => GpReader.read(Uint8List.fromList('hallo welt'.codeUnits)),

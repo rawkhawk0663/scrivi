@@ -33,7 +33,15 @@ class LineItem extends DisplayItem {
 }
 
 class RectItem extends DisplayItem {
-  const RectItem(this.x, this.y, this.width, this.height, {this.fill = true, this.thickness = 0.13, this.background = false});
+  const RectItem(
+    this.x,
+    this.y,
+    this.width,
+    this.height, {
+    this.fill = true,
+    this.thickness = 0.13,
+    this.background = false,
+  });
   final double x, y, width, height;
   final bool fill;
   final double thickness;
@@ -52,7 +60,16 @@ class PathItem extends DisplayItem {
 
 /// Text mit Grundlinie auf y.
 class TextItem extends DisplayItem {
-  const TextItem(this.text, this.x, this.y, this.role, this.size, {this.align = TextAlign.left, this.bold = false, this.italic = false});
+  const TextItem(
+    this.text,
+    this.x,
+    this.y,
+    this.role,
+    this.size, {
+    this.align = TextAlign.left,
+    this.bold = false,
+    this.italic = false,
+  });
   final String text;
   final double x;
   final double y;
