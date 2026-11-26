@@ -1,0 +1,16 @@
+name: scrivi_core
+description: "Herz von Scrivi: Notenmodell, Dateiformate und Notensatz, in reinem Dart ohne Flutter."
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: ^3.13.7
+
+# Alle Pakete müssen zur GPL-3.0 passen.
+dependencies:
+  archive: ^4.7.0
+  xml: ^6.5.0
+
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.25.0
