@@ -19,7 +19,7 @@ Der Plan mit allen Etappen steht in **`BAUPLAN.md`**. Nach jeder Etappe dort den
 - **Lizenz: GPL-3.0.** Neue Pakete, Schriften und Klänge müssen dazu passen (MIT, BSD, Apache-2.0, LGPL, MPL-2.0, OFL: ja; ohne Lizenz oder „nur nicht-kommerziell“: nein). Schriften-Lizenzen in `_registerFontLicenses` (`main.dart`).
 - Builds über GitHub Actions: Jeder Push auf `main` erzeugt ein Release mit `Scrivi-Setup.exe`, `Scrivi-Windows.zip` und `Scrivi-Android.apk`. Weitergabe zwischen den Schritten über den Cache, nicht über „Artifacts“. Android wird mit `SCRIVI_KEYSTORE`/`SCRIVI_KEYSTORE_PASSWORD` signiert (Geheimnisse im GitHub-Projekt; fehlen sie, Test-Schlüssel).
 - Das Installationsprogramm (`windows/installer/scrivi.iss`) hat eine eigene `AppId`. Nie die von Volti oder Conti übernehmen, sonst überschreiben sich die Installationen.
-- App-Symbol: `tool/make_icon.py` (Verlauf Pink → Violett, weisses „S“ mit Note).
+- App-Symbol: `tool/make_icon.py` (Verlauf Pink → Violett; weisser Schwung – Federstrich und Bogen zugleich –, der einen schrägen Notenkopf umfängt. Vom Besitzer gewählt; abstrakt wie Volti, aber bewusst eine andere Gestalt).
 - Windows-Teil (`windows/runner/flutter_window.cpp`): Stift-Verzögerungen abgeschaltet (`DisablePenDelays`), Bildschirmtastatur über den Kanal `scrivi/keyboard`, Bildschirm wach halten über `scrivi/screen` (Dart-Seite kommt mit dem Abspielen).
 
 ## Aufbau
