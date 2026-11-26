@@ -1,0 +1,236 @@
+# Scrivi – Bauplan
+
+Stand: 26. November 2026 · Arbeitsname „Scrivi“ (ital. „schreib!“)
+
+Scrivi ist ein Notenschreibprogramm für Noten, Tabulatur und Partituren. Es läuft mit Flutter
+auf Windows und Android, später vielleicht auch auf macOS und iPadOS. Es gehört zur gleichen
+Familie wie Volti (Noten lesen), Suona (Noten lernen) und Conti (Buchhaltung).
+
+---
+
+## 1. Was Scrivi können soll, und was nicht
+
+### Ziel
+Ein Programm, mit dem ein Berufsmusiker und Gitarrenlehrer im Alltag alles schreibt, was er
+braucht:
+
+- **Gitarre:** Noten und Tabulatur gekoppelt, Griffbilder, Rhythmus-Schreibweise (Slashes),
+  Spieltechniken (Bending, Slide, Hammer-on, Pull-off, Vibrato, Flageolett, Palm Mute,
+  Let ring, Tapping), beliebige Stimmungen und Kapo, 6-, 7- und 8-saitige Gitarre, Bass.
+- **Leadsheets:** Melodie, Akkordsymbole, Liedtext, Formteile (Intro, Strophe, Refrain),
+  Wiederholungen, Häuser, Segno und Coda.
+- **Partituren:** mehrere Instrumente, Klammern, Stimmen-Auszüge, Transposition für
+  transponierende Instrumente, Dynamik, Artikulation, Bögen, Liedtext.
+- **Abspielen:** Klang für alle Instrumente, mitlaufende Markierung, Tempo, Schleife,
+  Einzähler, Metronom, Lautstärke und Stumm/Solo pro Spur.
+- **Unterrichtsmaterial:** Übungsblätter, Tonleitern und Griffbrett-Diagramme schnell erstellt.
+- **Austausch:** vorhandene Dateien einlesen (MusicXML, Guitar-Pro-Dateien, MIDI), schöne PDFs
+  ausgeben, direkt an Volti weitergeben.
+
+### Ehrliche Grenzen
+- **Notensatz auf Verlagsniveau für grosse Orchesterpartituren** ist eine Arbeit von
+  Jahrzehnten. Scrivi soll für Band, Ensemble, Unterricht und Leadsheets sehr gut aussehen.
+  Eine Sinfonie mit 30 Systemen wird lange Zeit Handarbeit brauchen.
+- **Die bisherigen Dateien aus dem Partitur-Programm (`.sib`)** sind ein geschlossenes,
+  nicht beschriebenes Format. Scrivi kann sie nicht direkt öffnen. Der Weg führt über
+  **MusicXML**: Im alten Programm alle Stücke als MusicXML speichern (es gibt dort eine
+  Stapel-Umwandlung für ganze Ordner), dann in Scrivi einlesen. Das machen wir einmal
+  gemeinsam, bevor das Abo ausläuft.
+- **Guitar-Pro-Dateien** (`.gp`, `.gpx`, `.gp5`, `.gp4`, `.gp3`) sind gut erforscht, das
+  Einlesen ist machbar. Kleinigkeiten (besondere Effekte, Klangeinstellungen) gehen dabei
+  eventuell verloren. Der Klang wird nicht derselbe sein.
+- **Handschrift mit dem Stift erkennen** (Noten von Hand schreiben, Scrivi setzt sie) ist
+  sehr schwierig. Das steht ganz am Schluss und nur als „vielleicht“.
+- **iPad:** Ohne EU-Mitgliedschaft der Schweiz gibt es dort nur den App Store. Das braucht
+  ein Apple-Entwicklerkonto (jährliche Gebühr) und die Prüfung durch Apple.
+
+---
+
+## 2. Grundsätze (wie bei Volti, Suona und Conti)
+
+1. **Kein Konto, keine Daten sammeln, keine Werbung, funktioniert ohne Internet.**
+   Internet nur für Updates und den eigenen Dropbox-Abgleich.
+2. **Deutsch und Englisch**, jeder sichtbare Text als `tr('Deutsch', 'English')`,
+   Schweizer Schreibweise („ss“), Englisch britisch.
+3. **GPL-3.0**, alles öffentlich. Neue Pakete, Schriften und Klänge müssen zur GPL passen.
+4. **Gleiche Gestaltung wie die Familie:** Material 3, Markenverlauf, hell und dunkel,
+   Fenster ohne Titelleiste mit drei runden Knöpfen, Leiste links.
+5. **Bedienbar mit Stift, Finger, Maus und Tastatur.** Hauptgerät ist das Surface mit Stift.
+6. **Nie Daten verlieren:** automatisches Speichern, tägliche Sicherungen, Versionsverlauf
+   pro Stück, Einspielen löscht nie etwas.
+7. **Alte Dateien bleiben lesbar.** Jedes eigene Format hat eine Versionsnummer.
+8. **Flüssig auf dem Surface:** Messen statt raten (Lehren aus Volti: fertige Teile als Bild
+   zwischenspeichern, keine Schatten und Durchsichtigkeit beim Bearbeiten).
+9. **Builds über GitHub Actions:** jeder Push auf `main` ergibt `Scrivi-Setup.exe`,
+   `Scrivi-Windows.zip` und `Scrivi-Android.apk`, Updates in der App und über Obtainium.
+
+---
+
+## 3. Aufbau der Technik
+
+Scrivi besteht aus zwei Teilen:
+
+```
+packages/scrivi_core/      Reines Dart, ohne Flutter (schnell testbar, auch für Volti/Suona nutzbar)
+  model/                   Das Notenmodell (Stück, Instrumente, Takte, Noten …)
+  edit/                    Bearbeitungsbefehle mit Rückgängig (jede Änderung ist ein Befehl)
+  layout/                  Notensatz: rechnet aus dem Modell Seiten, Systeme und Zeichen-Positionen
+  render/                  „Zeichenliste“ (Linien, Zeichen, Bögen) – unabhängig von Bildschirm oder PDF
+  playback/                Aus dem Modell eine Abspiel-Liste (wann klingt welcher Ton wie lange)
+  io/                      Einlesen und Ausgeben: scrivi, MusicXML, Guitar Pro, MIDI
+  music/                   Tonhöhen, Intervalle, Tonarten, Akkordnamen, Stimmungen
+
+lib/                       Die Flutter-App
+  app/                     Theme, l10n, Updater, Fehlerprotokoll, Fensterknöpfe (wie in der Familie)
+  core/                    Bibliothek, Sync, Sicherungen, Einstellungen, Klang-Technik
+  features/
+    library/               Bibliothek mit Ordnern, Suche, Vorschaubildern
+    editor/                Notenansicht mit Eingabe, Paletten, Inspektor
+    playback/              Mischpult, Transport, mitlaufende Markierung
+    export/                PDF, Bilder, Audio, an Volti senden
+    settings/
+```
+
+**Warum so getrennt?** Der Notensatz ist das Herz und der schwierigste Teil. Ohne Flutter lässt
+er sich mit tausenden automatischen Tests prüfen, und Volti oder Suona können ihn später
+mitbenutzen (z. B. Volti zeigt Scrivi-Stücke mit mitlaufender Markierung).
+
+### Notenschrift
+- **Bravura** (SMuFL, OFL), dieselbe Schrift wie in Volti und Suona. Später zusätzlich
+  **Petaluma** (handschriftlicher Jazz-Look für Leadsheets) und **Leland**, alle OFL.
+- Ein Werkzeug (`tool/make_glyphs.py`) holt die Umrisse der benötigten Zeichen aus der Schrift
+  und legt sie als Vektordaten ab. So sehen Bildschirm und PDF garantiert gleich aus, und das
+  PDF wird gestochen scharf.
+
+### Darstellung
+- Gezeichnet wird über `CustomPainter` aus der Zeichenliste. Jedes System wird als Bild
+  zwischengespeichert; bei einer Änderung wird nur das betroffene System neu gesetzt.
+- Ansichten: **Seitenansicht** (wie gedruckt) und **Endlos-Ansicht** (ein langes Band, gut
+  zum Schreiben und auf dem Handy).
+
+### Klang
+- **Erste Stufe:** Das Stück wird im Hintergrund in eine Tonspur umgerechnet und mit
+  `flutter_soloud` abgespielt (gleiches Prinzip wie das Metronom in Volti: dadurch genau im
+  Takt). Gitarre zuerst mit der gezupften Saite aus Suona und Volti, die es schon gibt.
+- **Zweite Stufe:** SoundFont-Klänge (SF2/SF3) für alle Instrumente. Welche Klangsammlung,
+  entscheiden wir nach Lizenz und Grösse; grosse Sammlungen eventuell als Download nach der
+  Installation.
+- **Dritte Stufe:** Echtzeit-Klang für ein MIDI-Keyboard und beim Eingeben.
+
+### Pakete (Vorschlag, alle GPL-tauglich)
+`path_provider`, `archive`, `uuid`, `file_selector`, `share_plus`, `url_launcher`,
+`window_manager` 0.5.x, `flutter_soloud`, `flutter_recorder`, `pdf`, `xml`, `desktop_drop`,
+`flutter_localizations`. Wo möglich dieselben Versionen wie in Volti.
+
+---
+
+## 4. Das Notenmodell (Kurzfassung)
+
+```
+Stück (Titel, Untertitel, Komponist, Bearbeiter, Copyright, Tempo …)
+ └─ Instrumente (Name, Kürzel, Klang, Transposition, Stimmung, Kapo)
+     └─ Systeme pro Instrument (Noten, Tabulatur, Rhythmus, Schlagzeug)
+ └─ Taktfolge (für alle Instrumente gleich: Taktart, Tonart, Wiederholungen, Häuser,
+               Segno/Coda, Formteile, Tempo-Wechsel, Akkordsymbole)
+     └─ pro Instrument und Takt: Stimmen (1–4)
+         └─ Ereignisse: Akkord/Note oder Pause, Dauer, Punktierung, n-tolen, Vorschläge
+             └─ Noten: Tonhöhe **mit Schreibweise** (Fis ≠ Ges), Saite und Bund,
+                       Haltebogen, Techniken, Artikulation, Notenkopf
+ └─ Spannen über mehrere Noten: Bögen, Crescendo, Oktavierung, Pedal, Triller, Let ring …
+ └─ Liedtext (mehrere Strophen), Texte, Probenzeichen
+ └─ Satz-Einstellungen (Seitenformat, Abstände, Schriftgrössen, Umbrüche von Hand)
+```
+
+- Jedes Element hat eine **ID** (UUID), damit Rückgängig, Abgleich und Verschieben sicher sind.
+- Noten und Tabulatur sind **ein** Modell: Schreibt man in die Tabulatur, entsteht die Note,
+  und umgekehrt. Scrivi wählt Saite und Bund selbst (bequemste Lage), man kann es ändern.
+- **Klingende Tonhöhe** wird gespeichert, die Schreibweise für transponierende Instrumente
+  und Gitarre (Violinschlüssel mit kleiner 8) wird beim Setzen berechnet, wie in Suona.
+
+### Eigenes Dateiformat `.scrivi`
+Eine ZIP-Datei mit `score.json` (Format `scrivi-score`, Version 1), Vorschaubild, optional
+Bildern und Tonaufnahmen. Gut lesbar, gut zu sichern, versioniert.
+
+---
+
+## 5. Eingabe
+
+- **Tastatur** (schnellste Art): Buchstaben für Tonnamen, Zahlen für Notenwerte, Pfeile
+  für Oktave und Schritt, Kürzel für Pause, Punkt, Haltebogen, Vorzeichen. In der Tabulatur:
+  Bundzahl tippen, Pfeil hoch/runter wechselt die Saite.
+- **Stift/Maus:** Notenwert wählen, auf das Notensystem tippen (wie „Note setzen“ in Suona),
+  Paletten mit Zeichen, Ziehen zum Verschieben.
+- **Griffbrett** zum Antippen (aus Suona) und **Klaviatur** am unteren Rand.
+- **Mikrofon:** Gitarre spielen, Scrivi erkennt den Ton (Tonerkennung aus Volti und Suona).
+- **MIDI-Keyboard** (später).
+- **Handschrift** (ganz später, vielleicht).
+
+---
+
+## 6. Zusammenspiel mit der Familie
+
+| App | Verbindung |
+|---|---|
+| **Volti** | „An Volti senden“: PDF (und später das Scrivi-Stück selbst) landet in Voltis Bibliothek, mit Tempo und Taktart in den Infos. Später zeigt Volti Scrivi-Stücke direkt an, mit Klang und mitlaufender Markierung. Gemeinsame Bausteine: Metronom, Stimmgerät, Tonerkennung, Dropbox-Abgleich. |
+| **Suona** | Scrivi als Werkzeug für Lehrpersonen: Lieder für die Akkord-Tour und Lehrpläne schreiben und an Suona geben. Gemeinsame Bausteine: Notensystem, Griffbrett, Notennamen (H/B), gezupfte Saite. |
+| **Conti** | Keine inhaltliche Verbindung. Gemeinsam sind Gestaltung, Updater, Sicherungen und Dropbox-Abgleich. |
+
+**Gemeinsamer Code:** Heute hat jede App ihre eigene Kopie von l10n, Theme, Updater,
+Fensterknöpfen und Sync. Für Scrivi kopieren wir sie zuerst ebenfalls. Sobald es sich lohnt,
+legen wir sie in ein gemeinsames Paket, das alle vier Apps benutzen.
+
+---
+
+## 7. Etappen
+
+Grösse: S = eine bis zwei Sitzungen, M = einige Sitzungen, L = viele Sitzungen, XL = sehr viele.
+Jede Etappe endet mit einem Release, das man ausprobieren kann.
+
+| # | Etappe | Inhalt | Fertig, wenn … | Grösse |
+|---|---|---|---|---|
+| 0 | **Grundgerüst** | Flutter-Projekt, Theme, l10n, Fensterknöpfe, Updater, Fehlerprotokoll, Bau über GitHub Actions, README, CLAUDE.md, Lizenz | Scrivi startet auf Surface und Android und aktualisiert sich selbst | S |
+| 1 | **Noten zeigen** | Modell, Notensatz für ein System: Schlüssel, Tonart, Taktart, Noten und Pausen, Punkte, Vorzeichen, Hälse, Balken, Haltebögen, Taktstriche, Wiederholungen; Zeilen- und Seitenumbruch; Seiten- und Endlos-Ansicht | ein Stück aus Testdaten sieht sauber gesetzt aus | L |
+| 2 | **Einlesen** | MusicXML (Noten, Akkorde, Text), Guitar-Pro-Dateien `.gp`, `.gpx`, `.gp5/4/3`, MIDI. Bibliothek mit Import und Vorschaubildern | eigene echte Stücke lassen sich öffnen und lesen. Ab hier sind sie unser Testmaterial | L |
+| 3 | **Tabulatur** | Tab-System gekoppelt an Noten, Stimmungen, Kapo, Spieltechniken, Rhythmus in der Tab, Griffbilder, Slash-Notation | Gitarrenstücke aus Guitar Pro sehen vollständig aus | L |
+| 4 | **Abspielen** | Abspiel-Liste, Gitarrenklang, Tempo, Schleife, Einzähler, Metronom, mitlaufende Markierung, Mischpult; danach SoundFont-Klänge | ein Stück klingt richtig, auch mit Wiederholungen, Bends und Slides | M–L |
+| 5 | **Schreiben** | Cursor, Eingabe über Tastatur, Stift und Griffbrett, Auswahl, Kopieren, Rückgängig, Transponieren, Takte einfügen und löschen, Akkordsymbole, Liedtext, Titel | ein Leadsheet und eine Tab lassen sich vollständig in Scrivi schreiben | L |
+| 6 | **Ausgeben** | PDF, PNG/SVG, MusicXML, MIDI, Tonspur (WAV), „An Volti senden“, Drucken | ein PDF ist bereit für Schüler und Band | M |
+| 7 | **Partitur** | Mehrere Instrumente, Klammern, Stimmen-Auszüge, Transposition, mehrere Stimmen pro System, Dynamik, Bögen, n-tolen, Vorschläge, Schlagzeug | ein Band-Arrangement mit Auszügen ist druckreif | XL |
+| 8 | **Feinschliff Notensatz** | Kollisionen vermeiden, Abstände von Hand, Stilvorlagen, Schriften (Petaluma), Umbrüche, Kopf- und Fusszeilen | Ergebnis braucht kaum Handarbeit | L |
+| 9 | **Extras** | Dropbox-Abgleich, Mikrofon-Eingabe, MIDI-Keyboard, Übungsblatt-Generator, Lieder an Suona, macOS, iPadOS | nach Wunsch | je M |
+
+**Warum Einlesen so früh?** Die eigenen Guitar-Pro- und MusicXML-Dateien sind das beste
+Testmaterial. So sehen wir sofort an echten Stücken, wo der Notensatz noch hinkt, und Scrivi
+ist schon zum Lesen und Abspielen nützlich, bevor man darin schreiben kann.
+
+**Realistisch:** Nach den Etappen 0 bis 6 ersetzt Scrivi das Gitarren-Programm im Alltag
+(Tabs, Leadsheets, Abspielen, PDF). Das Partitur-Programm ersetzt es nach Etappe 7 und 8
+für Band und Ensemble. Für grosse Orchesterpartituren bleibt es lange schwächer.
+
+---
+
+## 8. Risiken und wie wir damit umgehen
+
+| Risiko | Gegenmittel |
+|---|---|
+| Notensatz sieht „billig“ aus | Satzregeln aus der Fachliteratur (Elaine Gould, *Behind Bars*), Bild-Vergleichstests für jede Regel, eigene Stücke als Prüfstein |
+| Langsam bei grossen Stücken | nur geänderte Systeme neu setzen, Systeme als Bild zwischenspeichern, früh auf dem Surface messen |
+| Guitar-Pro-Dateien mit Eigenheiten | viele echte Dateien als Testsammlung, unbekannte Teile überspringen statt abbrechen, Hinweis was fehlte |
+| Klang klingt künstlich | gute, lizenzfreie Klangsammlung wählen, Gitarre mit eigenen Effekten (Bend, Slide, Palm Mute) |
+| PDF und Bildschirm unterschiedlich | beide zeichnen aus derselben Zeichenliste mit denselben Vektor-Umrissen |
+| Projekt wird zu gross | jede Etappe ist einzeln nützlich; klare Reihenfolge, Wünsche kommen in eine Liste |
+
+---
+
+## 9. Offene Fragen an dich
+
+1. **Wofür brauchst du die beiden bisherigen Programme konkret am meisten?**
+   (z. B. Tabs für Schüler, Leadsheets für die Band, Arrangements, Bläsersätze, Chor …)
+   Danach richten wir die Reihenfolge aus.
+2. **Wie viele alte Dateien gibt es, und welche Formate?** (ungefähr: Anzahl `.gp`, `.gpx`,
+   `.gp5`, `.sib`). Ein paar Beispiele als Testmaterial wären sehr hilfreich.
+3. **Bibliothek oder freie Dateien?** Volti verwaltet seine Noten selbst in einer Bibliothek.
+   Für Scrivi schlage ich dasselbe vor (passt zum Abgleich), dazu Import und Export von
+   einzelnen Dateien. Einverstanden?
+4. **Name:** siehe Vorschläge im Chat. Der Name lässt sich bis zum ersten öffentlichen
+   Release noch ändern (das GitHub-Projekt kann man umbenennen).
