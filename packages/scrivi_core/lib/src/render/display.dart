@@ -93,11 +93,52 @@ class PageDisplay {
 
 /// Wo eine Zeile (System) auf der Seite liegt und welche Takte sie zeigt.
 class SystemBox {
-  const SystemBox({required this.top, required this.bottom, required this.firstBar, required this.lastBar});
+  const SystemBox({
+    required this.top,
+    required this.bottom,
+    required this.firstBar,
+    required this.lastBar,
+    this.bars = const [],
+  });
   final double top;
   final double bottom;
   final int firstBar;
   final int lastBar;
+
+  /// Lage der Takte und ihrer Schläge (für die mitlaufende Markierung).
+  final List<BarSpan> bars;
+
+  /// x-Stelle zu Takt [bar] und Stelle [position] (ganze Noten), null = nicht in dieser Zeile.
+  double? xAt(int bar, double position) {
+    for (final b in bars) {
+      if (b.bar == bar) return b.xAt(position);
+    }
+    return null;
+  }
+}
+
+/// Ein Takt in einer Zeile: von [x0] bis [x1], Schläge an [beats] (Stelle in ganzen Noten, x).
+class BarSpan {
+  const BarSpan(this.bar, this.x0, this.x1, this.length, this.beats);
+  final int bar;
+  final double x0;
+  final double x1;
+  final double length;
+  final List<(double, double)> beats;
+
+  /// x-Stelle zur Stelle [position]: zwischen den Schlägen gleichmässig verteilt.
+  double xAt(double position) {
+    final pts = [(0.0, beats.isEmpty ? x0 : beats.first.$2), ...beats, (length, x1)];
+    for (var i = 0; i + 1 < pts.length; i++) {
+      final (p0, a) = pts[i];
+      final (p1, b) = pts[i + 1];
+      if (position <= p1 || i + 2 == pts.length) {
+        if (p1 <= p0) return b;
+        return a + (b - a) * ((position - p0) / (p1 - p0)).clamp(0.0, 1.0);
+      }
+    }
+    return x0;
+  }
 }
 
 /// Misst Texte, damit der Notensatz Platz lassen kann. Die App misst genau,

@@ -189,7 +189,18 @@ void main() {
       // Schrägstrich-Schläge zeigen in der Tabulatur nichts (auch nicht die gedämpfte Note)
       expect(texts, isNot(contains('x')));
       final glyphs = page.items.whereType<GlyphItem>().map((g) => g.name).toSet();
-      expect(glyphs, containsAll(['gClef8vb', 'accidentalSharp', 'noteheadBlack', 'noteheadSlashHorizontalEnds', 'repeatDot', 'metNoteQuarterUp', '6stringTabClef']));
+      expect(
+        glyphs,
+        containsAll([
+          'gClef8vb',
+          'accidentalSharp',
+          'noteheadBlack',
+          'noteheadSlashHorizontalEnds',
+          'repeatDot',
+          'metNoteQuarterUp',
+          '6stringTabClef',
+        ]),
+      );
       // Ges in D-Dur braucht ein b-Vorzeichen
       expect(glyphs, contains('accidentalFlat'));
     });
@@ -201,7 +212,12 @@ void main() {
         info: s.info,
         masterBars: List.generate(60, (i) => s.masterBars[i % 2]),
         tracks: [
-          Track(name: 'G', staff: s.tracks.first.staff, bars: List.generate(60, (i) => s.tracks.first.bars[i % 2]), transposeSemitones: 12),
+          Track(
+            name: 'G',
+            staff: s.tracks.first.staff,
+            bars: List.generate(60, (i) => s.tracks.first.bars[i % 2]),
+            transposeSemitones: 12,
+          ),
         ],
       );
       final layout = Engraver(many).layout();

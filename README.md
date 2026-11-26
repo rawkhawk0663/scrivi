@@ -23,8 +23,9 @@ Scrivi gibt es auf **Deutsch und Englisch**. Es braucht **kein Konto**, sammelt 
 - **Stimmung und Kapo:** Bei besonderen Stimmungen (z. B. Drop D, Es-Stimmung) stehen die Saitennamen vor der Tabulatur, deutsch mit H. Ein Kapodaster erscheint als „Capo 2“ über den Noten. Gitarren mit 7 und 8 Saiten und Bass gehen auch.
 - **Ansicht wählen:** Noten und Tabulatur, nur Noten oder nur Tabulatur. In der reinen Tabulatur zeigen Hälse und Balken darunter den Rhythmus. Scrivi merkt sich die Wahl.
 - **Ansehen:** blättern mit Mausrad, Wischen, Bild auf/ab, Pfeiltasten oder Pedal. Zoomen mit zwei Fingern, Strg + Mausrad oder den Knöpfen oben. Hat eine Datei mehrere Spuren, wählst du oben die Spur.
+- **Abspielen:** Die Leiste unten spielt das Stück ab, mit allen Wiederholungen, Häusern und Sprüngen (D.C., D.S., Coda, Fine). Eine farbige Markierung läuft mit, die Seiten blättern von selbst. Einen Takt antippen springt dorthin, die Leertaste startet und hält an. Dazu: Tempo (25 bis 200 %, die Tonhöhe bleibt), Einzähler, Metronom, Schleife über beliebige Takte und ein Mischpult (Lautstärke, stumm, solo pro Spur). Die Klänge rechnet Scrivi selbst, ohne Klangdateien: Gitarre (auch verzerrt), Bass, Klavier, Streicher, Bläser und Schlagzeug, mit Bendings, Slides, Vibrato, Palm Mute und Flageoletts.
 
-Noch nicht: Abspielen, Schreiben, mehrere Instrumente gleichzeitig (Partitur). Das kommt in den nächsten Etappen.
+Noch nicht: Schreiben, mehrere Instrumente gleichzeitig (Partitur). Das kommt in den nächsten Etappen.
 
 ## Was Scrivi können soll
 

@@ -14,6 +14,8 @@ import '../../app/theme.dart';
 import '../../core/library/library_controller.dart';
 import '../../widgets/visuals.dart';
 import 'score_painter.dart';
+import 'score_player.dart';
+import 'transport_bar.dart';
 
 /// Zeigt ein Stück als Seiten mit Noten und Tabulatur.
 class ScoreScreen extends StatefulWidget {
@@ -31,6 +33,7 @@ class _ScoreScreenState extends State<ScoreScreen> {
   Object? _error;
   int _track = 0;
   ScoreView _view = ScoreView.both;
+  ScorePlayer? _player;
   final _viewer = GlobalKey<_PagesViewerState>();
 
   @override
@@ -60,6 +63,7 @@ class _ScoreScreenState extends State<ScoreScreen> {
       final score = await LibraryController.load(widget.piece.path);
       if (!mounted) return;
       _score = score;
+      _player = ScorePlayer(score);
       _engrave();
     } catch (e, st) {
       ErrorLog.record(e, st, where: 'Stück öffnen: ${widget.piece.fileName}');
@@ -114,6 +118,7 @@ class _ScoreScreenState extends State<ScoreScreen> {
 
   @override
   void dispose() {
+    _player?.dispose();
     for (final p in _pictures ?? const <ui.Picture>[]) {
       p.dispose();
     }
@@ -203,6 +208,7 @@ class _ScoreScreenState extends State<ScoreScreen> {
         ],
       ),
       body: _body(),
+      bottomNavigationBar: _player == null || _pages == null ? null : TransportBar(player: _player!),
     );
   }
 
@@ -216,16 +222,26 @@ class _ScoreScreenState extends State<ScoreScreen> {
     }
     final pages = _pages, pictures = _pictures;
     if (pages == null || pictures == null) return const Center(child: CircularProgressIndicator());
-    return _PagesViewer(key: _viewer, pages: pages, pictures: pictures);
+    return _PagesViewer(
+      key: _viewer,
+      pages: pages,
+      pictures: pictures,
+      player: _player,
+      onBarTap: (bar) => _player?.seekToBar(bar),
+    );
   }
 }
 
 /// Seiten untereinander, mit Zoom (zwei Finger, Strg + Mausrad, Knöpfe) und
 /// Blättern (Mausrad, Wischen, Bild auf/ab, Pfeiltasten, Pedal).
 class _PagesViewer extends StatefulWidget {
-  const _PagesViewer({super.key, required this.pages, required this.pictures});
+  const _PagesViewer({super.key, required this.pages, required this.pictures, this.player, this.onBarTap});
   final List<core.PageDisplay> pages;
   final List<ui.Picture> pictures;
+  final ScorePlayer? player;
+
+  /// Antippen eines Takts (Partitur-Nummer).
+  final ValueChanged<int>? onBarTap;
 
   @override
   State<_PagesViewer> createState() => _PagesViewerState();
@@ -246,15 +262,83 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
   Offset _flingDirection = Offset.zero;
   double _flingLast = 0;
 
+  // Lage der Seiten im Inhalt (ungezoomt)
+  List<double> _pageTops = const [];
+  double _pageW = 0;
+  double _pageLeft = 0;
+  core.SystemBox? _followed;
+
   static const _gap = 16.0;
   static const _minScale = 1.0;
   static const _maxScale = 4.0;
 
   @override
+  void initState() {
+    super.initState();
+    widget.player?.position.addListener(_follow);
+  }
+
+  @override
+  void didUpdateWidget(_PagesViewer old) {
+    super.didUpdateWidget(old);
+    if (old.player != widget.player) {
+      old.player?.position.removeListener(_follow);
+      widget.player?.position.addListener(_follow);
+    }
+  }
+
+  @override
   void dispose() {
+    widget.player?.position.removeListener(_follow);
     _fling.dispose();
     _focus.dispose();
     super.dispose();
+  }
+
+  /// Beim Abspielen mitblättern: Kommt die Markierung in eine Zeile, die nicht
+  /// ganz zu sehen ist, wird sie oben ins Bild gerückt.
+  void _follow() {
+    final player = widget.player;
+    if (player == null || !player.playing || _pageTops.isEmpty) return;
+    final (bar, _) = player.location;
+    for (var i = 0; i < widget.pages.length; i++) {
+      for (final sys in widget.pages[i].systems) {
+        if (bar < sys.firstBar || bar > sys.lastBar) continue;
+        if (identical(sys, _followed)) return;
+        _followed = sys;
+        final k = _pageW / widget.pages[i].width;
+        final top = (_pageTops[i] + sys.top * k) * _scale + _offset.dy;
+        final bottom = (_pageTops[i] + sys.bottom * k) * _scale + _offset.dy;
+        if (top < 0 || bottom > _viewport.height) {
+          _fling.stop();
+          _set(_scale, Offset(_offset.dx, _offset.dy - top + _viewport.height * 0.12));
+        }
+        return;
+      }
+    }
+  }
+
+  /// Angetippter Takt: Fensterpunkt → Seite → Zeile → Takt.
+  void _onTapUp(TapUpDetails d) {
+    final cb = widget.onBarTap;
+    if (cb == null) return;
+    final p = (d.localPosition - _offset) / _scale;
+    for (var i = 0; i < widget.pages.length && i < _pageTops.length; i++) {
+      final page = widget.pages[i];
+      final k = _pageW / page.width;
+      final h = page.height * k;
+      if (p.dy < _pageTops[i] || p.dy > _pageTops[i] + h) continue;
+      final x = (p.dx - _pageLeft) / k, y = (p.dy - _pageTops[i]) / k;
+      for (final sys in page.systems) {
+        if (y < sys.top - 2 || y > sys.bottom + 2) continue;
+        for (final b in sys.bars) {
+          if (x >= b.x0 - 1 && x <= b.x1) {
+            cb(b.bar);
+            return;
+          }
+        }
+      }
+    }
   }
 
   void _set(double scale, Offset offset) {
@@ -345,7 +429,11 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
     if (e is! KeyDownEvent && e is! KeyRepeatEvent) return KeyEventResult.ignored;
     final page = _viewport.height * 0.85;
     final k = e.logicalKey;
-    if (k == LogicalKeyboardKey.pageDown || k == LogicalKeyboardKey.space || k == LogicalKeyboardKey.arrowRight) {
+    if (k == LogicalKeyboardKey.space && widget.player != null) {
+      widget.player!.toggle();
+    } else if (k == LogicalKeyboardKey.pageDown ||
+        k == LogicalKeyboardKey.space ||
+        k == LogicalKeyboardKey.arrowRight) {
       scrollBy(page);
     } else if (k == LogicalKeyboardKey.pageUp || k == LogicalKeyboardKey.arrowLeft) {
       scrollBy(-page);
@@ -371,6 +459,15 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
         final pageW = math.min(box.maxWidth - 2 * _gap, 1100.0);
         final heights = widget.pages.map((p) => pageW * p.height / p.width).toList();
         _contentHeight = math.max(heights.fold(_gap, (s, h) => s + h + _gap), box.maxHeight);
+        _pageW = pageW;
+        _pageLeft = (box.maxWidth - pageW) / 2;
+        final tops = <double>[];
+        var y = _gap;
+        for (final h in heights) {
+          tops.add(y);
+          y += h + _gap;
+        }
+        _pageTops = tops;
         // Nach einer Grössenänderung des Fensters wieder in die Grenzen holen.
         final w = box.maxWidth, h = box.maxHeight;
         _offset = Offset(
@@ -388,6 +485,7 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
               onScaleStart: _onScaleStart,
               onScaleUpdate: _onScaleUpdate,
               onScaleEnd: _onScaleEnd,
+              onTapUp: _onTapUp,
               child: ClipRect(
                 child: OverflowBox(
                   alignment: Alignment.topLeft,
@@ -406,7 +504,12 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
                           SizedBox(
                             width: pageW,
                             child: RepaintBoundary(
-                              child: ScorePageView(picture: widget.pictures[i], page: widget.pages[i]),
+                              child: CustomPaint(
+                                foregroundPainter: widget.player == null
+                                    ? null
+                                    : _CursorPainter(widget.player!, widget.pages[i]),
+                                child: ScorePageView(picture: widget.pictures[i], page: widget.pages[i]),
+                              ),
                             ),
                           ),
                           const SizedBox(height: _gap),
@@ -422,4 +525,31 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
       },
     );
   }
+}
+
+/// Mitlaufende Markierung: ein farbiger Balken über die ganze Zeile.
+class _CursorPainter extends CustomPainter {
+  _CursorPainter(this.player, this.page) : super(repaint: Listenable.merge([player.position, player]));
+  final ScorePlayer player;
+  final core.PageDisplay page;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (!player.playing && player.position.value <= 0) return;
+    final (bar, pos) = player.location;
+    final k = size.width / page.width;
+    for (final sys in page.systems) {
+      if (bar < sys.firstBar || bar > sys.lastBar) continue;
+      final x = sys.xAt(bar, pos);
+      if (x == null) continue;
+      final r = Rect.fromLTRB((x - 0.45) * k, (sys.top - 1) * k, (x + 0.45) * k, (sys.bottom + 1) * k);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(r, Radius.circular(0.3 * k)),
+        Paint()..color = ScriviColors.selection.withAlpha(110),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_CursorPainter old) => old.player != player || old.page != page;
 }

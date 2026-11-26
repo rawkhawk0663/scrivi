@@ -714,7 +714,22 @@ class Engraver {
         page.items.add(shift(it, 0, dy));
       }
       page.systems.add(
-        SystemBox(top: top, bottom: top + height, firstBar: s.measures.first.index, lastBar: s.measures.last.index),
+        SystemBox(
+          top: top,
+          bottom: top + height,
+          firstBar: s.measures.first.index,
+          lastBar: s.measures.last.index,
+          bars: [
+            for (var j = 0; j < s.measures.length; j++)
+              BarSpan(
+                s.measures[j].index,
+                j == 0 ? s.x0 + s.header : s.measures[j].x,
+                s.measures[j].x + s.measures[j].w,
+                s.measures[j].mb.time.length.toDouble(),
+                [for (final c in s.measures[j].cols) (c.onset.toDouble(), c.x + 0.6)],
+              ),
+          ],
+        ),
       );
       y = top + height;
       firstOnPage = false;

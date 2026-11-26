@@ -32,6 +32,8 @@ packages/scrivi_core/   Herz von Scrivi, reines Dart ohne Flutter (eigene Tests:
               (MusicXmlReader, auch .mxl und „timewise“), MIDI (MidiReader)
   layout/     Engraver (Notensatz → Seiten), shapes (Bögen, Balken, Gabeln)
   render/     Zeichenliste (DisplayItem), Glyphs (Bravura-Umrisse, erzeugt), SVG-Ausgabe
+  playback/   PlaybackPlan (Abspiel-Reihenfolge, Zeiten, Töne mit Effekten, Metronom),
+              Synth (Klangerzeugung ohne Klangdateien, WAV)
 lib/
   app/        Theme (ScriviColors), l10n, Updater, Fehlerprotokoll, Fensterknöpfe,
               Bildschirmtastatur, Geräte-Einstellungen (einstellungen.json)
@@ -39,7 +41,8 @@ lib/
   features/
     shell/    Rahmen: Leiste links (breit) bzw. unten (schmal), ein Navigator pro Bereich
     library/  Bibliothek (Raster mit Vorschau, Suche, Import, Ziehen und Ablegen)
-    score/    Notenansicht (Seiten, Zoom, Blättern, Spurwahl), score_painter (Zeichenliste → Bild)
+    score/    Notenansicht (Seiten, Zoom, Blättern, Spurwahl), score_painter (Zeichenliste → Bild),
+              score_player (Abspielen), transport_bar (Leiste unten)
     settings/ Einstellungen, Über Scrivi, Updates
   widgets/    gemeinsame Bausteine (ScriviMark, SectionCard, EmptyState …)
 tool/         make_icon.py (Symbol), make_glyphs.py (Notenzeichen aus Bravura)
@@ -57,6 +60,13 @@ tool/         make_icon.py (Symbol), make_glyphs.py (Notenzeichen aus Bravura)
 - **Ansichten** (`LayoutOptions.showTab`/`showNotation`): ohne Notenzeile steht die Tab bei y = 0, der Rhythmus der Hauptstimme darunter (`_buildTabOnly`, `_tabRhythm`); ohne Saiten immer Noten. Die Wahl steht in `einstellungen.json` (`ansicht`).
 - **Griffbilder** oben auf Seite 1 (`_drawDiagrams`): aus der Datei, wenn mindestens drei Saiten belegt sind; sonst `ChordLibrary` (nur sechs Saiten in Normalstimmung und ohne Kapo). Barré in GP-Dateien: gleicher Finger auf gleichem Bund über mindestens vier Saiten.
 - **Saitennamen** nur bei besonderen Stimmungen (Liste `_standardTunings`), mit ♭ wenn die Stimmung E♭/A♭/B♭ enthält; deutsche Namen (H, B) über `LayoutOptions.germanNoteNames` nach der App-Sprache.
+
+## Abspielen
+- `PlaybackPlan.build(score, tempoFactor:)` rollt Wiederholungen, Häuser und Sprünge aus (nach einem D.C./D.S. keine Wiederholungen mehr, vom Haus das letzte) und liefert Takte mit Zeiten, Töne pro Spur und Metronom-Klicks. `locate(sekunden)` → (Takt, Stelle in ganzen Noten).
+- `Synth.renderTrack` rechnet eine Spur als Tonspur (44,1 kHz mono). Saiten: Verzögerungsschleife mit Tiefpass, Länge = Periode minus Verzögerung des Tiefpasses (sonst zu tief); die Länge darf sich im Ton ändern (Bendings, Slides, Vibrato). Klangfarbe nach `Track.program` (General MIDI), sonst nach Saiten. Tests messen die Tonhöhe.
+- App (`ScorePlayer`): Spuren und Metronom im Hintergrund (`Isolate.run`) als WAV rechnen, mit `flutter_soloud` als je eine Stimme laden und gemeinsam starten (Stimmengruppe). Einzähler über `setDelaySamples`; die Stimmen zählen die Wartezeit schon als gespielt (`_lead` abziehen). Tempo = neu rechnen. Audio-Technik wie in Volti (`AudioEngine`).
+- Markierung: Der Notensatz legt pro Zeile die Lage der Takte und Schläge ab (`SystemBox.bars`, `BarSpan.xAt`).
+- Testen ohne Lautsprecher: PulseAudio mit `module-null-sink` (spielt in Echtzeit); ein ALSA-„null“-Gerät läuft zu schnell.
 
 ## Dateiformate (packages/scrivi_core/lib/src/io)
 - `GpReader.read(bytes)` ist der einzige Einstieg: erkennt das Format am Inhalt, nicht an der Endung.

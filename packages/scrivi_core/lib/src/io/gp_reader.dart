@@ -239,6 +239,7 @@ class _Parser {
               ? hint
               : (defaultPerSystem != null && defaultPerSystem > 0 ? [defaultPerSystem] : null),
           transposeSemitones: transposeSemitones,
+          program: _program(t),
         ),
       );
     }
@@ -350,6 +351,15 @@ class _Parser {
       freeTime: _child(m, 'FreeTime') != null,
       directions: dirs,
     );
+  }
+
+  /// Klangfarbe: GP7 unter Sounds/Sound/MIDI/Program, GP6 unter GeneralMidi/Program.
+  int _program(XmlElement track) {
+    for (final e in track.findAllElements('Program')) {
+      final v = int.tryParse(e.innerText.trim());
+      if (v != null && v >= 0 && v < 128) return v;
+    }
+    return -1;
   }
 
   ChordDiagram? _diagram(XmlElement? d) {

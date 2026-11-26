@@ -179,6 +179,7 @@ class Track {
     Map<int, ChordDef>? chords,
     this.layoutHint,
     this.transposeSemitones = 0,
+    this.program = -1,
   }) : chords = chords ?? {};
 
   final String name;
@@ -194,6 +195,12 @@ class Track {
 
   /// Geschrieben = klingend + so viele Halbtöne (Gitarre: +12).
   final int transposeSemitones;
+
+  /// Klangfarbe als General-MIDI-Nummer (0..127), −1 = unbekannt.
+  final int program;
+
+  /// Schlagzeug (neutraler Schlüssel).
+  bool get percussion => bars.isNotEmpty && bars.first.clef == Clef.neutral;
 }
 
 /// Angaben zum Notensystem eines Instruments.

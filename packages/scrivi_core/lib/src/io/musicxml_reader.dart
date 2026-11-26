@@ -169,6 +169,7 @@ class _Parser {
   final XmlElement root;
 
   final _tempos = <TempoMark>[];
+  final _programs = <String, int>{};
   final _masters = <_Master>[];
 
   Score parse() {
@@ -176,6 +177,9 @@ class _Parser {
     for (final sp in root.findAllElements('score-part')) {
       final id = sp.getAttribute('id') ?? '';
       names[id] = _text(sp, 'part-name');
+      // Klangfarbe: in der Datei ab 1 gezählt
+      final prog = int.tryParse(_text(_child(sp, 'midi-instrument'), 'midi-program'));
+      if (prog != null && prog >= 1 && prog <= 128) _programs[id] = prog - 1;
     }
     final parts = _children(root, 'part').toList();
     if (parts.isEmpty) throw const ScoreFileException(ScoreFileProblem.unknownFormat, 'keine Stimmen');
@@ -603,6 +607,7 @@ class _Parser {
           bars: withChords,
           chords: chords,
           transposeSemitones: transpose,
+          program: _programs[part.getAttribute('id')] ?? -1,
         ),
       );
     }

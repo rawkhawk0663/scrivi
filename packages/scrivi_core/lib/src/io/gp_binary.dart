@@ -7,6 +7,9 @@ import 'gp_reader.dart';
 
 /// Liest ältere Guitar-Pro-Dateien (`.gp3`, `.gp4`, `.gp5`, Binärformat).
 class GpBinaryReader {
+  /// Klangfarben der 64 Kanäle.
+  final _programs = <int>[];
+
   GpBinaryReader._(this.r);
   final BinaryReader r;
 
@@ -99,8 +102,9 @@ class GpBinaryReader {
       if (_gp4) r.i8(); // Oktave
     }
     final percussionChannels = <int>{};
+    _programs.clear();
     for (var i = 0; i < 64; i++) {
-      r.i32(); // Instrument
+      _programs.add(r.i32()); // Instrument
       r.skip(6 + 2);
       if (i % 16 == 9) percussionChannels.add(i);
     }
@@ -285,8 +289,10 @@ class GpBinaryReader {
       if (i < stringCount) tuning.add(v);
     }
     t.tuningHighFirst = tuning;
-    r.i32(); // Port
+    final port = r.i32();
     final channel = r.i32() - 1;
+    final ci = (port - 1) * 16 + channel;
+    if (ci >= 0 && ci < _programs.length) t.program = _programs[ci];
     r.i32(); // Effekt-Kanal
     if (percussionChannels.contains(channel)) t.percussion = true;
     t.fretCount = r.i32();
@@ -723,6 +729,7 @@ ChordDiagram? _binaryDiagram(List<int>? highFirst, int strings) {
 class _Track {
   String name = '';
   bool percussion = false;
+  int program = -1;
   List<int> tuningHighFirst = const [];
   int fretCount = 24;
   int capo = 0;
@@ -849,6 +856,7 @@ class _Track {
     // Hälse gleich verteilt? Nicht bekannt: keine Zeilenvorgabe.
     return Track(
       name: name,
+      program: program >= 0 && program < 128 ? program : -1,
       staff: StaffDef(
         tuning: stringed ? tuning : const [],
         capo: capo,

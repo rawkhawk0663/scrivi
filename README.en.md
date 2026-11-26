@@ -23,8 +23,9 @@ Scrivi is available in **German and English**. It needs **no account**, collects
 - **Tunings and capo:** for special tunings (e.g. drop D, E♭ tuning) the string names stand in front of the tab. A capo appears as “Capo 2” above the music. 7- and 8-string guitars and bass work too.
 - **Choose the view:** notation and tab, notation only or tab only. In tab only, stems and beams underneath show the rhythm. Scrivi remembers your choice.
 - **Viewing:** scroll with the mouse wheel, swipes, Page Up/Down, arrow keys or a pedal. Zoom with two fingers, Ctrl + mouse wheel or the buttons at the top. If a file has several tracks, choose the track at the top.
+- **Playback:** the bar at the bottom plays the piece, with all repeats, endings and jumps (D.C., D.S., coda, fine). A coloured marker follows along and the pages turn by themselves. Tap a bar to jump there; the space bar starts and stops. Also: tempo (25 to 200 %, pitch stays the same), count-in, metronome, a loop over any bars and a mixer (volume, mute, solo per track). Scrivi makes the sounds itself, without sound files: guitar (also overdriven), bass, piano, strings, brass and drums, with bends, slides, vibrato, palm mute and harmonics.
 
-Not yet: playback, writing, several instruments at once (full score). These come in the next stages.
+Not yet: writing, several instruments at once (full score). These come in the next stages.
 
 ## What Scrivi is meant to do
 

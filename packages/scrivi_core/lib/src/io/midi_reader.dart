@@ -327,6 +327,7 @@ class _Midi {
       out.add(
         Track(
           name: t.name,
+          program: t.program >= 0 ? t.program : -1,
           staff: StaffDef(tuning: tuning),
           bars: bars,
           transposeSemitones: transpose,

@@ -1,6 +1,6 @@
 # Scrivi – Bauplan
 
-Stand: 26. November 2026 · Name: **Scrivi** (ital. „schreib!“) · Etappen 0 bis 3 fertig
+Stand: 26. November 2026 · Name: **Scrivi** (ital. „schreib!“) · Etappen 0 bis 4 fertig
 
 Scrivi ist ein Notenschreibprogramm für Noten, Tabulatur und Partituren. Es läuft mit Flutter
 auf Windows und Android, später vielleicht auch auf macOS und iPadOS. Es gehört zur gleichen
@@ -164,6 +164,9 @@ Bildern und Tonaufnahmen. Gut lesbar, gut zu sichern, versioniert.
 - **Mikrofon:** Gitarre spielen, Scrivi erkennt den Ton (Tonerkennung aus Volti und Suona).
 - **MIDI-Keyboard** (später).
 - **Handschrift** (ganz später, vielleicht).
+- **Werkzeuge bei der Note** (Wunsch des Besitzers): Die Werkzeuge (Notenwerte, Pause, Punkt,
+  Vorzeichen, Techniken …) schweben als kleine Leiste immer bei der Note, an der man gerade
+  arbeitet, statt weit weg am Bildschirmrand. Mit dem Stift muss man so kaum hin und her.
 
 ---
 
@@ -192,7 +195,7 @@ Jede Etappe endet mit einem Release, das man ausprobieren kann.
 | 1 | **Guitar-Pro-Dateien öffnen und zeigen** ✅ | Notenmodell; Einlesen von `.gp` (das Format der eigenen Dateien); Bibliothek mit Import und Vorschaubildern; Notensatz für ein Instrument: Schlüssel, Tonart, Taktart, Noten und Pausen, Punkte, Vorzeichen, Hälse, Balken, Haltebögen, Taktstriche, Wiederholungen, Häuser, Formteile, Akkordsymbole; Tabulatur darunter; Zeilen- und Seitenumbruch | die eigenen Stücke sehen in Scrivi sauber gesetzt aus | L |
 | 2 | **Weitere Formate einlesen** ✅ | ältere Guitar-Pro-Dateien (`.gpx`, `.gp5/4/3`), MusicXML (für die Partitur-Dateien), MIDI | alle alten Dateien lassen sich öffnen | M–L |
 | 3 | **Tabulatur vollständig** ✅ | alle Spieltechniken in Noten und Tab (Bending-Kurven, Vibrato, Flageolett, Tapping …), alle Stimmungen, Kapo, Rhythmus in der Tab, 7- und 8-saitige Gitarre, Bass | Gitarrenstücke mit allen Spieltechniken sehen vollständig aus | L |
-| 4 | **Abspielen** | Abspiel-Liste, Gitarrenklang, Tempo, Schleife, Einzähler, Metronom, mitlaufende Markierung, Mischpult; danach SoundFont-Klänge | ein Stück klingt richtig, auch mit Wiederholungen, Bends und Slides | M–L |
+| 4 | **Abspielen** ✅ | Abspiel-Liste, Gitarrenklang, Tempo, Schleife, Einzähler, Metronom, mitlaufende Markierung, Mischpult; danach SoundFont-Klänge | ein Stück klingt richtig, auch mit Wiederholungen, Bends und Slides | M–L |
 | 5 | **Schreiben** | Cursor, Eingabe über Tastatur, Stift und Griffbrett, Auswahl, Kopieren, Rückgängig, Transponieren, Takte einfügen und löschen, Akkordsymbole, Liedtext, Titel | ein Leadsheet und eine Tab lassen sich vollständig in Scrivi schreiben | L |
 | 6 | **Ausgeben** | PDF, PNG/SVG, MusicXML, MIDI, Tonspur (WAV), „An Volti senden“, Drucken | ein PDF ist bereit für Schüler und Band | M |
 | 7 | **Partitur** | Mehrere Instrumente, Klammern, Stimmen-Auszüge, Transposition, mehrere Stimmen pro System, Dynamik, Bögen, n-tolen, Vorschläge, Schlagzeug | ein Band-Arrangement mit Auszügen ist druckreif | XL |
@@ -267,6 +270,27 @@ Bewusst offen:
 - Mit Kapo zeigt Scrivi nur Griffbilder aus der Datei (ob die Akkordnamen dann klingend oder als
   Griff gemeint sind, ist von Datei zu Datei verschieden).
 - Ganze Noten haben in der reinen Tab-Ansicht kein Zeichen darunter.
+
+### Stand nach Etappe 4 (26. November 2026)
+
+Fertig: Abspiel-Liste im Kern (`packages/scrivi_core/lib/src/playback`): Wiederholungen, Häuser,
+D.C./D.S. (al Fine, al Coda), Tempowechsel, Haltebögen, Vorschläge, Anschlag, Tremolo, Fermaten.
+Klangerzeugung ohne Klangdateien: schwingende Saite mit veränderlicher Tonhöhe (Bendings, Slides,
+Vibrato), Palm Mute, gedämpfte Noten, Flageolett, Verzerrung; Bass, Klavier, Orgel, Streicher,
+Bläser, Flöte, Flächen, Schlagzeug. Jede Spur wird im Hintergrund als Tonspur gerechnet (ein Lied:
+etwa 2 Sekunden) und mit `flutter_soloud` als eigene Stimme gespielt, das Metronom ebenso.
+In der App: Leiste unten (Abspielen, Anfang, Stelle, Tempo, Einzähler, Metronom, Schleife,
+Mischpult), mitlaufende Markierung mit Mitblättern, Takt antippen zum Springen, Leertaste,
+Bildschirm bleibt beim Abspielen wach (Windows). Dazu: Hochscrollen zoomt nicht mehr (eigene
+Steuerung für Scrollen und Zoomen). Geprüft mit Tests (Reihenfolge, Zeiten, Tonhöhe auf wenige
+Cent genau) und in der Linux-App mit einer virtuellen Soundkarte.
+
+Bewusst offen:
+- Klang ist gerechnet, nicht aufgenommen: gut zum Üben, aber kein Studio-Klang. SoundFont-Klänge
+  als nächste Stufe (Lizenz und Grösse der Sammlung klären).
+- Ein anderes Tempo rechnet die Tonspuren neu (ein paar Sekunden Warten).
+- Gehört habe ich (Claude) den Klang nicht selbst, nur gemessen: Rückmeldung zum Klang erwünscht.
+- Mehrere Spuren mit Wiederholungen nur mit Testdaten geprüft.
 
 ## 9. Entscheidungen (26. November 2026)
 

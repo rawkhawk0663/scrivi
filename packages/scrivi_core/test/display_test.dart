@@ -81,10 +81,7 @@ void main() {
     });
 
     test('englisch mit B, ohne Tabulatur über der ersten Zeile', () {
-      final layout = Engraver(
-        GpReader.read(zipped(dropD)),
-        options: const LayoutOptions(showTab: false),
-      ).layout();
+      final layout = Engraver(GpReader.read(zipped(dropD)), options: const LayoutOptions(showTab: false)).layout();
       expect(_texts(layout).any((t) => t.contains('D A D G B E')), isTrue);
     });
 
@@ -142,9 +139,7 @@ void main() {
       expect(main.tremolo, 2);
       expect(main.fermata, isTrue);
       // Takt voll trotz Vorschlag: Halbe + Halbe
-      final total = beats
-          .where((b) => b.grace == GraceType.none)
-          .fold(Fraction.zero, (a, b) => a + b.duration.length);
+      final total = beats.where((b) => b.grace == GraceType.none).fold(Fraction.zero, (a, b) => a + b.duration.length);
       expect(total, Fraction(1, 1));
     });
 

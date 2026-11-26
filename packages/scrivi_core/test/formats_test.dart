@@ -236,7 +236,14 @@ Uint8List midiFile() {
     (0, [0xFF, 0x58, 4, 3, 2, 24, 8]),
   ];
   final mel = <(int, List<int>)>[];
-  for (final (s, l, k) in [(0, d, 67), (d, d, 69), (2 * d, 2 * d, 71), (4 * d, d ~/ 2, 72), (4 * d + d ~/ 2, d ~/ 2, 74), (5 * d, d, 76)]) {
+  for (final (s, l, k) in [
+    (0, d, 67),
+    (d, d, 69),
+    (2 * d, 2 * d, 71),
+    (4 * d, d ~/ 2, 72),
+    (4 * d + d ~/ 2, d ~/ 2, 74),
+    (5 * d, d, 76),
+  ]) {
     mel
       ..add((s, [0x90, k, 90]))
       ..add((s + l, [0x80, k, 0]));
@@ -315,7 +322,8 @@ void main() {
   });
 
   test('MusicXML gepackt (.mxl)', () {
-    final container = '<?xml version="1.0"?><container><rootfiles><rootfile full-path="lied.musicxml"/></rootfiles></container>';
+    final container =
+        '<?xml version="1.0"?><container><rootfiles><rootfile full-path="lied.musicxml"/></rootfiles></container>';
     final a = Archive()
       ..add(ArchiveFile.bytes('META-INF/container.xml', utf8.encode(container)))
       ..add(ArchiveFile.bytes('lied.musicxml', utf8.encode(musicXml)));
