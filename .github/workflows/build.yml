@@ -36,6 +36,13 @@ jobs:
       - run: flutter pub get
       - run: flutter analyze
       - run: flutter test
+      # Herz von Scrivi (Notenmodell, Dateien, Notensatz): eigene Prüfung und Tests
+      - name: Scrivi-Kern prüfen und testen
+        working-directory: packages/scrivi_core
+        run: |
+          dart pub get
+          dart analyze
+          dart test
 
   windows:
     name: Windows-Build

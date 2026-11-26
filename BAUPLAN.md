@@ -1,6 +1,6 @@
 # Scrivi – Bauplan
 
-Stand: 26. November 2026 · Name: **Scrivi** (ital. „schreib!“) · Etappe 0 fertig
+Stand: 26. November 2026 · Name: **Scrivi** (ital. „schreib!“) · Etappe 0 und 1 fertig
 
 Scrivi ist ein Notenschreibprogramm für Noten, Tabulatur und Partituren. Es läuft mit Flutter
 auf Windows und Android, später vielleicht auch auf macOS und iPadOS. Es gehört zur gleichen
@@ -189,7 +189,7 @@ Jede Etappe endet mit einem Release, das man ausprobieren kann.
 | # | Etappe | Inhalt | Fertig, wenn … | Grösse |
 |---|---|---|---|---|
 | 0 | **Grundgerüst** ✅ | Flutter-Projekt, Theme, l10n, Fensterknöpfe, Updater, Fehlerprotokoll, Bau über GitHub Actions, README, CLAUDE.md, Lizenz | Scrivi startet auf Surface und Android und aktualisiert sich selbst | S |
-| 1 | **Guitar-Pro-Dateien öffnen und zeigen** | Notenmodell; Einlesen von `.gp` (das Format der eigenen Dateien); Bibliothek mit Import und Vorschaubildern; Notensatz für ein Instrument: Schlüssel, Tonart, Taktart, Noten und Pausen, Punkte, Vorzeichen, Hälse, Balken, Haltebögen, Taktstriche, Wiederholungen, Häuser, Formteile, Akkordsymbole; Tabulatur darunter; Zeilen- und Seitenumbruch | die eigenen Stücke sehen in Scrivi sauber gesetzt aus | L |
+| 1 | **Guitar-Pro-Dateien öffnen und zeigen** ✅ | Notenmodell; Einlesen von `.gp` (das Format der eigenen Dateien); Bibliothek mit Import und Vorschaubildern; Notensatz für ein Instrument: Schlüssel, Tonart, Taktart, Noten und Pausen, Punkte, Vorzeichen, Hälse, Balken, Haltebögen, Taktstriche, Wiederholungen, Häuser, Formteile, Akkordsymbole; Tabulatur darunter; Zeilen- und Seitenumbruch | die eigenen Stücke sehen in Scrivi sauber gesetzt aus | L |
 | 2 | **Weitere Formate einlesen** | ältere Guitar-Pro-Dateien (`.gpx`, `.gp5/4/3`), MusicXML (für die Partitur-Dateien), MIDI | alle alten Dateien lassen sich öffnen | M–L |
 | 3 | **Tabulatur vollständig** | alle Spieltechniken in Noten und Tab (Bending-Kurven, Vibrato, Flageolett, Tapping …), alle Stimmungen, Kapo, Rhythmus in der Tab, 7- und 8-saitige Gitarre, Bass | Gitarrenstücke mit allen Spieltechniken sehen vollständig aus | L |
 | 4 | **Abspielen** | Abspiel-Liste, Gitarrenklang, Tempo, Schleife, Einzähler, Metronom, mitlaufende Markierung, Mischpult; danach SoundFont-Klänge | ein Stück klingt richtig, auch mit Wiederholungen, Bends und Slides | M–L |
@@ -221,6 +221,18 @@ für Band und Ensemble. Für grosse Orchesterpartituren bleibt es lange schwäch
 | Projekt wird zu gross | jede Etappe ist einzeln nützlich; klare Reihenfolge, Wünsche kommen in eine Liste |
 
 ---
+
+### Stand nach Etappe 1 (26. November 2026)
+
+Fertig: Notenmodell und Notensatz als eigenes Paket (`packages/scrivi_core`), Einlesen von
+`.gp`, Bibliothek mit Import (Dateien, Ordner, Ziehen), Vorschaubildern, Suche und Papierkorb,
+Notenansicht mit Seiten, Zoom und Blättern, Spurwahl. Geprüft mit den vier Beispieldateien.
+
+Bewusst noch offen (kommt später):
+- Vorschlagsnoten (werden übersprungen, verschieben aber nichts) → Etappe 3
+- Griffbilder über den Noten → Etappe 3
+- Mehrere Stimmen pro System sind angelegt, aber noch kaum geprüft → Etappe 7
+- Ausgabe als PDF/SVG: Die Zeichenliste kann schon SVG, in der App kommt es mit Etappe 6
 
 ## 9. Entscheidungen (26. November 2026)
 

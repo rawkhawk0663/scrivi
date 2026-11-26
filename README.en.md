@@ -11,7 +11,16 @@ Scrivi is a music notation app for musicians, made for the **Surface with pen** 
 
 Scrivi is available in **German and English**. It needs **no account**, collects **no data** and works **offline**.
 
-> **Scrivi is at the very beginning.** Today there is the basic framework: library (still empty), settings, updates. What comes next is in the [plan](BAUPLAN.md) (German).
+> **Scrivi is still at the beginning.** Today it opens Guitar Pro files and shows them neatly as notation with tablature. Writing and playback come next. The whole plan is in the [plan](BAUPLAN.md) (German).
+
+## What Scrivi can do today
+
+- **Library:** import Guitar Pro files (`.gp`) with *Import*, *Import folder* or simply by dragging them into the window. Scrivi keeps a copy in its own library and leaves the originals untouched. Each piece appears with a preview, title and artist. Search by title or artist. Scrivi spots duplicate files. Deleting moves the piece into the library’s “Papierkorb” (bin) folder, so nothing is lost.
+- **Notation with tablature:** neatly engraved on A4 pages, with the systems split the way the file intends. This includes title and artist, tempo, sections (intro, verse, chorus …), chord symbols, repeats and endings, double bars, key and time changes, ties, beams, dots, tuplets, accidentals, rhythm slashes, dynamics and hairpins, lyrics and free text.
+- **Guitar techniques:** palm mute (P.M.), dead notes (x), hammer-ons and pull-offs (H/P), slides, bends with amount (½, full …), ghost notes, accents, let ring.
+- **Viewing:** scroll with the mouse wheel, swipes, Page Up/Down, arrow keys or a pedal. Zoom with two fingers, Ctrl + mouse wheel or the buttons at the top. If a file has several tracks, choose the track at the top.
+
+Not yet: older Guitar Pro files (`.gpx`, `.gp5`, `.gp4`, `.gp3`), MusicXML, grace notes and chord diagrams in the notation. These come in the next stages.
 
 ## What Scrivi is meant to do
 

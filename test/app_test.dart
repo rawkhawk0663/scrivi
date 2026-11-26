@@ -5,6 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:scrivi/app/device_settings.dart';
 import 'package:scrivi/app/l10n.dart';
 import 'package:scrivi/app/updater.dart';
+import 'package:scrivi/core/library/library_controller.dart';
+import 'package:scrivi/core/library/thumbnails.dart';
 import 'package:scrivi/main.dart';
 
 void main() {
@@ -52,7 +54,13 @@ void main() {
     tester.view.physicalSize = const Size(1400, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
-    await tester.pumpWidget(ScriviApp(settings: DeviceSettings.memory()));
+    final dir = Directory.systemTemp.createTempSync('scrivi_lib');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final library = LibraryController(dir.path);
+    await tester.runAsync(library.init);
+    await tester.pumpWidget(
+      ScriviApp(settings: DeviceSettings.memory(), library: library, thumbnails: Thumbnails(library.metaDir)),
+    );
     await tester.pumpAndSettle();
     expect(find.text('Noch keine Stücke'), findsOneWidget);
     await tester.tap(find.text('Einstellungen'));

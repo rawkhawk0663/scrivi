@@ -11,7 +11,16 @@ Scrivi ist ein Notenschreibprogramm für Musikerinnen und Musiker, gemacht für 
 
 Scrivi gibt es auf **Deutsch und Englisch**. Es braucht **kein Konto**, sammelt **keine Daten** und funktioniert **ohne Internet**.
 
-> **Scrivi ist ganz am Anfang.** Heute gibt es das Grundgerüst: Bibliothek (noch leer), Einstellungen, Updates. Was als Nächstes kommt, steht im [Bauplan](BAUPLAN.md).
+> **Scrivi ist noch am Anfang.** Heute öffnet es Guitar-Pro-Dateien und zeigt sie sauber als Noten mit Tabulatur. Schreiben und Abspielen kommen als Nächstes. Den ganzen Plan findest du im [Bauplan](BAUPLAN.md).
+
+## Was Scrivi heute kann
+
+- **Bibliothek:** Guitar-Pro-Dateien (`.gp`) importieren, über *Importieren*, *Ordner importieren* oder einfach ins Fenster ziehen. Scrivi legt eine Kopie in seine eigene Bibliothek, die Originale bleiben unangetastet. Jedes Stück erscheint mit Vorschaubild, Titel und Interpret. Suche nach Titel oder Interpret. Doppelte Dateien erkennt Scrivi. Löschen legt das Stück in den Ordner „Papierkorb“ der Bibliothek, es geht also nichts verloren.
+- **Noten mit Tabulatur:** sauber gesetzt auf A4-Seiten, mit den Zeilen so aufgeteilt wie in der Datei vorgesehen. Dazu gehören Titel und Interpret, Tempo, Formteile (Intro, Strophe, Refrain …), Akkordsymbole, Wiederholungen und Häuser, Doppelstriche, Tonart- und Taktwechsel, Haltebögen, Balken, Punktierungen, n-tolen, Vorzeichen, Rhythmus-Schrägstriche, Dynamik und Gabeln, Liedtext und freier Text.
+- **Gitarrentechniken:** Palm Mute (P.M.), gedämpfte Noten (x), Hammer-on und Pull-off (H/P), Slides, Bendings mit Angabe (½, full …), Geisternoten, Akzente, let ring.
+- **Ansehen:** blättern mit Mausrad, Wischen, Bild auf/ab, Pfeiltasten oder Pedal. Zoomen mit zwei Fingern, Strg + Mausrad oder den Knöpfen oben. Hat eine Datei mehrere Spuren, wählst du oben die Spur.
+
+Noch nicht: ältere Guitar-Pro-Dateien (`.gpx`, `.gp5`, `.gp4`, `.gp3`), MusicXML, Vorschlagsnoten und Griffbilder in den Noten. Das kommt in den nächsten Etappen.
 
 ## Was Scrivi können soll
 

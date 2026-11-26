@@ -22,7 +22,12 @@ Future<void> prepareWindow() async {
   if (!Platform.isWindows) return;
   try {
     await windowManager.waitUntilReadyToShow(
-      const WindowOptions(title: 'Scrivi', minimumSize: Size(420, 560), titleBarStyle: TitleBarStyle.hidden, windowButtonVisibility: false),
+      const WindowOptions(
+        title: 'Scrivi',
+        minimumSize: Size(420, 560),
+        titleBarStyle: TitleBarStyle.hidden,
+        windowButtonVisibility: false,
+      ),
       () async {
         await windowManager.setTitleBarStyle(TitleBarStyle.hidden, windowButtonVisibility: false);
         await windowManager.maximize();

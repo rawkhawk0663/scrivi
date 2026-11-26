@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import 'app/device_settings.dart';
@@ -11,6 +12,9 @@ import 'app/theme.dart';
 import 'app/touch_keyboard.dart';
 import 'app/updater.dart';
 import 'app/window_buttons.dart';
+import 'core/library/library_controller.dart';
+import 'core/library/thumbnails.dart';
+import 'features/library/library_screen.dart';
 import 'features/shell/home_shell.dart';
 
 Future<void> main() async {
@@ -26,36 +30,45 @@ Future<void> main() async {
   TouchKeyboard.install();
   final settings = await DeviceSettings.load(support);
   L10n.language.value = settings.effectiveLanguage;
+  // Die Bibliothek mit den Stücken (wird im Hintergrund eingelesen).
+  final library = LibraryController(p.join(support, 'Bibliothek'));
+  library.init();
   // Nach einem Update: alte, beiseitegeschobene Programmdateien wegräumen.
   Future<void>.delayed(const Duration(seconds: 5), Updater.cleanUp);
-  runApp(ScriviApp(settings: settings));
+  runApp(ScriviApp(settings: settings, library: library, thumbnails: Thumbnails(library.metaDir)));
 }
 
 class ScriviApp extends StatelessWidget {
-  const ScriviApp({super.key, required this.settings});
+  const ScriviApp({super.key, required this.settings, required this.library, required this.thumbnails});
   final DeviceSettings settings;
+  final LibraryController library;
+  final Thumbnails thumbnails;
 
   @override
   Widget build(BuildContext context) {
     return SettingsScope(
       settings: settings,
-      child: ListenableBuilder(
-        listenable: Listenable.merge([settings.themeMode, L10n.language]),
-        builder: (context, home) => MaterialApp(
-          title: 'Scrivi',
-          debugShowCheckedModeBanner: false,
-          theme: buildScriviTheme(Brightness.light),
-          darkTheme: buildScriviTheme(Brightness.dark),
-          themeMode: settings.themeMode.value,
-          // Eingebaute Texte (Kopieren/Einfügen, Lizenzen …) in der Sprache der App,
-          // Deutsch in Schweizer Schreibweise.
-          locale: L10n.language.value.locale,
-          supportedLocales: const [Locale('de', 'CH'), Locale('de'), Locale('en')],
-          localizationsDelegates: GlobalMaterialLocalizations.delegates,
-          builder: (context, child) => WindowButtonsOverlay(child: child ?? const SizedBox.shrink()),
-          home: home,
+      child: LibraryScope(
+        library: library,
+        thumbnails: thumbnails,
+        child: ListenableBuilder(
+          listenable: Listenable.merge([settings.themeMode, L10n.language]),
+          builder: (context, home) => MaterialApp(
+            title: 'Scrivi',
+            debugShowCheckedModeBanner: false,
+            theme: buildScriviTheme(Brightness.light),
+            darkTheme: buildScriviTheme(Brightness.dark),
+            themeMode: settings.themeMode.value,
+            // Eingebaute Texte (Kopieren/Einfügen, Lizenzen …) in der Sprache der App,
+            // Deutsch in Schweizer Schreibweise.
+            locale: L10n.language.value.locale,
+            supportedLocales: const [Locale('de', 'CH'), Locale('de'), Locale('en')],
+            localizationsDelegates: GlobalMaterialLocalizations.delegates,
+            builder: (context, child) => WindowButtonsOverlay(child: child ?? const SizedBox.shrink()),
+            home: home,
+          ),
+          child: const HomeShell(),
         ),
-        child: const HomeShell(),
       ),
     );
   }

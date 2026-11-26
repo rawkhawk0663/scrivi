@@ -50,7 +50,8 @@ class ScoreLayout {
 
 // Linienstärken aus der Schrift (Linienabstände).
 final double _staffLineT = Glyphs.engraving('staffLineThickness', 0.13);
-final double _stemT = Glyphs.engraving('stemThickness', 0.12);
+// Hälse etwas kräftiger als der Grundwert: am Bildschirm besser lesbar.
+final double _stemT = Glyphs.engraving('stemThickness', 0.12) + 0.02;
 final double _beamT = Glyphs.engraving('beamThickness', 0.5);
 final double _beamGap = Glyphs.engraving('beamSpacing', 0.25);
 final double _ledgerT = Glyphs.engraving('legerLineThickness', 0.16);

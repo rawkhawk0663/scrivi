@@ -33,7 +33,10 @@ class AboutPage extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text('Scrivi', style: Theme.of(context).textTheme.headlineSmall),
-                          Text(tr('Version $scriviVersion', 'Version $scriviVersion'), style: TextStyle(color: c.muted)),
+                          Text(
+                            tr('Version $scriviVersion', 'Version $scriviVersion'),
+                            style: TextStyle(color: c.muted),
+                          ),
                           const SizedBox(height: 6),
                           Text(
                             tr(
@@ -79,7 +82,8 @@ class AboutPage extends StatelessWidget {
                   leading: const Icon(Icons.gavel_outlined),
                   title: Text(tr('Lizenzen', 'Licences')),
                   subtitle: Text(tr('Verwendete Programmteile und Schriften', 'Components and fonts used')),
-                  onTap: () => showLicensePage(context: context, applicationName: 'Scrivi', applicationVersion: scriviVersion),
+                  onTap: () =>
+                      showLicensePage(context: context, applicationName: 'Scrivi', applicationVersion: scriviVersion),
                 ),
               ),
             ],

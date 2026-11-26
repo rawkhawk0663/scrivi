@@ -3,7 +3,7 @@ import '../render/display.dart';
 /// Bogen (Haltebogen oder Legatobogen) als gefüllte Form: aussen und innen eine
 /// Kurve, in der Mitte [thickness] dick, an den Enden spitz.
 /// [up]: nach oben gewölbt.
-PathItem arc(double x1, double y1, double x2, double y2, {required bool up, double? height, double thickness = 0.22}) {
+PathItem arc(double x1, double y1, double x2, double y2, {required bool up, double? height, double thickness = 0.26}) {
   final len = (x2 - x1).abs();
   final h = height ?? (len * 0.12).clamp(0.45, 1.6);
   final s = up ? -1.0 : 1.0;

@@ -24,17 +24,38 @@ Der Plan mit allen Etappen steht in **`BAUPLAN.md`**. Nach jeder Etappe dort den
 
 ## Aufbau
 ```
+packages/scrivi_core/   Herz von Scrivi, reines Dart ohne Flutter (eigene Tests: dart test)
+  model/      Fraction (genaue Notenlängen), Pitch (mit Schreibweise), Score/MasterBar/Track/Bar/Voice/Beat/Note
+  io/         GpReader: .gp (ZIP mit Content/score.gpif)
+  layout/     Engraver (Notensatz → Seiten), shapes (Bögen, Balken, Gabeln)
+  render/     Zeichenliste (DisplayItem), Glyphs (Bravura-Umrisse, erzeugt), SVG-Ausgabe
 lib/
   app/        Theme (ScriviColors), l10n, Updater, Fehlerprotokoll, Fensterknöpfe,
               Bildschirmtastatur, Geräte-Einstellungen (einstellungen.json)
+  core/library/  LibraryController (Bibliothek, Import, Papierkorb), Thumbnails (Vorschaubilder)
   features/
     shell/    Rahmen: Leiste links (breit) bzw. unten (schmal), ein Navigator pro Bereich
-    library/  Bibliothek
+    library/  Bibliothek (Raster mit Vorschau, Suche, Import, Ziehen und Ablegen)
+    score/    Notenansicht (Seiten, Zoom, Blättern, Spurwahl), score_painter (Zeichenliste → Bild)
     settings/ Einstellungen, Über Scrivi, Updates
   widgets/    gemeinsame Bausteine (ScriviMark, SectionCard, EmptyState …)
-tool/         Hilfsprogramme (Symbol erzeugen)
+tool/         make_icon.py (Symbol), make_glyphs.py (Notenzeichen aus Bravura)
 ```
-Geplant (siehe `BAUPLAN.md`): `packages/scrivi_core/` mit Notenmodell, Notensatz, Abspiel-Liste und Dateiformaten, in reinem Dart ohne Flutter.
+
+## Notensatz (packages/scrivi_core)
+- **Masseinheit Linienabstand (sp)**, y nach unten, oberste Notenlinie einer Zeile bei y = 0. Seite A4 = 120 × 169,7 sp (1 sp = 1,75 mm).
+- **Notenzeichen** kommen als Umrisse aus `glyphs.g.dart` (erzeugt mit `tool/make_glyphs.py` aus `assets/fonts/Bravura.otf`, `glyphnames.json` der SMuFL und `Bravura.json` aus dem Bravura-Paket; nicht von Hand ändern). Neue Zeichen: in die Liste `GLYPHS` eintragen und neu erzeugen. Masse und Ansatzpunkte (Hals am Notenkopf, Fähnchen) stammen aus den Metadaten.
+- Der Notensatz liefert eine **Zeichenliste** (`PageDisplay` mit `GlyphItem`, `LineItem`, `RectItem`, `PathItem`, `TextItem`). Die App zeichnet sie (`PagePictures`), `pageToSvg` schreibt SVG. Texte misst ein `TextMeasurer` (App: echte Schriften, Tests: Schätzung).
+- **Gitarre** wird eine Oktave höher geschrieben als sie klingt (`Track.transposeSemitones = 12`, Violinschlüssel mit kleiner 8). `Note.pitch` ist klingend, `Note.written` geschrieben (Schreibweise aus der Datei; fehlt sie, wird die klingende um Oktaven verschoben).
+- **Zeilen:** Die Takte pro Zeile aus der Datei (`SystemsLayout`) werden übernommen, solange sie passen; sonst wird gefüllt. Jede Zeile im Blocksatz.
+- **Tabulatur:** Saite 0 = tiefste. Schläge mit Rhythmus-Schrägstrichen zeigen in der Tab nichts. Gehaltene Noten nur am Zeilenanfang in Klammern.
+- **Dynamik** erscheint nur bei Wechseln (die Dateien schreiben „mf“ an jeden Schlag).
+- Vorschlagsnoten werden noch übersprungen (nehmen keine Zeit).
+
+## Bibliothek
+- `<ApplicationSupport>/Bibliothek/Stücke/` enthält Kopien der importierten Dateien (heute `.gp`), `Bibliothek/Papierkorb/` Gelöschtes, `Bibliothek/.scrivi/index.json` (Format `scrivi-library` v1: Titel, Interpret, Takte, Grösse, Änderungszeit pro Datei) und `.scrivi/vorschau/` (Vorschaubilder, Name mit Grösse und Änderungszeit).
+- Import prüft jede Datei (im Hintergrund), erkennt Doppelte (gleicher Inhalt) und meldet ältere Formate als „kommt bald“.
+- Das eigene Format `.scrivi` kommt mit dem Schreiben (Etappe 5).
 
 ## Grundsätze
 1. **Kein Konto, keine Daten sammeln, keine Werbung, funktioniert ohne Internet.** Internet nur für Updates und (später) den eigenen Dropbox-Abgleich.
@@ -48,5 +69,6 @@ Geplant (siehe `BAUPLAN.md`): `packages/scrivi_core/` mit Notenmodell, Notensatz
 - Die Guitar-Pro-Dateien des Besitzers sind **urheberrechtlich geschützte Lieder**. Sie dürfen **nie ins Projekt** (es ist öffentlich). Tests im Projekt nutzen nur selbst gebaute Beispiele; echte Dateien prüft man lokal ausserhalb des Projektordners.
 
 ## Prüfen
-- `flutter analyze` und `flutter test` müssen sauber sein.
+- `flutter analyze` und `flutter test` müssen sauber sein, ebenso im Kern: `cd packages/scrivi_core && dart analyze && dart test` (läuft auch im Bau auf GitHub).
+- Notensatz schnell ansehen ohne App: echte Dateien lokal mit `GpReader` + `Engraver` + `pageToSvg` als SVG schreiben und im Browser (Playwright) als Bild aufnehmen. Diese Hilfsskripte gehören nicht ins Projekt.
 - Anschauen ohne Surface: Linux-Build (`flutter build linux`, braucht `libgtk-3-dev`) unter Xvfb starten und mit `xdotool` bedienen, Bildschirmfoto mit `import -window root`.

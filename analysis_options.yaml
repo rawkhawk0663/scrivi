@@ -6,3 +6,5 @@ analyzer:
     - android/**
     - windows/**
     - linux/**
+    # Eigene Pakete werden in ihrem Ordner geprüft (eigene Abhängigkeiten).
+    - packages/**

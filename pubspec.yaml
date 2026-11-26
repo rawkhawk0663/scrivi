@@ -13,11 +13,16 @@ dependencies:
   flutter_localizations:
     sdk: flutter
   archive: ^4.7.0
+  desktop_drop: ^0.8.4
+  file_selector: ^1.1.0
   path: ^1.9.1
   path_provider: ^2.1.6
   url_launcher: ^6.3.3
   # Bei 0.5.x bleiben (wie Volti und Conti): 0.6 baut auf einer neuen, ungeprüften Grundlage auf.
   window_manager: ^0.5.1
+  # Herz von Scrivi: Notenmodell, Dateiformate, Notensatz (reines Dart)
+  scrivi_core:
+    path: packages/scrivi_core
 
 dev_dependencies:
   flutter_test:
