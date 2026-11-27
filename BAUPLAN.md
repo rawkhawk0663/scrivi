@@ -413,8 +413,20 @@ Vorzeichen ♯ ♭ ♮ 𝄪 𝄫 und zur Erinnerung in Klammern, Doppelpunkt, Qu
 oder zwei Takte. Neue Werkzeuggruppe „Vorzeichen“. Paket 2 (Gitarre) ✅: Slides hinein/hinaus,
 künstliche und Pinch-Flageoletts, weites Vibrato, Tremolo-Picking, Whammy-Dip, Ein-/Ausblenden,
 Anschwellen, Slap/Pop, Triller, Arpeggio, Rasgueado (mit Klang; noch nicht aus Guitar-Pro-Dateien
-gelesen). Offen: Paket 3 (Fingersätze, Saitennummern, Pedal); Oktavierung und Wiederholungszeichen
-noch nicht in MusicXML und Guitar-Pro-Dateien.
+gelesen). Paket 3 ✅: Fingersätze beider Hände, Saitennummern im Kreis, Pedal (klingt mit). Offen:
+Oktavierung, Wiederholungszeichen und Fingersätze noch nicht aus/in MusicXML und Guitar-Pro-Dateien.
+
+### Akkordsymbole einstellen (27. November 2026)
+
+Wunsch des Besitzers: die Schreibweise der Akkordsymbole selbst wählen. Pro Stück: Moll, grosse
+Septime, Wörter oder Zeichen für vermindert/übermässig/halbvermindert, ♯/♭ oder +/−, Klammern,
+Zusätze hochgestellt, SUS/ADD gross, „sus4“ oder „sus“, Grundtöne B oder H, Griffbilder ein/aus.
+Scrivi zerlegt die getippten Namen und schreibt sie einheitlich; unbekannte bleiben, wie sie sind.
+
+### Seitenlayout (Wunsch vom 27. November 2026, geplant)
+
+Der Besitzer will die ganze Seite selbst gestalten können. Erst ein Entwurf zum Anschauen, dann
+umsetzen (wie bei der Leiste am Cursor).
 
 ### Mischpult in den Spuren, Menü „Ansicht“ (27. November 2026)
 

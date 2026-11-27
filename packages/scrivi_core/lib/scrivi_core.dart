@@ -9,6 +9,7 @@ export 'src/audio/pitch_detector.dart';
 export 'src/edit/editor.dart';
 export 'src/edit/patterns.dart';
 export 'src/model/chord_library.dart';
+export 'src/model/chord_symbol.dart';
 export 'src/model/fraction.dart';
 export 'src/model/pitch.dart';
 export 'src/model/score.dart';

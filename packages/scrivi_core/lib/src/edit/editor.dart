@@ -58,6 +58,7 @@ enum Technique {
   slap,
   pop,
   trill,
+  stringNumber,
 }
 
 /// Bearbeitet ein Stück: Cursor, Eingabe, Takte, Rückgängig.
@@ -676,6 +677,12 @@ class ScoreEditor {
     _changeBeats((b) => b.copyWith(whammy: off ? 0 : semitones));
   }
 
+  /// Haltepedal: 1 treten, 2 loslassen, 3 wechseln (nochmals = aus). Auch auf Pausen.
+  void setPedal(int pedal) {
+    final off = _allBeats((b) => b.pedal == pedal);
+    _changeBeats((b) => b.copyWith(pedal: off ? 0 : pedal), notesOnly: false);
+  }
+
   /// Oktavierung am Cursor (für die Eingabe im Notensystem).
   int get _ottavaHere => currentBeat?.ottava ?? 0;
 
@@ -1096,6 +1103,7 @@ class ScoreEditor {
     Technique.slap => n.slap,
     Technique.pop => n.pop,
     Technique.trill => n.trill != 0,
+    Technique.stringNumber => n.stringNumber,
   };
 
   /// Slide-Art setzen: die Bits einer Gruppe (zum nächsten Ton, hinein, hinaus) schliessen sich aus.
@@ -1124,6 +1132,7 @@ class ScoreEditor {
     Technique.slap => n.copyWith(slap: on, pop: on ? false : n.pop),
     Technique.pop => n.copyWith(pop: on, slap: on ? false : n.slap),
     Technique.trill => n.copyWith(trill: on ? 2 : 0),
+    Technique.stringNumber => n.copyWith(stringNumber: on),
     Technique.bend =>
       on
           ? n.copyWith(bend: const Bend([BendPoint(0, 0), BendPoint(0.5, 2), BendPoint(1, 2)]))
@@ -1138,6 +1147,47 @@ class ScoreEditor {
     Technique.marcato => n.copyWith(accent: on ? n.accent | 4 : n.accent & ~4),
     Technique.tapping => n.copyWith(tapped: on),
   };
+
+  /// Fingersatz an den Tönen am Cursor (in der Tab: nur die Saite des Cursors): [left] Greifhand
+  /// 1–4/5 = Daumen, [right] Anschlagshand 1 p … 5 c. Derselbe Wert nochmals = entfernen.
+  void setFinger({int? left, int? right}) {
+    final targets = _targets;
+    _begin();
+    var changed = false;
+    for (final (bar, i) in targets) {
+      final beats = beatsOf(bar);
+      final b = beats[i];
+      if (b.isRest) continue;
+      final onString = selection == null && stringed && b.notes.any((n) => n.string == cursor.string);
+      bool hit(Note n) => !onString || n.string == cursor.string;
+      final sample = b.notes.firstWhere(hit);
+      final off = left != null ? sample.leftFinger == left : sample.rightFinger == right;
+      beats[i] = b.copyWith(
+        notes: [
+          for (final n in b.notes)
+            !hit(n)
+                ? n
+                : left != null
+                ? n.copyWith(leftFinger: off ? 0 : left)
+                : n.copyWith(rightFinger: off ? 0 : right),
+        ],
+      );
+      changed = true;
+    }
+    if (!changed) {
+      _undo.removeLast();
+      return;
+    }
+    _done();
+  }
+
+  /// Fingersatz des Tons am Cursor (Greifhand bzw. Anschlagshand), 0 = keiner.
+  int fingerAtCursor({bool left = true}) {
+    final b = currentBeat;
+    if (b == null || b.isRest) return 0;
+    final n = b.notes.where((n) => !stringed || n.string == cursor.string).firstOrNull ?? b.notes.first;
+    return left ? n.leftFinger : n.rightFinger;
+  }
 
   /// Gilt die Technik für den Ton am Cursor? (für die Anzeige der Knöpfe)
   bool hasTechnique(Technique t) {
@@ -1487,6 +1537,13 @@ class ScoreEditor {
   void setScoreInfo(ScoreInfo info) {
     _begin();
     _score = _score.copyWith(info: info);
+    _done();
+  }
+
+  /// Schreibweise der Akkordsymbole für das ganze Stück.
+  void setChordStyle(ChordStyle style) {
+    _begin();
+    _score.chordStyle = style;
     _done();
   }
 

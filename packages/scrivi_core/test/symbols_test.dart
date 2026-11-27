@@ -173,4 +173,44 @@ void main() {
     expect(const ScoreInfo(copyright: 'Copyright 2026').copyrightLine, 'Copyright 2026');
     expect(const ScoreInfo().copyrightLine, '');
   });
+
+  test('Paket 3: Fingersätze, Saitennummer, Pedal', () {
+    final e = ScoreEditor(ScoreEditor.newScore(bars: 2));
+    e.duration = const NoteDuration(NoteValue.quarter);
+    e.cursor = const EditCursor(string: 3);
+    e.inputFret(2);
+    e.setFinger(left: 2);
+    e.setFinger(right: 2);
+    e.toggleTechnique(Technique.stringNumber);
+    var n = e.currentBeat!.notes.single;
+    expect((n.leftFinger, n.rightFinger, n.stringNumber), (2, 2, true));
+    expect(e.fingerAtCursor(), 2);
+    final g = _glyphs(e.score);
+    expect(g, containsAll(['fingering2', 'fingeringILower', 'fingering3'])); // ③ = Saite 3 von oben
+    e.setFinger(left: 2); // nochmals = weg
+    expect(e.currentBeat!.notes.single.leftFinger, 0);
+    e.setFinger(left: 5);
+    expect(_glyphs(e.score), contains('fingeringTUpper'));
+    n = ScriviFormat.decode(ScriviFormat.encode(e.score)).tracks[0].bars[0].voices[0].beats[0].notes[0];
+    expect((n.leftFinger, n.rightFinger, n.stringNumber), (5, 2, true));
+
+    // Pedal: Töne klingen bis zum Loslassen (Melodie ohne Saiten)
+    final m = ScoreEditor(ScoreEditor.newScore(kind: NewPieceKind.leadSheet, bars: 2));
+    m.duration = const NoteDuration(NoteValue.quarter);
+    m.inputStep(0);
+    m.moveBeat(-1);
+    m.setPedal(1);
+    m.moveBeat(1);
+    m.inputStep(2);
+    m.moveBeat(1);
+    m.setPedal(2);
+    expect(_glyphs(m.score), containsAll(['keyboardPedalPed', 'keyboardPedalUp']));
+    final notes = PlaybackPlan.build(m.score).tracks.first.notes;
+    final quarter = PlaybackPlan.build(m.score).bars.first.duration / 4;
+    final first = notes.firstWhere((p) => p.start < 0.01);
+    final second = notes.firstWhere((p) => (p.start - quarter).abs() < 0.01);
+    expect(first.duration, greaterThan(quarter * 1.5)); // klingt über den eigenen Schlag hinaus
+    expect(first.end, closeTo(second.end, 0.01)); // beide bis zum Loslassen
+    expect(ScriviFormat.decode(ScriviFormat.encode(m.score)).tracks[0].bars[0].voices[0].beats[0].pedal, 1);
+  });
 }

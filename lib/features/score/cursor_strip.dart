@@ -5,7 +5,7 @@ import '../../app/theme.dart';
 import 'tools.dart';
 
 /// Leiste unter der Zeile, in der man schreibt: Reiter für die Gruppen
-/// (Wert, Ausdruck, Gitarre, Takt, Text) und darunter deren Werkzeuge. Ein
+/// (Wert, Vorzeichen, Ausdruck, Gitarre, Finger, Takt, Text) und darunter deren Werkzeuge. Ein
 /// kleiner Pfeil zeigt auf die Stelle des Cursors. So muss man mit Maus oder
 /// Stift nicht zur Werkzeugspalte am Rand.
 class CursorStrip extends StatefulWidget {
@@ -17,7 +17,7 @@ class CursorStrip extends StatefulWidget {
   final double arrowX;
   final bool above;
 
-  static const width = 500.0;
+  static const width = 560.0;
   static const height = 120.0;
 
   /// Zuletzt gewählter Reiter (gilt für alle Stücke, solange Scrivi läuft).
@@ -28,6 +28,7 @@ class CursorStrip extends StatefulWidget {
     ToolGroup.accidental,
     ToolGroup.expression,
     ToolGroup.guitar,
+    ToolGroup.finger,
     ToolGroup.bar,
     ToolGroup.text,
   ];
@@ -110,7 +111,11 @@ class _CursorStripState extends State<CursorStrip> {
                               ),
                             ),
                             onPressed: () => setState(() => CursorStrip.group = g),
-                            child: Text(g == ToolGroup.duration ? tr('Wert', 'Value') : g.label),
+                            child: Text(switch (g) {
+                              ToolGroup.duration => tr('Wert', 'Value'),
+                              ToolGroup.finger => tr('Finger', 'Fingers'),
+                              _ => g.label,
+                            }),
                           ),
                         ),
                     ],

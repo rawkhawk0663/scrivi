@@ -63,6 +63,10 @@ GLYPHS = [
     'ornamentTrill', 'wiggleTrill', 'wiggleVibrato', 'guitarVibratoStroke', 'stringsHarmonic',
     'arrowheadBlackUp', 'arrowheadBlackDown', 'stringsDownBow', 'stringsUpBow',
     'graceNoteSlashStemUp', 'graceNoteAcciaccaturaStemUp',
+    # Fingersätze und Pedal
+    'fingering0', 'fingering1', 'fingering2', 'fingering3', 'fingering4', 'fingering5', 'fingering6',
+    'fingeringTUpper', 'fingeringPLower', 'fingeringILower', 'fingeringMLower', 'fingeringALower',
+    'fingeringCLower', 'keyboardPedalPed', 'keyboardPedalUp',
 ]
 
 

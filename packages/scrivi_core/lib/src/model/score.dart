@@ -1,5 +1,8 @@
+import 'chord_symbol.dart';
 import 'fraction.dart';
 import 'pitch.dart';
+
+export 'chord_symbol.dart' show ChordStyle;
 
 /// Ein ganzes Stück: Angaben, Taktfolge (für alle Instrumente gleich) und Spuren.
 class Score {
@@ -10,7 +13,11 @@ class Score {
     List<TempoMark>? tempos,
     this.reverb = defaultReverb,
     this.masterVolume = 1,
+    this.chordStyle = ChordStyle.standard,
   }) : tempos = tempos ?? [];
+
+  /// Wie die Akkordsymbole geschrieben werden.
+  ChordStyle chordStyle;
 
   /// Gesamtlautstärke (Masterspur), 0..1.
   double masterVolume;
@@ -39,6 +46,7 @@ class Score {
     tempos: tempos,
     reverb: reverb,
     masterVolume: masterVolume,
+    chordStyle: chordStyle,
   );
 }
 
@@ -502,6 +510,7 @@ class Beat {
     this.rasgueado = false,
     this.fade = 0,
     this.whammy = 0,
+    this.pedal = 0,
   }) : notes = notes ?? [],
        lyrics = lyrics ?? [];
 
@@ -547,6 +556,9 @@ class Beat {
   /// Tremolo-Hebel: kurz so viele Halbtöne hinunter und zurück (negativ, 0 = keiner).
   final int whammy;
 
+  /// Haltepedal: 1 = treten („Ped.“), 2 = loslassen („*“), 3 = wechseln (los und gleich wieder treten).
+  final int pedal;
+
   bool get isRest => notes.isEmpty;
 
   /// Kopie mit Änderungen. Für null-fähige Felder: [clearChord], [clearText], [clearDynamic].
@@ -572,6 +584,7 @@ class Beat {
     bool? rasgueado,
     int? fade,
     int? whammy,
+    int? pedal,
   }) => Beat(
     duration: duration ?? this.duration,
     notes: notes ?? [...this.notes],
@@ -591,6 +604,7 @@ class Beat {
     rasgueado: rasgueado ?? this.rasgueado,
     fade: fade ?? this.fade,
     whammy: whammy ?? this.whammy,
+    pedal: pedal ?? this.pedal,
   );
 }
 
@@ -621,7 +635,19 @@ class Note {
     this.slap = false,
     this.pop = false,
     this.trill = 0,
+    this.leftFinger = 0,
+    this.rightFinger = 0,
+    this.stringNumber = false,
   });
+
+  /// Fingersatz der Greifhand: 0 keiner, 1–4 Finger, 5 Daumen (T).
+  final int leftFinger;
+
+  /// Fingersatz der Anschlagshand: 0 keiner, 1 p, 2 i, 3 m, 4 a, 5 c (kleiner Finger).
+  final int rightFinger;
+
+  /// Saitennummer im Kreis zeigen (1 = höchste Saite).
+  final bool stringNumber;
 
   /// Weites Vibrato (grosse, langsame Welle).
   final bool wideVibrato;
@@ -713,6 +739,9 @@ class Note {
     bool? slap,
     bool? pop,
     int? trill,
+    int? leftFinger,
+    int? rightFinger,
+    bool? stringNumber,
   }) => Note(
     pitch: pitch ?? this.pitch,
     written: clearWritten ? null : (written ?? this.written),
@@ -738,6 +767,9 @@ class Note {
     slap: slap ?? this.slap,
     pop: pop ?? this.pop,
     trill: trill ?? this.trill,
+    leftFinger: leftFinger ?? this.leftFinger,
+    rightFinger: rightFinger ?? this.rightFinger,
+    stringNumber: stringNumber ?? this.stringNumber,
   );
 }
 

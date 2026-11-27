@@ -53,6 +53,7 @@ class ScriviFormat {
     'tempos': [for (final t in s.tempos) _tempo(t)],
     'reverb': s.reverb == Score.defaultReverb ? null : s.reverb,
     'master': s.masterVolume == 1 ? null : s.masterVolume,
+    'chordStyle': s.chordStyle.isStandard ? null : s.chordStyle.toJson(),
     'masterBars': [for (final m in s.masterBars) _masterBar(m)],
     'tracks': [for (final t in s.tracks) _track(t)],
   };
@@ -181,6 +182,7 @@ class ScriviFormat {
       'rasgueado': b.rasgueado,
       'fade': b.fade == 0 ? null : b.fade,
       'whammy': b.whammy == 0 ? null : b.whammy,
+      'pedal': b.pedal == 0 ? null : b.pedal,
     });
   }
 
@@ -215,6 +217,9 @@ class ScriviFormat {
     'slap': n.slap,
     'pop': n.pop,
     'trill': n.trill == 0 ? null : n.trill,
+    'lf': n.leftFinger == 0 ? null : n.leftFinger,
+    'rf': n.rightFinger == 0 ? null : n.rightFinger,
+    'stringNumber': n.stringNumber,
   });
 
   // ───────────────────────── Lesen ─────────────────────────
@@ -250,6 +255,7 @@ class ScriviFormat {
       ),
       reverb: j['reverb'] is num ? (j['reverb'] as num).toDouble().clamp(0.0, 1.0) : Score.defaultReverb,
       masterVolume: j['master'] is num ? (j['master'] as num).toDouble().clamp(0.0, 1.0) : 1.0,
+      chordStyle: ChordStyle.fromJson(j['chordStyle']),
       tempos: [
         for (final t in _list(j['tempos']).map(_map))
           TempoMark(
@@ -375,6 +381,7 @@ class ScriviFormat {
       rasgueado: _bool(b['rasgueado']),
       fade: _int(b['fade']).clamp(0, 3),
       whammy: _int(b['whammy']).clamp(-24, 0),
+      pedal: _int(b['pedal']).clamp(0, 3),
     );
   }
 
@@ -416,6 +423,9 @@ class ScriviFormat {
       slap: _bool(n['slap']),
       pop: _bool(n['pop']),
       trill: _int(n['trill']).clamp(0, 12),
+      leftFinger: _int(n['lf']).clamp(0, 5),
+      rightFinger: _int(n['rf']).clamp(0, 5),
+      stringNumber: _bool(n['stringNumber']),
     );
   }
 }

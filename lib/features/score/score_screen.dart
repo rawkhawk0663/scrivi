@@ -642,6 +642,7 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
         item(tr('Drucken …', 'Print …'), Icons.print_outlined, tr('Strg+P', 'Ctrl+P'), printPiece),
         const Divider(height: 1),
         item(tr('Angaben zum Stück …', 'Piece information …'), Icons.info_outline_rounded, null, editTitle),
+        item(tr('Akkordsymbole …', 'Chord symbols …'), Icons.music_note_outlined, null, editChordStyle),
         const Divider(height: 1),
         item(
           tr('Einstellungen …', 'Settings …'),
@@ -847,6 +848,12 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
   Future<void> editTitle() async {
     final r = await askScoreInfo(context, editor.score.info);
     if (r != null) apply((e) => e.setScoreInfo(r));
+  }
+
+  @override
+  Future<void> editChordStyle() async {
+    final r = await askChordStyle(context, editor.score.chordStyle, germanNames: !L10n.isEnglish);
+    if (r != null) apply((e) => e.setChordStyle(r));
   }
 
   @override

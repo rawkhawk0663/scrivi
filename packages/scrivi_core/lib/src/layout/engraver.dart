@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import '../model/chord_library.dart';
+import '../model/chord_symbol.dart';
 import '../model/fraction.dart';
 import '../model/pitch.dart';
 import '../edit/editor.dart';
@@ -99,6 +100,7 @@ const _textSize = 1.35;
 const _lyricsSize = 1.4;
 const _smallSize = 1.0;
 const _techniqueSize = 1.1;
+const _fingerScale = 0.78;
 
 // Vorschlagsnoten: Grösse und Abstand
 const _graceScale = 0.65;
@@ -115,6 +117,9 @@ class _Head {
 
   /// Vorzeichen zur Erinnerung: in Klammern.
   bool courtesy = false;
+
+  /// Lage des Fingersatzes der Greifhand links vom Kopf (relativ zur Spalte).
+  double fingerX = 0;
 
   double get width => Glyphs.get(glyph).right;
 }
@@ -474,12 +479,29 @@ class Engraver {
           }
           maxW = math.max(maxW, -h.accX + (h.courtesy ? _parenL + 0.05 : 0));
         }
+        // Fingersatz der Greifhand: links vom Kopf bzw. vom Vorzeichen
+        for (final h in e.heads) {
+          final f = h.note?.leftFinger ?? 0;
+          if (f == 0) continue;
+          final left = h.accidental != null ? h.accX - (h.courtesy ? _parenL + 0.05 : 0) : minDx;
+          h.fingerX = left - 0.2 - Glyphs.get(_leftFingerGlyph(f)).right * _fingerScale;
+          maxW = math.max(maxW, -h.fingerX);
+        }
       }
       final graces = c.evs.fold(0, (m, e) => e.graces.length > m ? e.graces.length : m);
       c.graceW = graces == 0 ? 0 : graces * _graceStep + 0.5;
       c.accW = maxW + c.graceW;
     }
   }
+
+  static String _leftFingerGlyph(int f) => f == 5 ? 'fingeringTUpper' : 'fingering$f';
+  static String _rightFingerGlyph(int f) => switch (f) {
+    1 => 'fingeringPLower',
+    2 => 'fingeringILower',
+    3 => 'fingeringMLower',
+    4 => 'fingeringALower',
+    _ => 'fingeringCLower',
+  };
 
   static final double _parenL = Glyphs.get('accidentalParensLeft').right;
   static final double _parenR = Glyphs.get('accidentalParensRight').right;
@@ -602,9 +624,8 @@ class Engraver {
           }
         }
         if (e.beat.chordId != null) {
-          final name = _chordName(e.beat.chordId!);
           // Akkordnamen dürfen etwas überstehen, aber nicht zu viel.
-          w = math.max(w, measurer.width(name, TextRole.chord, _chordSize, bold: true) * 0.85);
+          w = math.max(w, _chordWidth(_chordParts(e.beat.chordId!), _chordSize) * 0.85);
         }
         if (e.beat.lyrics.isNotEmpty) {
           w = math.max(w, measurer.width(e.beat.lyrics.first, TextRole.lyrics, _lyricsSize) + 0.6);
@@ -1037,7 +1058,9 @@ class Engraver {
   }
 
   double _drawDiagrams(PageDisplay page, double y) {
-    if (!options.showChordDiagrams || !_track.staff.isStringed || _track.chords.isEmpty) return y;
+    if (!options.showChordDiagrams || !score.chordStyle.diagrams || !_track.staff.isStringed || _track.chords.isEmpty) {
+      return y;
+    }
     // Akkorde in der Reihenfolge ihres ersten Auftretens
     final names = <String>{};
     final list = <(String, ChordDiagram)>[];
@@ -1146,13 +1169,28 @@ class Engraver {
 
   // ───────────────────────── Hilfen ─────────────────────────
 
-  String _chordName(int id) {
+  /// Akkordsymbol in Teilen (Grundton, Zusätze evtl. hochgestellt), nach den Einstellungen des Stücks.
+  List<ChordPart> _chordParts(int id) {
     var name = _track.chords[id]?.name ?? '';
+    if (name.trim().isEmpty) return const [];
     if (_viewShift != 0) {
       name = ScoreEditor.transposeChordName(name, _viewShift, score.masterBars.first.key.transposed(_viewShift).fifths);
     }
-    return name.replaceAll('#', '♯').replaceAllMapped(RegExp(r'([A-G])b'), (m) => '${m[1]}♭');
+    return ChordSymbol.format(name, score.chordStyle, germanNames: options.germanNoteNames);
   }
+
+  String _chordName(int id) => _chordParts(id).map((p) => p.text).join();
+
+  /// Breite eines Akkordsymbols (hochgestellte Teile kleiner).
+  double _chordWidth(List<ChordPart> parts, double size) {
+    var w = 0.0;
+    for (final p in parts) {
+      w += measurer.width(p.text, TextRole.chord, p.raised ? size * _raisedScale : size, bold: true);
+    }
+    return w;
+  }
+
+  static const _raisedScale = 0.7;
 
   String _fretText(Note n, bool parens) {
     var t = n.dead ? 'x' : '${n.fret}';
@@ -1291,7 +1329,9 @@ class _SystemBuilder {
       if (ev.beat.fermata) {
         final g = Glyphs.get('fermataAbove');
         glyph('fermataAbove', cx - g.right / 2, y);
+        y -= g.height + 0.3;
       }
+      _fingerings(ev, cx, y);
     }
     _above(top);
     _below(rhythmBottom);
@@ -1767,6 +1807,8 @@ class _SystemBuilder {
         glyph('accidentalParensLeft', x + h.dx - 0.55, h.y);
         glyph('accidentalParensRight', x + h.dx + h.width + 0.1, h.y);
       }
+      final f = h.note?.leftFinger ?? 0;
+      if (f != 0) glyph(Engraver._leftFingerGlyph(f), x + h.fingerX, h.y + 0.39, scale: _fingerScale);
     }
     // Hineingleiten und Hinausgleiten: kurze schräge Striche am Kopf
     for (final h in ev.heads) {
@@ -1882,6 +1924,33 @@ class _SystemBuilder {
         y -= 1.3;
       }
     }
+    _fingerings(ev, cx, y);
+  }
+
+  /// Saitennummern im Kreis und Fingersätze der Anschlagshand (p i m a c) über dem Schlag,
+  /// der höchste Ton zuoberst. Gibt die neue Oberkante zurück.
+  double _fingerings(_Ev ev, double cx, double y) {
+    final notes = [...ev.beat.notes]..sort((a, b) => a.pitch.midi.compareTo(b.pitch.midi));
+    final strings = track.staff.stringCount;
+    for (final n in notes) {
+      if (!n.stringNumber || n.string == null || strings == 0) continue;
+      const r = 0.62;
+      final cy = y - r - 0.15;
+      add(PathItem(ring(cx, cy, r, 0.11)));
+      final name = 'fingering${(strings - n.string!).clamp(0, 6)}';
+      const sc = 0.7;
+      final g = Glyphs.get(name);
+      glyph(name, cx - g.right * sc / 2, cy + g.height * sc / 2, scale: sc);
+      y = cy - r - 0.3;
+    }
+    for (final n in notes) {
+      if (n.rightFinger == 0) continue;
+      final name = Engraver._rightFingerGlyph(n.rightFinger);
+      final g = Glyphs.get(name);
+      glyph(name, cx - g.right * _fingerScale / 2, y - 0.15, scale: _fingerScale);
+      y -= g.top * _fingerScale + 0.45;
+    }
+    return y;
   }
 
   /// Wellenlinie (Vibrato) von x1 bis x2.
@@ -2156,12 +2225,16 @@ class _SystemBuilder {
       final y = rowTop - 0.9;
       var lastEnd = -double.infinity;
       for (final ev in chordEvs) {
-        final name = e._chordName(ev.beat.chordId!);
-        if (name.isEmpty) continue;
+        final parts = e._chordParts(ev.beat.chordId!);
+        if (parts.isEmpty) continue;
         var x = ev.x;
         if (x < lastEnd + 0.6) x = lastEnd + 0.6;
-        text(name, x, y, TextRole.chord, _chordSize, bold: true);
-        lastEnd = x + tw(name, TextRole.chord, _chordSize, bold: true);
+        for (final p in parts) {
+          final size = p.raised ? _chordSize * Engraver._raisedScale : _chordSize;
+          text(p.text, x, p.raised ? y - _chordSize * 0.42 : y, TextRole.chord, size, bold: true);
+          x += tw(p.text, TextRole.chord, size, bold: true);
+        }
+        lastEnd = x;
       }
       rowTop = y - _chordSize * 0.8;
     }
@@ -2410,6 +2483,20 @@ class _SystemBuilder {
         k = j + 1;
       }
       rowBottom = y + 1.0;
+    }
+    // Haltepedal: „Ped.“ beim Treten, „*“ beim Loslassen, beim Wechseln beides
+    final pedals = voice0.where((ev) => ev.beat.pedal != 0).toList();
+    if (pedals.isNotEmpty) {
+      final y = rowBottom + 3.0;
+      for (final ev in pedals) {
+        final p = ev.beat.pedal;
+        final px = ev.x;
+        if (p >= 2) {
+          glyph('keyboardPedalUp', p == 3 ? px - 1.9 : px, y, scale: 0.8);
+        }
+        if (p != 2) glyph('keyboardPedalPed', px, y, scale: 0.8);
+      }
+      rowBottom = y + 0.6;
     }
     // Liedtext
     final lyricEvs = voice0.where((ev) => ev.beat.lyrics.isNotEmpty).toList();

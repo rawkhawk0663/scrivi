@@ -32,6 +32,7 @@ abstract class ToolHost {
   Future<void> editEndings();
   Future<void> editJumps();
   Future<void> editTitle();
+  Future<void> editChordStyle();
   Future<void> editTranspose();
 
   /// Spur: Name, Klang, Stimmung/Kapo (Spur am Cursor), neue Spur.
@@ -66,6 +67,7 @@ enum ToolGroup {
   duration('Notenwert', 'Note value'),
   accidental('Vorzeichen', 'Accidentals'),
   guitar('Gitarre', 'Guitar'),
+  finger('Fingersatz', 'Fingering'),
   quick('Schnell', 'Quick'),
   expression('Ausdruck', 'Expression'),
   bar('Takt', 'Bar'),
@@ -185,6 +187,38 @@ ToolDef _tech(
   active: (e) => e.hasTechnique(t),
   enabled: _hasNotes,
   run: (h) => h.apply((e) => e.toggleTechnique(t), sound: true),
+);
+
+/// Fingersatz der Greifhand (1–4, 5 = Daumen) bzw. der Anschlagshand (1 p … 5 c).
+ToolDef _finger(int f, String glyph, String de, String en, {required bool left, List<String> keywords = const []}) =>
+    ToolDef(
+      id: left ? 'lf-$f' : 'rf-$f',
+      group: ToolGroup.finger,
+      look: GlyphLook(glyph, size: 30, dy: left ? 6 : 3),
+      de: de,
+      en: en,
+      keywords: [
+        'fingersatz',
+        'fingering',
+        if (left) ...['greifhand', 'linke hand', 'left hand'] else ...['anschlag', 'rechte hand', 'right hand'],
+        ...keywords,
+      ],
+      stringedOnly: !left,
+      active: (e) => e.fingerAtCursor(left: left) == f,
+      enabled: _hasNotes,
+      run: (h) => h.apply((e) => left ? e.setFinger(left: f) : e.setFinger(right: f)),
+    );
+
+ToolDef _pedal(int p, String de, String en) => ToolDef(
+  id: 'pedal-$p',
+  group: ToolGroup.expression,
+  look: p == 2 ? const GlyphLook('\uE655', size: 26, dy: 4) : const GlyphLook('\uE650', size: 24, dy: 4),
+  de: de,
+  en: en,
+  keywords: const ['pedal', 'klavier', 'piano', 'halten', 'sustain', 'ped'],
+  active: (e) => e.currentBeat?.pedal == p,
+  enabled: _hasBeat,
+  run: (h) => h.apply((e) => e.setPedal(p)),
 );
 
 ToolDef _dynamic(core.Dynamic d, String glyph) => ToolDef(
@@ -581,6 +615,31 @@ final List<ToolDef> allTools = [
     enabled: _hasNotes,
     run: (h) => h.apply((e) => e.setArpeggio(-1), sound: true),
   ),
+  _finger(1, '\uED11', 'Finger 1 (Zeigefinger)', 'Finger 1 (index)', left: true),
+  _finger(2, '\uED12', 'Finger 2 (Mittelfinger)', 'Finger 2 (middle)', left: true),
+  _finger(3, '\uED13', 'Finger 3 (Ringfinger)', 'Finger 3 (ring)', left: true),
+  _finger(4, '\uED14', 'Finger 4 (kleiner Finger)', 'Finger 4 (little)', left: true),
+  _finger(5, '\uED16', 'Daumen (T)', 'Thumb (T)', left: true),
+  _finger(1, '\uED17', 'p – Daumen (Anschlag)', 'p – thumb (picking)', left: false),
+  _finger(2, '\uED19', 'i – Zeigefinger (Anschlag)', 'i – index (picking)', left: false),
+  _finger(3, '\uED1A', 'm – Mittelfinger (Anschlag)', 'm – middle (picking)', left: false),
+  _finger(4, '\uED1B', 'a – Ringfinger (Anschlag)', 'a – ring (picking)', left: false),
+  _finger(5, '\uED1C', 'c – kleiner Finger (Anschlag)', 'c – little finger (picking)', left: false),
+  ToolDef(
+    id: 't-stringNumber',
+    group: ToolGroup.finger,
+    look: const TextLook('③'),
+    de: 'Saitennummer im Kreis',
+    en: 'String number in a circle',
+    keywords: const ['saite', 'string', 'kreis', 'circle', 'nummer'],
+    stringedOnly: true,
+    active: (e) => e.hasTechnique(core.Technique.stringNumber),
+    enabled: _hasNotes,
+    run: (h) => h.apply((e) => e.toggleTechnique(core.Technique.stringNumber)),
+  ),
+  _pedal(1, 'Pedal treten (Ped.)', 'Pedal down (Ped.)'),
+  _pedal(2, 'Pedal loslassen (*)', 'Pedal up (*)'),
+  _pedal(3, 'Pedal wechseln (* Ped.)', 'Change pedal (* Ped.)'),
   ToolDef(
     id: 'rasgueado',
     group: ToolGroup.guitar,
@@ -1044,6 +1103,15 @@ final List<ToolDef> allTools = [
       'info',
     ],
     run: (h) => h.editTitle(),
+  ),
+  ToolDef(
+    id: 'chord-style',
+    group: ToolGroup.piece,
+    look: const TextLook('C⁷'),
+    de: 'Akkordsymbole einstellen …',
+    en: 'Chord symbol settings …',
+    keywords: const ['akkord', 'chord', 'moll', 'minor', 'maj7', 'sus', 'griffbild', 'diagram', 'schreibweise'],
+    run: (h) => h.editChordStyle(),
   ),
   ToolDef(
     id: 'transpose',

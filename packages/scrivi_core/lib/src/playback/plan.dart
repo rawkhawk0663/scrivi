@@ -426,6 +426,9 @@ class PlaybackPlan {
     final lastOnString = <int, PlayNote>{};
     final slides = <PlayNote>[];
     var velocity = 0.74;
+    // Haltepedal (aus der ersten Stimme): Zeiten, in denen es getreten ist
+    final pedalSpans = <(double, double)>[];
+    double? pedalDown;
     for (final pb in bars) {
       if (pb.bar >= track.bars.length) continue;
       final bar = track.bars[pb.bar];
@@ -442,6 +445,10 @@ class PlaybackPlan {
           var t1 = pb.start + pb.secondsAt(onset + len);
           if (beat.fermata) t1 += (t1 - t0) * 0.5;
           if (beat.dynamic != null) velocity = _velocity(beat.dynamic);
+          if (v == 0 && beat.pedal != 0) {
+            if (beat.pedal >= 2 && pedalDown != null) pedalSpans.add((pedalDown, t0));
+            pedalDown = beat.pedal == 2 ? null : t0;
+          }
           // Vorschlagsnoten: kurz vor (bzw. auf) dem Schlag
           var mainStart = t0;
           for (var g = 0; g < graces.length; g++) {
@@ -549,6 +556,16 @@ class PlaybackPlan {
             if (n.slide & 3 != 0 && n.string != null) slides.add(out.last);
           }
           onset += len;
+        }
+      }
+    }
+    if (pedalDown != null && bars.isNotEmpty) pedalSpans.add((pedalDown, bars.last.end));
+    // Unter dem Pedal klingen die Töne bis zum Loslassen (bei Saiteninstrumenten nicht:
+    // dort beendet der nächste Ton auf derselben Saite den alten)
+    if (!stringed) {
+      for (final (a, b) in pedalSpans) {
+        for (final n in out) {
+          if (n.start >= a - 1e-6 && n.start < b && n.end < b) n.duration = b - n.start;
         }
       }
     }
