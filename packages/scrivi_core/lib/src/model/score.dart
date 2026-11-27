@@ -43,6 +43,7 @@ class ScoreInfo {
     this.copyright = '',
     this.tabber = '',
     this.instructions = '',
+    this.notice = '',
   });
 
   final String title;
@@ -53,18 +54,35 @@ class ScoreInfo {
   final String music;
   final String copyright;
   final String tabber;
+
+  /// Anleitungen: stehen über der ersten Zeile (z. B. „Kapo 2, mit Plektrum“).
   final String instructions;
 
-  ScoreInfo copyWith({String? title, String? subtitle, String? artist, String? words, String? music}) => ScoreInfo(
+  /// Bemerkung: nur für sich selbst, erscheint nicht auf dem Blatt.
+  final String notice;
+
+  ScoreInfo copyWith({
+    String? title,
+    String? subtitle,
+    String? artist,
+    String? album,
+    String? words,
+    String? music,
+    String? copyright,
+    String? tabber,
+    String? instructions,
+    String? notice,
+  }) => ScoreInfo(
     title: title ?? this.title,
     subtitle: subtitle ?? this.subtitle,
     artist: artist ?? this.artist,
-    album: album,
+    album: album ?? this.album,
     words: words ?? this.words,
     music: music ?? this.music,
-    copyright: copyright,
-    tabber: tabber,
-    instructions: instructions,
+    copyright: copyright ?? this.copyright,
+    tabber: tabber ?? this.tabber,
+    instructions: instructions ?? this.instructions,
+    notice: notice ?? this.notice,
   );
 }
 

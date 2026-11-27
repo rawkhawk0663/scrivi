@@ -520,6 +520,33 @@ void main() {
       expect(back.tracks.single.instrumentKey, 2);
     });
 
+    test('Angaben zum Stück: auf dem Blatt, die Bemerkung nicht; gespeichert', () {
+      final e = ScoreEditor(ScoreEditor.newScore(bars: 1));
+      e.setScoreInfo(
+        const ScoreInfo(
+          title: 'Lied',
+          artist: 'Band',
+          album: 'Platte',
+          words: 'Anna',
+          music: 'Anna',
+          tabber: 'Tom',
+          instructions: 'Kapo 2',
+          notice: 'privat',
+          copyright: '(c) 2026',
+        ),
+      );
+      final texts = Engraver(
+        e.score,
+        options: const LayoutOptions(germanNoteNames: true),
+      ).layout().pages.first.items.whereType<TextItem>().map((t) => t.text).toList();
+      expect(texts, containsAll(['Lied', 'Band', 'Platte', 'Text und Musik: Anna', 'Transkription: Tom', 'Kapo 2']));
+      expect(texts, isNot(contains('privat')));
+      final back = ScriviFormat.decode(ScriviFormat.encode(e.score)).info;
+      expect(back.notice, 'privat');
+      expect(back.album, 'Platte');
+      expect(e.canUndo, isTrue);
+    });
+
     test('Mischpult wird mit dem Stück gespeichert, ohne Rückgängig-Schritt', () {
       final e = ScoreEditor(ScoreEditor.newScore(bars: 1));
       final rev = e.revision;

@@ -50,6 +50,7 @@ class ScoreScreen extends StatefulWidget {
     this.onTitle,
     this.tabBar,
     this.onOpenPiece,
+    this.onOpenPath,
     this.onNextTab,
   });
 
@@ -71,6 +72,9 @@ class ScoreScreen extends StatefulWidget {
   /// Weiteres Stück in einem neuen Reiter öffnen; nächster Reiter (+1/−1).
   final VoidCallback? onOpenPiece;
   final ValueChanged<int>? onNextTab;
+
+  /// Reiter: eine bestimmte Datei in einem neuen Reiter öffnen.
+  final ValueChanged<String>? onOpenPath;
 
   @override
   State<ScoreScreen> createState() => _ScoreScreenState();
@@ -563,6 +567,90 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
     }
   }
 
+  /// Datei öffnen (Dateidialog) und in einem neuen Reiter zeigen.
+  Future<void> _openFile() async {
+    final file = await openFile(
+      acceptedTypeGroups: [XTypeGroup(label: tr('Notendateien', 'Music files'), extensions: ScoreFiles.readable)],
+      confirmButtonText: tr('Öffnen', 'Open'),
+    );
+    if (file == null || !mounted) return;
+    final open = widget.onOpenPath;
+    if (open != null) {
+      open(file.path);
+    } else {
+      unawaited(Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => ScoreScreen(path: file.path))));
+    }
+  }
+
+  /// Menü „Datei“ oben links: Neu, Öffnen, Zuletzt geöffnet, Speichern, Exportieren, Drucken …
+  Widget _fileMenu(BuildContext context) {
+    final c = context.scrivi;
+    final recent = (_recent?.entries ?? const <RecentEntry>[]).where((e) => !p.equals(e.path, _path)).take(10).toList();
+    Widget item(String label, IconData icon, String? keys, VoidCallback? onPressed) => MenuItemButton(
+      leadingIcon: Icon(icon, size: 18),
+      trailingIcon: keys == null
+          ? null
+          : Padding(
+              padding: const EdgeInsets.only(left: 28),
+              child: Text(keys, style: TextStyle(fontSize: 12, color: c.muted)),
+            ),
+      onPressed: onPressed,
+      child: Text(label),
+    );
+    return MenuAnchor(
+      alignmentOffset: const Offset(0, 4),
+      menuChildren: [
+        item(tr('Neues Stück …', 'New piece …'), Icons.note_add_outlined, tr('Strg+N', 'Ctrl+N'), widget.onOpenPiece),
+        item(tr('Öffnen …', 'Open …'), Icons.folder_open_outlined, tr('Strg+O', 'Ctrl+O'), _openFile),
+        SubmenuButton(
+          leadingIcon: const Icon(Icons.history_rounded, size: 18),
+          menuChildren: [
+            if (recent.isEmpty)
+              MenuItemButton(onPressed: null, child: Text(tr('Noch nichts', 'Nothing yet')))
+            else
+              for (final r in recent)
+                MenuItemButton(
+                  onPressed: widget.onOpenPath == null ? null : () => widget.onOpenPath!(r.path),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 320),
+                    child: Text(r.displayTitle, overflow: TextOverflow.ellipsis),
+                  ),
+                ),
+          ],
+          child: Text(tr('Zuletzt geöffnet', 'Open recent')),
+        ),
+        const Divider(height: 1),
+        item(tr('Speichern', 'Save'), Icons.save_outlined, tr('Strg+S', 'Ctrl+S'), save),
+        item(
+          tr('Speichern unter …', 'Save as …'),
+          Icons.save_as_outlined,
+          tr('Strg+Umschalt+S', 'Ctrl+Shift+S'),
+          saveAs,
+        ),
+        const Divider(height: 1),
+        item(
+          tr('Exportieren (PDF, MusicXML, MIDI) …', 'Export (PDF, MusicXML, MIDI) …'),
+          Icons.ios_share_rounded,
+          tr('Strg+E', 'Ctrl+E'),
+          exportPiece,
+        ),
+        item(tr('Drucken …', 'Print …'), Icons.print_outlined, tr('Strg+P', 'Ctrl+P'), printPiece),
+        const Divider(height: 1),
+        item(tr('Angaben zum Stück …', 'Piece information …'), Icons.info_outline_rounded, null, editTitle),
+        const Divider(height: 1),
+        item(tr('Schliessen', 'Close'), Icons.close_rounded, tr('Strg+W', 'Ctrl+W'), _leave),
+      ],
+      builder: (context, controller, _) => TextButton(
+        onPressed: () => controller.isOpen ? controller.close() : controller.open(),
+        style: TextButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.onSurface),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [Text(tr('Datei', 'File')), const Icon(Icons.arrow_drop_down_rounded, size: 20)],
+        ),
+      ),
+    );
+  }
+
   /// Titel und Speicherstand oben links.
   Widget _titleBlock(BuildContext context, bool compact) {
     final c = context.scrivi;
@@ -686,8 +774,8 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
 
   @override
   Future<void> editTitle() async {
-    final r = await askTitle(context, editor.score.info.title, editor.score.info.artist);
-    if (r != null) apply((e) => e.setInfo(title: r.$1.trim(), artist: r.$2.trim()));
+    final r = await askScoreInfo(context, editor.score.info);
+    if (r != null) apply((e) => e.setScoreInfo(r));
   }
 
   @override
@@ -986,7 +1074,9 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
         apply((e) => e.selectAll());
       } else if (k == LogicalKeyboardKey.keyS) {
         shift ? saveAs() : save();
-      } else if (k == LogicalKeyboardKey.keyO && widget.onOpenPiece != null) {
+      } else if (k == LogicalKeyboardKey.keyO) {
+        _openFile();
+      } else if (k == LogicalKeyboardKey.keyN && widget.onOpenPiece != null) {
         widget.onOpenPiece!();
       } else if (k == LogicalKeyboardKey.keyW && widget.onClose != null) {
         _leave();
@@ -1308,6 +1398,7 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
                 icon: const Icon(Icons.arrow_back),
                 onPressed: _leave,
               ),
+              _fileMenu(context),
               _titleBlock(context, compact),
               IconButton(
                 tooltip: _unsaved

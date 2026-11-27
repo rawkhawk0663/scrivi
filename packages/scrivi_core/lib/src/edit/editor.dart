@@ -1137,11 +1137,13 @@ class ScoreEditor {
   }
 
   /// Titel, Untertitel und Interpret.
-  void setInfo({String? title, String? subtitle, String? artist}) {
+  void setInfo({String? title, String? subtitle, String? artist}) =>
+      setScoreInfo(_score.info.copyWith(title: title, subtitle: subtitle, artist: artist));
+
+  /// Alle Angaben zum Stück (Titel, Interpret, Album, Text, Musik, Copyright …).
+  void setScoreInfo(ScoreInfo info) {
     _begin();
-    _score = _score.copyWith(
-      info: _score.info.copyWith(title: title, subtitle: subtitle, artist: artist),
-    );
+    _score = _score.copyWith(info: info);
     _done();
   }
 

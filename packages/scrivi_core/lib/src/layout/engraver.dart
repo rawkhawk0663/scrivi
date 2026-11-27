@@ -886,6 +886,8 @@ class Engraver {
   double _drawHeader(PageDisplay page, double y) {
     final info = score.info;
     final cx = options.pageWidth / 2;
+    final de = options.germanNoteNames;
+    final top = y;
     // Bei mehreren Spuren: Name des Instruments oben links (Einzelstimmen beim Drucken)
     final part = score.tracks.length > 1 && !_inScore ? _track.name.trim() : '';
     if (part.isNotEmpty) {
@@ -907,6 +909,45 @@ class Engraver {
       y += 1.8;
       page.items.add(TextItem(info.artist, cx, y, TextRole.credit, 1.5, align: TextAlign.center));
       y += 0.6;
+    }
+    if (info.album.isNotEmpty) {
+      y += 1.6;
+      page.items.add(TextItem(info.album, cx, y, TextRole.credit, 1.3, align: TextAlign.center, italic: true));
+      y += 0.5;
+    }
+    // Rechts: Text und Musik; links: wer die Noten geschrieben hat
+    final words = info.words.trim(), music = info.music.trim();
+    final right = <String>[
+      if (words.isNotEmpty && words == music)
+        (de ? 'Text und Musik: ' : 'Words and music: ') + words
+      else ...[
+        if (words.isNotEmpty) (de ? 'Text: ' : 'Words: ') + words,
+        if (music.isNotEmpty) (de ? 'Musik: ' : 'Music: ') + music,
+      ],
+    ];
+    final left = <String>[
+      if (info.tabber.trim().isNotEmpty) (de ? 'Transkription: ' : 'Transcribed by ') + info.tabber.trim(),
+    ];
+    // Unter dem Titel beginnen, damit sich nichts überdeckt
+    var side = top + (info.title.isNotEmpty ? 6.4 : 1.5);
+    var ry = side, ly = side;
+    for (final t in right) {
+      ry += 1.6;
+      page.items.add(
+        TextItem(t, options.pageWidth - options.marginRight, ry, TextRole.credit, 1.25, align: TextAlign.right),
+      );
+    }
+    for (final t in left) {
+      ly += 1.6;
+      page.items.add(TextItem(t, options.marginLeft, ly, TextRole.credit, 1.25));
+    }
+    y = math.max(y, math.max(ry, ly) + 0.4);
+    // Anleitungen über der ersten Zeile
+    for (final line in info.instructions.split('\n')) {
+      final t = line.trim();
+      if (t.isEmpty) continue;
+      y += 1.9;
+      page.items.add(TextItem(t, options.marginLeft, y, TextRole.text, 1.35, italic: true));
     }
     return y + 2.5;
   }

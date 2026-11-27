@@ -41,6 +41,11 @@ class _ScoreTabsState extends State<ScoreTabs> {
     final path = await Navigator.of(context)
         .push<String>(MaterialPageRoute(builder: (_) => const StartScreen(pick: true)));
     if (path == null || !mounted) return;
+    _openPath(path);
+  }
+
+  /// Bestimmte Datei als Reiter öffnen (Datei-Menü: Öffnen, Zuletzt geöffnet).
+  void _openPath(String path) {
     setState(() {
       final i = _tabs.indexWhere((t) => p.equals(t.path, path));
       if (i >= 0) {
@@ -99,6 +104,7 @@ class _ScoreTabsState extends State<ScoreTabs> {
                   if (mounted) setState(() => _tabs[i].title = title);
                 },
                 onOpenPiece: _open,
+                onOpenPath: _openPath,
                 onNextTab: _next,
               ),
             ),
@@ -168,7 +174,7 @@ class _ScoreTabsState extends State<ScoreTabs> {
             ),
           ),
           IconButton(
-            tooltip: tr('Weiteres Stück öffnen  (Strg+O)', 'Open another piece  (Ctrl+O)'),
+            tooltip: tr('Weiteres Stück öffnen  (Strg+N)', 'Open another piece  (Ctrl+N)'),
             visualDensity: VisualDensity.compact,
             icon: const Icon(Icons.add_rounded, size: 20),
             onPressed: _open,

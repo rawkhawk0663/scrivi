@@ -175,40 +175,111 @@ List<String> sectionSuggestions() => L10n.isEnglish
     ? ['Intro', 'Verse', 'Pre-Chorus', 'Chorus', 'Bridge', 'Solo', 'Interlude', 'Outro']
     : ['Intro', 'Strophe', 'Pre-Chorus', 'Refrain', 'Bridge', 'Solo', 'Zwischenspiel', 'Schluss'];
 
-/// Titel und Interpret abfragen.
-Future<(String, String)?> askTitle(BuildContext context, String title, String artist) {
-  final t = TextEditingController(text: title);
-  final a = TextEditingController(text: artist);
-  return showDialog<(String, String)>(
+/// Angaben zum Stück: alles, was oben auf dem Blatt steht, dazu eine private Bemerkung.
+Future<core.ScoreInfo?> askScoreInfo(BuildContext context, core.ScoreInfo info) {
+  final fields = <String, TextEditingController>{
+    'title': TextEditingController(text: info.title),
+    'subtitle': TextEditingController(text: info.subtitle),
+    'artist': TextEditingController(text: info.artist),
+    'album': TextEditingController(text: info.album),
+    'words': TextEditingController(text: info.words),
+    'music': TextEditingController(text: info.music),
+    'copyright': TextEditingController(text: info.copyright),
+    'tabber': TextEditingController(text: info.tabber),
+    'instructions': TextEditingController(text: info.instructions),
+    'notice': TextEditingController(text: info.notice),
+  };
+  Widget field(String key, String label, {String? hint, bool autofocus = false, int lines = 1}) => TextField(
+    controller: fields[key],
+    autofocus: autofocus,
+    minLines: lines,
+    maxLines: lines == 1 ? 1 : 6,
+    keyboardType: lines == 1 ? TextInputType.text : TextInputType.multiline,
+    decoration: InputDecoration(labelText: label, helperText: hint, border: const OutlineInputBorder(), isDense: true),
+  );
+  Widget pair(Widget a, Widget b) => Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Expanded(child: a),
+      const SizedBox(width: 12),
+      Expanded(child: b),
+    ],
+  );
+  core.ScoreInfo result() => core.ScoreInfo(
+    title: fields['title']!.text.trim(),
+    subtitle: fields['subtitle']!.text.trim(),
+    artist: fields['artist']!.text.trim(),
+    album: fields['album']!.text.trim(),
+    words: fields['words']!.text.trim(),
+    music: fields['music']!.text.trim(),
+    copyright: fields['copyright']!.text.trim(),
+    tabber: fields['tabber']!.text.trim(),
+    instructions: fields['instructions']!.text.trim(),
+    notice: fields['notice']!.text.trim(),
+  );
+  return showDialog<core.ScoreInfo>(
     context: context,
     builder: (context) => AlertDialog(
-      title: Text(tr('Titel und Interpret', 'Title and artist')),
+      title: Text(tr('Angaben zum Stück', 'Piece information')),
       content: SizedBox(
-        width: 380,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: t,
-              autofocus: true,
-              decoration: InputDecoration(labelText: tr('Titel', 'Title')),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: a,
-              decoration: InputDecoration(labelText: tr('Interpret', 'Artist')),
-            ),
-          ],
+        width: 560,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              field('title', tr('Titel', 'Title'), autofocus: true),
+              const SizedBox(height: 12),
+              field('subtitle', tr('Untertitel', 'Subtitle')),
+              const SizedBox(height: 12),
+              pair(field('artist', tr('Interpret', 'Artist')), field('album', tr('Album', 'Album'))),
+              const SizedBox(height: 12),
+              pair(
+                field('words', tr('Text', 'Words'), hint: tr('steht rechts oben', 'shown top right')),
+                field(
+                  'music',
+                  tr('Musik', 'Music'),
+                  hint: tr('gleich wie Text: „Text und Musik“', 'same as words: “Words and music”'),
+                ),
+              ),
+              const SizedBox(height: 12),
+              pair(
+                field(
+                  'copyright',
+                  tr('Copyright', 'Copyright'),
+                  hint: tr('steht unten auf Seite 1', 'shown at the bottom of page 1'),
+                ),
+                field('tabber', tr('Transkription', 'Transcribed by'), hint: tr('steht links oben', 'shown top left')),
+              ),
+              const SizedBox(height: 12),
+              field(
+                'instructions',
+                tr('Anleitungen', 'Instructions'),
+                hint: tr(
+                  'stehen über der ersten Zeile, z. B. „Kapo 2, mit Plektrum“',
+                  'shown above the first line, e.g. “Capo 2, with a pick”',
+                ),
+                lines: 2,
+              ),
+              const SizedBox(height: 12),
+              field(
+                'notice',
+                tr('Bemerkung', 'Notes'),
+                hint: tr('nur für dich, erscheint nicht auf dem Blatt', 'just for you, not printed'),
+                lines: 2,
+              ),
+            ],
+          ),
         ),
       ),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('Abbrechen', 'Cancel'))),
-        FilledButton(onPressed: () => Navigator.pop(context, (t.text, a.text)), child: Text(tr('Übernehmen', 'Apply'))),
+        FilledButton(onPressed: () => Navigator.pop(context, result()), child: Text(tr('Übernehmen', 'Apply'))),
       ],
     ),
   ).whenComplete(() {
-    t.dispose();
-    a.dispose();
+    for (final c in fields.values) {
+      c.dispose();
+    }
   });
 }
 

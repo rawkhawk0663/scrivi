@@ -134,6 +134,7 @@ class _Parser {
       copyright: _text(s, 'Copyright'),
       tabber: _text(s, 'Tabber'),
       instructions: _text(s, 'Instructions'),
+      notice: _text(s, 'Notices'),
     );
 
     final rhythms = <int, NoteDuration>{};

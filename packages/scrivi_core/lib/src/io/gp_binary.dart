@@ -65,9 +65,7 @@ class GpBinaryReader {
     final tab = r.intByteSizeString();
     final instructions = r.intByteSizeString();
     final notices = r.i32();
-    for (var i = 0; i < notices; i++) {
-      r.intByteSizeString();
-    }
+    final notice = [for (var i = 0; i < notices; i++) r.intByteSizeString()].join('\n');
     final info = ScoreInfo(
       title: title,
       subtitle: subtitle,
@@ -78,6 +76,7 @@ class GpBinaryReader {
       copyright: copyright,
       tabber: tab,
       instructions: instructions,
+      notice: notice,
     );
 
     int tempo;

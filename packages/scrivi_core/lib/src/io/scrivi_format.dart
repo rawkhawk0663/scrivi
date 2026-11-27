@@ -74,6 +74,7 @@ class ScriviFormat {
     'copyright': i.copyright,
     'tabber': i.tabber,
     'instructions': i.instructions,
+    'notice': i.notice,
   });
 
   static Map<String, dynamic> _tempo(TempoMark t) => _compact({
@@ -228,6 +229,7 @@ class ScriviFormat {
         copyright: _str(info['copyright']),
         tabber: _str(info['tabber']),
         instructions: _str(info['instructions']),
+        notice: _str(info['notice']),
       ),
       reverb: j['reverb'] is num ? (j['reverb'] as num).toDouble().clamp(0.0, 1.0) : Score.defaultReverb,
       tempos: [
