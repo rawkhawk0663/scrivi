@@ -331,6 +331,18 @@ class Engraver {
         if (e.isRest) continue;
         if (e.beat.slashed) {
           e.heads.add(_Head(null, 2, _headGlyph(e.beat, null)));
+        } else if (_drums) {
+          for (final n in e.beat.notes) {
+            final (y, cross) = _drumPosition(n.pitch.midi);
+            final v = e.beat.duration.value;
+            final glyph = !cross
+                ? _headGlyph(e.beat, n)
+                : (v == NoteValue.whole || v == NoteValue.doubleWhole
+                      ? 'noteheadXWhole'
+                      : (v == NoteValue.half ? 'noteheadXHalf' : 'noteheadXBlack'));
+            e.heads.add(_Head(n, y, glyph));
+          }
+          e.heads.sort((a, b) => a.y.compareTo(b.y));
         } else {
           for (final n in e.beat.notes) {
             e.heads.add(_Head(n, (top - n.shown.diatonic) / 2, _headGlyph(e.beat, n)));
@@ -347,7 +359,7 @@ class Engraver {
       for (final e in c.evs) {
         for (final h in e.heads) {
           final n = h.note;
-          if (n == null) continue;
+          if (n == null || _drums) continue;
           final p = n.shown;
           final current = state[p.diatonic] ?? m.mb.key.alterFor(p.step);
           if (n.tieDestination) {
@@ -489,6 +501,7 @@ class Engraver {
   bool _stemDirection(List<_Ev> g, int voiceCount) {
     final voice = g.first.voice;
     if (voiceCount > 1) return voice.isEven;
+    if (_drums) return true;
     var minY = double.infinity, maxY = -double.infinity;
     for (final e in g) {
       for (final h in e.heads) {
@@ -578,7 +591,29 @@ class Engraver {
 
   // ───────────────────────── Zeilen ─────────────────────────
 
-  double _keyWidth(KeySignature k) => k.fifths.abs() * 1.0 + (k.fifths == 0 ? 0 : 0.6);
+  double _keyWidth(KeySignature k) => _drums ? 0 : k.fifths.abs() * 1.0 + (k.fifths == 0 ? 0 : 0.6);
+
+  /// Schlagzeug: eigene Lage der Instrumente, keine Tonart, keine Vorzeichen.
+  late final bool _drums = _track.percussion;
+
+  /// Lage (Linienabstände unter der obersten Linie) und Kopf eines Schlagzeug-Tons.
+  static (double, bool) _drumPosition(int key) => switch (key) {
+    35 || 36 => (3.5, false), // Bassdrum
+    37 => (1.5, true), // Rimshot
+    38 || 40 => (1.5, false), // Snare
+    39 => (1.5, true), // Klatschen
+    41 => (3.0, false), // Standtom tief
+    43 => (2.5, false), // Standtom
+    45 || 47 => (1.0, false), // mittleres Tom
+    48 || 50 => (0.5, false), // hohes Tom
+    42 => (-0.5, true), // Hi-Hat zu
+    44 => (4.5, true), // Hi-Hat mit dem Fuss
+    46 => (-0.5, true), // Hi-Hat offen
+    49 || 57 || 52 || 55 => (-1.0, true), // Crash, China, Splash
+    51 || 59 || 53 => (0.0, true), // Ride
+    54 || 56 => (0.5, true), // Tamburin, Kuhglocke
+    _ => (1.5, false),
+  };
   double _timeWidth(TimeSignature t) => math.max(t.beats.toString().length, t.beatType.toString().length) * 1.8 + 1.0;
 
   double _headerWidth(_Meas m, bool firstSystem) {
@@ -1295,6 +1330,7 @@ class _SystemBuilder {
 
   /// Tonart zeichnen ab x; gibt die Breite zurück.
   double _keySig(KeySignature k, double x, Clef clef) {
+    if (clef == Clef.neutral) return 0; // Schlagzeug: keine Tonart
     const sharpY = [0.0, 1.5, -0.5, 1.0, 2.5, 0.5, 2.0];
     const flatY = [2.0, 0.5, 2.5, 1.0, 3.5, 1.5, 4.0];
     final off = _keyYOffset(clef);

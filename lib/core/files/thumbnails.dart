@@ -23,7 +23,7 @@ class Thumbnails {
 
   /// Stand des Notensatzes: erhöhen, wenn die Noten anders aussehen, damit die
   /// Vorschaubilder neu entstehen.
-  static const style = 3;
+  static const style = 4;
 
   final _jobs = <String, Future<File?>>{};
   Future<void> _queue = Future.value();

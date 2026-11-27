@@ -62,6 +62,7 @@ tool/         make_icon.py (Symbol), make_glyphs.py (Notenzeichen aus Bravura),
 - **Gitarre** wird eine Oktave höher geschrieben als sie klingt (`Track.transposeSemitones = 12`, Violinschlüssel mit kleiner 8). `Note.pitch` ist klingend, `Note.written` geschrieben (Schreibweise aus der Datei; fehlt sie, wird die klingende um Oktaven verschoben).
 - **Zeilen:** Die Takte pro Zeile aus der Datei (`SystemsLayout`) werden übernommen, solange sie passen; sonst wird gefüllt. Jede Zeile im Blocksatz.
 - **Tabulatur:** Saite 0 = tiefste. Schläge mit Rhythmus-Schrägstrichen zeigen in der Tab nichts. Gehaltene Noten nur am Zeilenanfang in Klammern.
+- **Schlagzeug** (`Track.percussion`, neutraler Schlüssel): Lage und Kopf pro Instrument aus `_drumPosition` (Bassdrum unten, Snare Mitte, Toms dazwischen, Hi-Hat/Becken als Kreuz über der obersten Linie), Hälse nach oben, keine Tonart und keine Vorzeichen.
 - **Dynamik** erscheint nur bei Wechseln (die Dateien schreiben „mf“ an jeden Schlag).
 - **Vorschlagsnoten** nehmen keine Zeit: der Notensatz hängt sie an den nächsten Schlag (`_Ev.graces`) und reserviert vorne in der Spalte Platz (`_Col.graceW`).
 - **Endlos-Ansicht** (`LayoutOptions.endless`): alle Takte in einer Zeile ohne Blocksatz (`_endlessLayout`, Abstand `endlessSpacing`), ohne Titel; die Seite ist so breit wie nötig. Der Betrachter zeigt sie im Massstab einer A4-Seite und blättert waagrecht (`einstellungen.json`: `endlos`).

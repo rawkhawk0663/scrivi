@@ -128,6 +128,43 @@ void main() {
     });
   });
 
+  group('Schlagzeug', () {
+    test('eigene Lage pro Instrument, Becken als Kreuz, keine Tonart', () {
+      Note d(int k) => Note(pitch: Pitch.fromMidi(k));
+      final score = Score(
+        info: const ScoreInfo(),
+        masterBars: [MasterBar(time: const TimeSignature(4, 4), key: const KeySignature(3))],
+        tracks: [
+          Track(
+            name: 'Schlagzeug',
+            staff: const StaffDef(),
+            bars: [
+              Bar(
+                clef: Clef.neutral,
+                voices: [
+                  Voice([
+                    for (final k in [36, 38, 42, 49])
+                      Beat(duration: const NoteDuration(NoteValue.quarter), notes: [d(k)]),
+                  ]),
+                ],
+              ),
+            ],
+          ),
+        ],
+      );
+      final layout = Engraver(score).layout();
+      final heads = _all<GlyphItem>(layout).where((g) => g.name.startsWith('notehead')).toList()
+        ..sort((a, b) => a.x.compareTo(b.x));
+      expect(heads.map((g) => g.name), ['noteheadBlack', 'noteheadBlack', 'noteheadXBlack', 'noteheadXBlack']);
+      // Bassdrum unten, Snare in der Mitte, Hi-Hat und Crash über der obersten Linie
+      expect(heads[0].y, greaterThan(heads[1].y));
+      final top = layout.pages.first.systems.first.staffTop!;
+      expect(heads[2].y, lessThan(top + 0.01));
+      expect(heads[3].y, lessThan(heads[2].y));
+      expect(_glyphs(layout).where((n) => n.startsWith('accidental')), isEmpty);
+    });
+  });
+
   group('Endlos-Ansicht', () {
     test('alle Takte in einer Zeile, Seite so breit wie nötig', () {
       final e = ScoreEditor(ScoreEditor.newScore(bars: 40));
