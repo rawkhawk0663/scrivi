@@ -84,5 +84,12 @@ void _registerFontLicenses() {
         yield LicenseEntryWithLineBreaks([e.key], await rootBundle.loadString('assets/fonts/${e.value}'));
       } catch (_) {}
     }
+    // Klangsammlung: FreePats (CC0, GPL mit Ausnahme) und FluidR3 Mono (MIT)
+    try {
+      yield LicenseEntryWithLineBreaks([
+        'FreePats',
+        'FluidR3 Mono',
+      ], await rootBundle.loadString('assets/sounds/LIZENZEN.txt'));
+    } catch (_) {}
   });
 }

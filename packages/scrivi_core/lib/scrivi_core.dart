@@ -12,5 +12,6 @@ export 'src/render/display.dart';
 export 'src/render/glyphs.dart';
 export 'src/layout/engraver.dart';
 export 'src/playback/plan.dart';
+export 'src/playback/soundfont.dart';
 export 'src/playback/synth.dart';
 export 'src/render/svg.dart';

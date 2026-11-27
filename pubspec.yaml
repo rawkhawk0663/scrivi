@@ -38,6 +38,9 @@ flutter:
     - assets/fonts/OFL-Bravura.txt
     - assets/fonts/OFL-IBMPlexSans.txt
     - assets/fonts/OFL-Sora.txt
+    # Klangsammlung (gebaut mit tool/make_sounds.py) und ihre Lizenzen
+    - assets/sounds/scrivi.sf2
+    - assets/sounds/LIZENZEN.txt
   fonts:
     # Schriften der Oberfläche (feste Schnitte, OFL)
     - family: Plex

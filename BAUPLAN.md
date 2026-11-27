@@ -113,6 +113,10 @@ mitbenutzen (z. B. Volti zeigt Scrivi-Stücke mit mitlaufender Markierung).
   Gitarren und Bass von FreePats (CC0 bzw. GPL mit Ausnahme), alle übrigen Instrumente und
   Schlagzeug aus FluidR3/MuseScore General (MIT). GeneralUser GS nicht (Herkunft der Klänge
   unsicher).
+- **Stand (27. November 2026):** umgesetzt. Klangsammlung `assets/sounds/scrivi.sf2` (38 Klänge,
+  etwa 65 MB) mit `tool/make_sounds.py`; Scrivi liest SF2 selbst und spielt die Samples mit
+  Bendings, Slides, Vibrato, Palm Mute, Hüllkurven und Schleifen. Ohne die Datei klingen die
+  gerechneten Töne wie bisher. Noch offen: Hall, Stereo, eigene SoundFonts laden.
 - **Erste Stufe:** Das Stück wird im Hintergrund in eine Tonspur umgerechnet und mit
   `flutter_soloud` abgespielt (gleiches Prinzip wie das Metronom in Volti: dadurch genau im
   Takt). Gitarre zuerst mit der gezupften Saite aus Suona und Volti, die es schon gibt.

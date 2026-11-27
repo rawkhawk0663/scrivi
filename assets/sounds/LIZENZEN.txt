@@ -1,0 +1,99 @@
+Klangsammlung von Scrivi (assets/sounds/scrivi.sf2)
+Sound collection of Scrivi
+
+Gebaut mit tool/make_sounds.py aus den folgenden Quellen. Die Samples wurden
+gekürzt (Gitarren und Bässe auf höchstens 4 Sekunden, mit Ausklang), auf einen
+Kanal (mono) gebracht und teilweise auf 32 kHz umgerechnet.
+Built with tool/make_sounds.py from the sources below. Samples were shortened
+(guitars and basses to at most 4 seconds, with a fade), made mono and partly
+resampled to 32 kHz.
+
+------------------------------------------------------------------------------
+FreePats project – https://freepats.zenvoid.org/
+------------------------------------------------------------------------------
+
+Spanish classical guitar (Klangnummer 24), version 2019-06-18
+  Recorded 2008 by Roberto for the FreePats project.
+  Creative Commons CC0 1.0 Universal (public domain dedication).
+
+FSBS Electric Guitar Jazz, bridge pickup, small (Klangnummer 26), 2026-08-07
+FSBS Electric Guitar Clean, bridge pickup, small (Klangnummer 27–31), 2026-08-07
+  FreePats project.
+  Creative Commons CC0 1.0 Universal (public domain dedication).
+
+Finger Bass YR (Klangnummer 33), Picked Bass YR (Klangnummer 34), 2019-09-30
+  Samples by Andrea Biasior from a Yamaha RBX bass guitar, edited for FreePats.
+  Creative Commons CC0 1.0 Universal (public domain dedication).
+
+CC0: https://creativecommons.org/publicdomain/zero/1.0/
+
+FSS Steel-String Acoustic Guitar, small (Klangnummer 25), release 2020-05-21
+  Copyright 2008 Gary Campion (FlameStudios)
+  Modified 2016-2020 by Roberto for the FreePats project.
+
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+  As a special exception, if you create a composition which uses these sounds,
+  and mix these sounds or unaltered portions of these sounds into the
+  composition, these sounds do not by themselves cause the entire composition
+  as a whole to be covered by the GNU General Public License. This exception
+  does not however invalidate any other reasons why the composition might be
+  covered by the GNU General Public License.
+
+  If you modify these sounds, you may extend this exception to your version of
+  the sounds, but you are not obligated to do so. If you do not wish to do so,
+  delete this exception statement from your version.
+
+------------------------------------------------------------------------------
+Fluid (R3) Mono GM SoundFont – alle übrigen Klänge und das Schlagzeug
+all other sounds and the drum kit
+------------------------------------------------------------------------------
+
+Mono version Copyright © 2014-2017 Michael Cowgill
+Temple Blocks instrument Copyright © 2002 Ethan Winer
+Drumline Percussion Copyright © 2016 Michael Schorsch
+
+(Original Stereo version) Fluid (R3) GM SoundFont:
+Copyright © 2000-2002, 2008 Frank Wen
+
+Fluid was constructed in part from samples found in the public
+domain that Frank Wen edited/cleaned/remixed/programmed and
+largely from recordings of his own and in conjunction with the
+people below who helped along the way: Suren M. Seron,
+Scott Hanan, Steve Aupperle, Chris Gillman, Alex Taubr,
+Chris Prola, Andrew Klenk, Winfried Hubbe, Dylan, Tim, Gort,
+Uros Katic, Ethan Winer.
+
+MIT License
+
+Permission is hereby granted, free of charge, to any person
+obtaining a copy of this software and associated documentation
+files (the "Software"), to deal in the Software without
+restriction, including without limitation the rights to use,
+copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+OTHER DEALINGS IN THE SOFTWARE.

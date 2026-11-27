@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'plan.dart';
+import 'soundfont.dart';
 
 /// Klangfarbe einer Spur.
 enum Voicing { guitar, overdrive, nylon, bass, piano, organ, strings, brass, flute, pad, drums }
@@ -42,9 +43,58 @@ class Synth {
     return Voicing.piano;
   }
 
-  /// Tonspur der Spur [t] (mono, −1..1), [seconds] lang.
-  static Float32List renderTrack(PlayTrack t, double seconds, {Voicing? voicing}) {
+  /// Preset der Klangsammlung für die Spur: Schlagzeug, sonst die
+  /// Klangnummer, sonst ein Klang aus derselben Familie, sonst nach der Art der Spur.
+  static SfPreset? presetFor(PlayTrack t, SoundFont sf) {
+    final tr = t.track;
+    if (tr.percussion) return sf.preset(128, 0) ?? _first(sf, 128);
+    var p = tr.program;
+    if (p < 0) {
+      p = switch (voicingFor(t)) {
+        Voicing.bass => 33,
+        Voicing.nylon => 24,
+        Voicing.guitar => 25,
+        Voicing.overdrive => 29,
+        Voicing.organ => 16,
+        Voicing.strings => 48,
+        Voicing.brass => 61,
+        Voicing.flute => 73,
+        Voicing.pad => 89,
+        _ => 0,
+      };
+    }
+    final exact = sf.preset(0, p);
+    if (exact != null) return exact;
+    // Gitarren: gedämpft, verzerrt und Flageolett aus der cleanen E-Gitarre
+    const near = {28: 27, 29: 27, 30: 27, 31: 27, 36: 33, 37: 34, 39: 38};
+    final n = near[p];
+    if (n != null && sf.preset(0, n) != null) return sf.preset(0, n);
+    // Sonst der nächste Klang derselben Familie (je acht Nummern)
+    final base = p ~/ 8 * 8;
+    for (var d = 1; d < 8; d++) {
+      for (final q in [p - d, p + d]) {
+        if (q >= base && q < base + 8) {
+          final x = sf.preset(0, q);
+          if (x != null) return x;
+        }
+      }
+    }
+    return sf.preset(0, 0) ?? _first(sf, 0);
+  }
+
+  static SfPreset? _first(SoundFont sf, int bank) {
+    for (final p in sf.presets) {
+      if (p.bank == bank) return p;
+    }
+    return null;
+  }
+
+  /// Tonspur der Spur [t] (mono, −1..1), [seconds] lang. Mit [sounds] klingen
+  /// aufgenommene Töne aus der Klangsammlung, sonst gerechnete.
+  static Float32List renderTrack(PlayTrack t, double seconds, {Voicing? voicing, SoundFont? sounds}) {
     final v = voicing ?? voicingFor(t);
+    final preset = sounds == null ? null : presetFor(t, sounds);
+    if (sounds != null && preset != null) return _renderSampled(t, seconds, v, sounds, preset);
     final out = Float32List((seconds * rate).ceil() + 1);
     final rnd = math.Random(t.index + 7);
     for (final n in t.notes) {
@@ -79,6 +129,170 @@ class Synth {
       }
     }
     return out;
+  }
+
+  // ───────────────────────── Aufgenommene Töne ─────────────────────────
+
+  static Float32List _renderSampled(PlayTrack t, double seconds, Voicing v, SoundFont sf, SfPreset preset) {
+    final out = Float32List((seconds * rate).ceil() + 1);
+    final rnd = math.Random(t.index + 7);
+    final drums = t.track.percussion;
+    final program = t.track.program;
+    final allMuted = program == 28;
+    final notes = [...t.notes]..sort((a, b) => a.start.compareTo(b.start));
+    // Töne derselben Klasse (Hi-Hat offen/zu) schneiden sich ab
+    final cutAt = <PlayNote, double>{};
+    if (drums) {
+      final last = <int, PlayNote>{};
+      for (final n in notes) {
+        for (final r in preset.regionsFor(n.midi, _vel(n))) {
+          if (r.exclusiveClass == 0) continue;
+          final prev = last[r.exclusiveClass];
+          if (prev != null && prev != n) cutAt[prev] = n.start;
+          last[r.exclusiveClass] = n;
+        }
+      }
+    }
+    for (final n in notes) {
+      if (n.dead && !drums) {
+        _string(out, n, Voicing.guitar, rnd);
+        continue;
+      }
+      if (n.harmonic && !drums) {
+        _bell(out, n, math.pow(n.velocity, 1.4).toDouble() * 2.5);
+        continue;
+      }
+      for (final r in preset.regionsFor(n.midi, _vel(n))) {
+        _voice(out, sf, r, n, drums: drums, muted: allMuted || n.palmMuted, cut: cutAt[n]);
+      }
+    }
+    if (v == Voicing.overdrive || program == 29 || program == 30) _overdrive(out);
+    _limit(out, drums ? 0.9 : 0.8);
+    return out;
+  }
+
+  static int _vel(PlayNote n) => (n.velocity * 127).round().clamp(1, 127);
+
+  /// Ein aufgenommener Ton: abspielen mit veränderlicher Tonhöhe, Hüllkurve und Tiefpass.
+  static void _voice(
+    Float32List out,
+    SoundFont sf,
+    SfRegion r,
+    PlayNote n, {
+    required bool drums,
+    required bool muted,
+    double? cut,
+  }) {
+    final data = sf.samples;
+    final s = r.sample;
+    final start = r.start, end = math.min(r.end, data.length);
+    if (end - start < 4) return;
+    final looping = r.loopMode == 1 || r.loopMode == 3;
+    final ls = r.loopStart, le = r.loopEnd;
+    final canLoop = looping && le > ls + 4 && le <= end && ls >= start;
+    final vel = _vel(n);
+    // Anschlag → Lautstärke (wie üblich quadratisch), Abschwächung der Zone
+    var amp = math.pow(vel / 127, 2).toDouble() * math.pow(10, -r.attenuation * 0.4 / 20).toDouble();
+    if (n.legato) amp *= 0.7;
+    final s0 = (n.start * rate).round();
+    // Loslassen: Schlagzeug spielt aus, sonst am Ende des Tons
+    var offSec = drums ? double.infinity : n.duration;
+    if (muted) offSec = math.min(offSec, 0.09);
+    var relSec = r.release.clamp(0.006, 3.0);
+    if (muted) relSec = 0.12;
+    if (cut != null) {
+      offSec = math.min(offSec, cut - n.start);
+      relSec = 0.02;
+    }
+    // Tiefpass: Grenzfrequenz der Zone, leiser angeschlagen etwas dunkler, gedämpft deutlich
+    var fcCents = r.filterFc - 2400 * (1 - vel / 127) * 0.5;
+    if (muted) fcCents = math.min(fcCents, 8800); // etwa 1,3 kHz
+    final fc = 8.176 * math.pow(2, fcCents / 1200);
+    final useFilter = fc < rate * 0.42;
+    var b0 = 1.0, b1 = 0.0, b2 = 0.0, a1 = 0.0, a2 = 0.0;
+    if (useFilter) {
+      final q = math.pow(10, r.filterQ / 20).toDouble().clamp(0.5, 12.0) * 0.7071;
+      final w = 2 * math.pi * fc / rate;
+      final alpha = math.sin(w) / (2 * q);
+      final cw = math.cos(w);
+      final a0 = 1 + alpha;
+      b0 = (1 - cw) / 2 / a0;
+      b1 = (1 - cw) / a0;
+      b2 = b0;
+      a1 = -2 * cw / a0;
+      a2 = (1 - alpha) / a0;
+    }
+    var x1 = 0.0, x2 = 0.0, y1 = 0.0, y2 = 0.0;
+    final decay = r.decayFor(n.midi);
+    final sustain = r.sustainDb;
+    final delay = r.delay, attack = r.attack, hold = r.hold;
+    final ratio = s.rate / rate;
+    var pos = start.toDouble();
+    var step = 1.0;
+    var db = 0.0; // Abschwächung der Hüllkurve in dB
+    double? relFromDb;
+    final maxLen = math.min(out.length - s0, ((drums ? 8.0 : n.duration + relSec + 0.05) * rate).ceil());
+    for (var i = 0; i < maxLen; i++) {
+      final sec = i / rate;
+      if ((i & 31) == 0) {
+        final x = n.duration > 0 ? (sec / n.duration).clamp(0.0, 1.0) : 0.0;
+        final pitch = drums ? n.midi.toDouble() : _pitchAt(n, x, sec);
+        final semis = (pitch - r.rootKey) * r.scaleTuning / 100 + r.tune / 100;
+        step = math.pow(2, semis / 12) * ratio;
+      }
+      // Hüllkurve
+      double env;
+      if (sec < delay) {
+        env = 0;
+      } else if (sec < delay + attack) {
+        env = (sec - delay) / attack;
+      } else {
+        final t2 = sec - delay - attack - hold;
+        if (t2 > 0 && decay > 0) {
+          db = math.min(sustain, t2 / decay * 100);
+        } else if (t2 > 0) {
+          db = sustain;
+        }
+        env = 1;
+      }
+      if (sec >= offSec) {
+        relFromDb ??= db;
+        final rdb = relFromDb + (sec - offSec) / relSec * 100;
+        if (rdb > 90) break;
+        env *= math.pow(10, -rdb / 20);
+      } else if (db > 0) {
+        env *= math.pow(10, -db / 20);
+      }
+      if (muted) env *= math.exp(-sec * 9);
+      // Sample lesen (kubisch zwischen den Werten)
+      final ip = pos.floor();
+      if (ip >= end - 1) break;
+      final f = pos - ip;
+      final xm1 = data[math.max(start, ip - 1)].toDouble();
+      final x0 = data[ip].toDouble();
+      final xp1 = data[ip + 1].toDouble();
+      final xp2 = data[math.min(end - 1, ip + 2)].toDouble();
+      final c1 = 0.5 * (xp1 - xm1);
+      final c2 = xm1 - 2.5 * x0 + 2 * xp1 - 0.5 * xp2;
+      final c3 = 0.5 * (xp2 - xm1) + 1.5 * (x0 - xp1);
+      var y = ((c3 * f + c2) * f + c1) * f + x0;
+      y *= 1 / 32768;
+      if (useFilter) {
+        final yy = b0 * y + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
+        x2 = x1;
+        x1 = y;
+        y2 = y1;
+        y1 = yy;
+        y = yy;
+      }
+      out[s0 + i] += y * env * amp;
+      pos += step;
+      if (canLoop && (r.loopMode == 1 || sec < offSec)) {
+        while (pos >= le) {
+          pos -= le - ls;
+        }
+      }
+    }
   }
 
   // ───────────────────────── Saiten ─────────────────────────
@@ -343,7 +557,8 @@ class Synth {
   /// WAV-Datei (16 Bit, mono) aus Werten zwischen −1 und 1.
   static Uint8List wav(Float32List samples) {
     final dataLen = samples.length * 2;
-    final b = ByteData(44 + dataLen);
+    final bytes = Uint8List(44 + dataLen);
+    final b = ByteData.sublistView(bytes);
     void str(int o, String s) {
       for (var i = 0; i < s.length; i++) {
         b.setUint8(o + i, s.codeUnitAt(i));
@@ -363,9 +578,16 @@ class Synth {
     b.setUint16(34, 16, Endian.little);
     str(36, 'data');
     b.setUint32(40, dataLen, Endian.little);
+    // Direkt als 16-Bit-Werte schreiben (44 ist gerade: ausgerichtet)
+    final pcm = Int16List.view(bytes.buffer, 44, samples.length);
+    final little = Endian.host == Endian.little;
     for (var i = 0; i < samples.length; i++) {
-      b.setInt16(44 + i * 2, (samples[i].clamp(-1.0, 1.0) * 32767).round(), Endian.little);
+      var v = samples[i] * 32767;
+      if (v > 32767) v = 32767;
+      if (v < -32767) v = -32767;
+      final x = (v >= 0 ? v + 0.5 : v - 0.5).toInt();
+      pcm[i] = little ? x : ((x & 0xFF) << 8) | ((x >> 8) & 0xFF);
     }
-    return b.buffer.asUint8List();
+    return bytes;
   }
 }

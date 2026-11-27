@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:isolate';
 import 'dart:math' as math;
 
@@ -7,6 +8,7 @@ import 'package:flutter_soloud/flutter_soloud.dart';
 import 'package:scrivi_core/scrivi_core.dart' as core;
 
 import '../../app/audio_engine.dart';
+import '../../app/sounds.dart';
 import '../../app/error_log.dart';
 import '../../app/l10n.dart';
 import '../../app/screen_awake.dart';
@@ -337,7 +339,17 @@ class ScorePlayer extends ChangeNotifier {
     try {
       final soloud = await AudioEngine.use(this);
       final s = _score, tempo = _tempo;
-      final wavs = await Isolate.run(() => _render(s, tempo));
+      final sounds = await Sounds.bytes();
+      // Mehrere Spuren gleichzeitig rechnen (je ein Isolate pro Gruppe)
+      final groups = _groups(_plan, Platform.isAndroid || Platform.isIOS ? 2 : 3);
+      final parts = await Future.wait([for (final g in groups) Isolate.run(() => _render(s, tempo, sounds, g))]);
+      final byIndex = <int, Uint8List>{};
+      for (var k = 0; k < groups.length; k++) {
+        for (var j = 0; j < groups[k].length; j++) {
+          byIndex[groups[k][j]] = parts[k][j];
+        }
+      }
+      final wavs = [for (var i = 0; i < _plan.tracks.length; i++) byIndex[i]!, parts.first.last];
       if (gen != _generation || _disposed) return;
       final tracks = <AudioSource>[];
       for (var i = 0; i < wavs.length - 1; i++) {
@@ -360,12 +372,33 @@ class ScorePlayer extends ChangeNotifier {
     }
   }
 
-  /// Läuft in einem eigenen Isolate: alle Spuren und das Metronom als WAV.
-  static List<Uint8List> _render(core.Score score, double tempo) {
+  /// Spuren auf [n] Gruppen verteilen, etwa gleich viele Töne pro Gruppe.
+  static List<List<int>> _groups(core.PlaybackPlan plan, int n) {
+    final order = [for (var i = 0; i < plan.tracks.length; i++) i]
+      ..sort((a, b) => plan.tracks[b].notes.length.compareTo(plan.tracks[a].notes.length));
+    final groups = List.generate(math.max(1, math.min(n, order.length)), (_) => <int>[]);
+    final load = List.filled(groups.length, 0);
+    for (final i in order) {
+      var best = 0;
+      for (var k = 1; k < groups.length; k++) {
+        if (load[k] < load[best]) best = k;
+      }
+      groups[best].add(i);
+      load[best] += plan.tracks[i].notes.length + 50;
+    }
+    return groups;
+  }
+
+  /// Läuft in einem eigenen Isolate: die Spuren [indices] als WAV, dahinter das Metronom.
+  static List<Uint8List> _render(core.Score score, double tempo, Uint8List? sounds, List<int> indices) {
     final plan = core.PlaybackPlan.build(score, tempoFactor: tempo);
     final len = plan.duration + 2.5;
+    core.SoundFont? sf;
+    try {
+      sf = sounds == null || indices.isEmpty ? null : core.SoundFont.parse(sounds);
+    } catch (_) {}
     return [
-      for (final t in plan.tracks) core.Synth.wav(core.Synth.renderTrack(t, len)),
+      for (final i in indices) core.Synth.wav(core.Synth.renderTrack(plan.tracks[i], len, sounds: sf)),
       core.Synth.wav(core.Synth.renderClicks(plan.clicks, len)),
     ];
   }

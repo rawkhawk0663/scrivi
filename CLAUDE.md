@@ -34,7 +34,8 @@ packages/scrivi_core/   Herz von Scrivi, reines Dart ohne Flutter (eigene Tests:
   render/     Zeichenliste (DisplayItem), Glyphs (Bravura-Umrisse, erzeugt), SVG-Ausgabe
   edit/       ScoreEditor (Cursor, Eingabe, Takte, Transponieren, Rückgängig)
   playback/   PlaybackPlan (Abspiel-Reihenfolge, Zeiten, Töne mit Effekten, Metronom),
-              Synth (Klangerzeugung ohne Klangdateien, WAV)
+              Synth (Klang: aufgenommene Töne aus der Klangsammlung, sonst gerechnet; WAV),
+              SoundFont (SF2 lesen: Presets, Zonen, Samples)
 lib/
   app/        Theme (ScriviColors), l10n, Updater, Fehlerprotokoll, Fensterknöpfe,
               Bildschirmtastatur, Geräte-Einstellungen (einstellungen.json)
@@ -50,7 +51,8 @@ lib/
               edit_tools (Dialoge zum Schreiben)
     settings/ Einstellungen, Über Scrivi, Updates
   widgets/    gemeinsame Bausteine (ScriviMark, SectionCard, EmptyState …)
-tool/         make_icon.py (Symbol), make_glyphs.py (Notenzeichen aus Bravura)
+tool/         make_icon.py (Symbol), make_glyphs.py (Notenzeichen aus Bravura),
+              make_sounds.py + sf2lib.py (Klangsammlung assets/sounds/scrivi.sf2 bauen)
 ```
 
 ## Notensatz (packages/scrivi_core)
@@ -80,6 +82,8 @@ tool/         make_icon.py (Symbol), make_glyphs.py (Notenzeichen aus Bravura)
 ## Abspielen
 - Mischpult pro Spur: Lautstärke, stumm, solo, links/rechts (`ScorePlayer.pan`, `setPan`); noch nicht in der Datei gespeichert.
 - `PlaybackPlan.build(score, tempoFactor:)` rollt Wiederholungen, Häuser und Sprünge aus (nach einem D.C./D.S. keine Wiederholungen mehr, vom Haus das letzte) und liefert Takte mit Zeiten, Töne pro Spur und Metronom-Klicks. `locate(sekunden)` → (Takt, Stelle in ganzen Noten).
+- **Klangsammlung** `assets/sounds/scrivi.sf2` (fest mitgeliefert, Wunsch des Besitzers; etwa 65 MB): Gitarren und Bässe von FreePats (CC0, Stahlsaiten GPL mit Ausnahme), alle übrigen Klänge und das Schlagzeug (Bank 128) aus FluidR3 Mono (MIT). Gebaut mit `tool/make_sounds.py` aus den heruntergeladenen Quellen (Liste `QUELLEN`; braucht numpy und ffmpeg); Gitarren/Bässe auf 4 s gekürzt, FluidR3 auf 32 kHz. Lizenzen in `assets/sounds/LIZENZEN.txt` (erscheinen unter Lizenzen). Neue Klänge: in `FLUID` bzw. `FREEPATS` eintragen und neu bauen; die Datei nicht oft neu einchecken (gross).
+- **Aufgenommene Töne** (`Synth.renderTrack(…, sounds:)`, `_voice`): Preset nach Klangnummer, sonst aus derselben Familie (`presetFor`; 28–31 → cleane E-Gitarre, verzerrt mit `_overdrive`), Tasten ausserhalb einer Zone nehmen die nächste Zone. Tonhöhe pro 32 Werte aus `_pitchAt` (Bendings, Slides, Vibrato), kubisch zwischen den Werten, Schleifen, Lautstärke-Hüllkurve (Generatoren 33–38, Abschwächung ×0,4 wie üblich), Tiefpass (8/9), Anschlag quadratisch. Palm Mute: kurz und dumpf; gedämpfte Noten und Flageoletts weiter gerechnet. Schlagzeug spielt aus, Hi-Hat-Klassen schneiden sich ab. App: `Sounds` (lib/app/sounds.dart) lädt die Datei einmal; `ScorePlayer` rechnet die Spuren in 3 (Android 2) Isolates gleichzeitig.
 - `Synth.renderTrack` rechnet eine Spur als Tonspur (44,1 kHz mono). Saiten: Verzögerungsschleife mit Tiefpass, Länge = Periode minus Verzögerung des Tiefpasses (sonst zu tief); die Länge darf sich im Ton ändern (Bendings, Slides, Vibrato). Klangfarbe nach `Track.program` (General MIDI), sonst nach Saiten. Tests messen die Tonhöhe.
 - App (`ScorePlayer`): Spuren und Metronom im Hintergrund (`Isolate.run`) als WAV rechnen, mit `flutter_soloud` als je eine Stimme laden und gemeinsam starten (Stimmengruppe). Einzähler über `setDelaySamples`; die Stimmen zählen die Wartezeit schon als gespielt (`_lead` abziehen). Tempo = neu rechnen. Audio-Technik wie in Volti (`AudioEngine`).
 - Markierung: Der Notensatz legt pro Zeile die Lage der Takte und Schläge ab (`SystemBox.bars`, `BarSpan.xAt`).

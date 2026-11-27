@@ -5,6 +5,7 @@ import 'package:scrivi_core/scrivi_core.dart' as core;
 
 import '../../app/audio_engine.dart';
 import '../../app/error_log.dart';
+import '../../app/sounds.dart';
 
 /// Spielt eingegebene Töne kurz an (zum Mithören beim Schreiben).
 ///
@@ -21,7 +22,8 @@ class NotePreview {
       final soloud = await AudioEngine.use(this);
       _ready = true;
       final voicing = core.Synth.voicingFor(track);
-      final key = '${voicing.name}:${midis.join(',')}';
+      final sounds = await Sounds.font();
+      final key = '${voicing.name}:${track.track.program}:${midis.join(',')}';
       var src = _cache[key];
       if (src == null) {
         // Akkord leicht gebrochen, wie angeschlagen
@@ -29,7 +31,12 @@ class NotePreview {
           for (var i = 0; i < midis.length; i++)
             core.PlayNote(start: i * 0.012, duration: 0.9, midi: midis[i], velocity: 0.75),
         ];
-        final pcm = core.Synth.renderTrack(core.PlayTrack(track.index, track.track, notes), 1.3, voicing: voicing);
+        final pcm = core.Synth.renderTrack(
+          core.PlayTrack(track.index, track.track, notes),
+          1.6,
+          voicing: voicing,
+          sounds: sounds,
+        );
         src = await soloud.loadMem('scrivi-vorhoeren-$key.wav', core.Synth.wav(pcm));
         _cache[key] = src;
         if (_cache.length > 64) {
