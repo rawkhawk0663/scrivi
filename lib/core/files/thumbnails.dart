@@ -6,13 +6,14 @@ import 'package:scrivi_core/scrivi_core.dart';
 
 import '../../app/error_log.dart';
 import '../../features/score/score_painter.dart';
-import 'library_controller.dart';
+import 'recent_files.dart';
+import 'score_files.dart';
 
-/// Vorschaubilder der Bibliothek: der obere Teil der ersten Seite als PNG in
-/// `Bibliothek/.scrivi/vorschau/`. Werden einzeln nacheinander erzeugt,
-/// damit die Bibliothek flüssig bleibt.
+/// Vorschaubilder für „Zuletzt geöffnet“: der obere Teil der ersten Seite als
+/// PNG im Ordner [dir]. Werden einzeln nacheinander erzeugt, damit die
+/// Startseite flüssig bleibt.
 class Thumbnails {
-  Thumbnails(String metaDir) : dir = p.join(metaDir, 'vorschau');
+  Thumbnails(this.dir);
 
   final String dir;
 
@@ -27,12 +28,12 @@ class Thumbnails {
   final _jobs = <String, Future<File?>>{};
   Future<void> _queue = Future.value();
 
-  String _keyFor(Piece piece) {
-    final safe = piece.fileName.replaceAll(RegExp(r'[^\w\-. ]'), '_');
+  String _keyFor(RecentEntry piece) {
+    final safe = '${piece.path.hashCode.toRadixString(16)}-${piece.fileName}'.replaceAll(RegExp(r'[^\w\-. ]'), '_');
     return '$safe-${piece.size}-${piece.modified.millisecondsSinceEpoch}-v$style.png';
   }
 
-  Future<File?> forPiece(Piece piece) {
+  Future<File?> forPiece(RecentEntry piece) {
     final key = _keyFor(piece);
     return _jobs.putIfAbsent(key, () {
       final done = _queue.then((_) => _make(piece, key));
@@ -41,12 +42,12 @@ class Thumbnails {
     });
   }
 
-  Future<File?> _make(Piece piece, String key) async {
+  Future<File?> _make(RecentEntry piece, String key) async {
     final file = File(p.join(dir, key));
     try {
       if (await file.exists()) return file;
       await Directory(dir).create(recursive: true);
-      final score = await LibraryController.load(piece.path);
+      final score = await ScoreFiles.load(piece.path);
       final layout = Engraver(score, measurer: FlutterTextMeasurer()).layout();
       final page = layout.pages.first;
       final picture = PagePictures.record(page);

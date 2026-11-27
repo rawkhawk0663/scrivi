@@ -25,6 +25,8 @@ abstract class ToolHost {
   Future<void> editRepeatEnd();
   Future<void> editTitle();
   Future<void> editTranspose();
+  Future<void> save();
+  Future<void> saveAs();
   void copy();
   void cut();
   void paste();
@@ -510,6 +512,26 @@ final List<ToolDef> allTools = [
   ),
 
   // ── Stück ──
+  ToolDef(
+    id: 'save',
+    group: ToolGroup.piece,
+    look: const IconLook(Icons.save_outlined),
+    de: 'Speichern',
+    en: 'Save',
+    shortcut: 'Strg+S',
+    keywords: const ['sichern', 'datei', 'file'],
+    run: (h) => h.save(),
+  ),
+  ToolDef(
+    id: 'save-as',
+    group: ToolGroup.piece,
+    look: const IconLook(Icons.save_as_outlined),
+    de: 'Speichern unter …',
+    en: 'Save as …',
+    shortcut: 'Strg+Umschalt+S',
+    keywords: const ['sichern', 'datei', 'file', 'kopie'],
+    run: (h) => h.saveAs(),
+  ),
   ToolDef(
     id: 'title',
     group: ToolGroup.piece,

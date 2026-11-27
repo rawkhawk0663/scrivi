@@ -335,11 +335,21 @@ Plan in fünf Schritten:
 4. Stift-Gesten, waagrechte Band-Ansicht.
 5. Mikrofon-Eingabe (einstimmig).
 
+### Dateien statt Bibliothek (27. November 2026)
+
+Entscheid des Besitzers: keine Bibliothek. Stücke sind `.scrivi`-Dateien, gespeichert, wo man
+will. Startseite mit *Neues Stück* (Vorlagen: Gitarre mit Tab, Gitarre nur Noten, Bass,
+Leadsheet, Eigene), *Öffnen …* und *Zuletzt geöffnet*; keine Seitenleiste mehr (Einstellungen über
+das Zahnrad), ein Stück füllt den ganzen Bildschirm. Neue Stücke sind bis zum ersten Speichern
+Entwürfe (laufend gesichert). Andere Formate werden nie überschrieben. Die Stücke der früheren
+Bibliothek erscheinen beim ersten Start unter *Zuletzt geöffnet*. Windows: `.scrivi` per
+Doppelklick.
+
 ## 9. Entscheidungen (26. November 2026)
 
 1. **Umfang:** alles, was unter Punkt 1 steht.
 2. **Alte Dateien:** sehr viele Guitar-Pro-Dateien. Vier Beispiele liegen vor (siehe unten).
-3. **Bibliothek:** Scrivi verwaltet seine Stücke selbst wie Volti, dazu Import und Export
+3. **Bibliothek:** ~~Scrivi verwaltet seine Stücke selbst wie Volti~~ – am 27. November 2026 geändert: Stücke sind Dateien, siehe „Dateien statt Bibliothek“. Ursprünglich: Import und Export
    einzelner Dateien.
 4. **Name:** Scrivi.
 

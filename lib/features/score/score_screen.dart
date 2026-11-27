@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -13,9 +14,15 @@ import '../../app/error_log.dart';
 import '../../app/l10n.dart';
 import '../../app/theme.dart';
 import '../../app/window_buttons.dart';
-import '../../core/library/library_controller.dart';
+
+import 'package:file_selector/file_selector.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+
+import '../../core/files/recent_files.dart';
+import '../../core/files/score_files.dart';
 import '../../widgets/visuals.dart';
-import '../library/library_screen.dart' show LibraryScope;
+
 import 'edit_tools.dart';
 import 'fretboard.dart';
 import 'note_preview.dart';
@@ -28,11 +35,10 @@ import 'transport_bar.dart';
 /// Griffbrett unten, oben Anzeige und Abspielen. Es gibt keinen eigenen
 /// Bearbeiten-Modus: Der Cursor ist immer da.
 class ScoreScreen extends StatefulWidget {
-  const ScoreScreen({super.key, required this.piece, this.startEditing = false});
-  final Piece piece;
+  const ScoreScreen({super.key, required this.path});
 
-  /// Früher: gleich im Bearbeiten-Modus öffnen. Heute wird immer geschrieben.
-  final bool startEditing;
+  /// Die Datei (auch ein Entwurf im Ordner „Entwürfe“ von Scrivi).
+  final String path;
 
   @override
   State<ScoreScreen> createState() => _ScoreScreenState();
@@ -40,7 +46,10 @@ class ScoreScreen extends StatefulWidget {
 
 class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
   core.Score? _score;
-  late Piece _piece = widget.piece;
+
+  /// Datei, in die gespeichert wird. Bei Entwürfen und bei Dateien anderer
+  /// Formate (z. B. Guitar Pro) braucht es erst „Speichern unter“.
+  late String _path = widget.path;
   List<core.PageDisplay>? _pages;
   List<ui.Picture>? _pictures;
   Object? _error;
@@ -60,7 +69,7 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
   DateTime _fretTime = DateTime(0);
   core.EditCursor? _fretCursor;
   static List<core.Beat> _clipboard = const [];
-  LibraryController? _library;
+  RecentFiles? _recent;
 
   /// Zählt Cursor-Bewegungen (die Markierung zeichnet sich dann neu).
   final _cursorTick = ValueNotifier<int>(0);
@@ -77,7 +86,7 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
   void didChangeDependencies() {
     super.didChangeDependencies();
     _view = _settings?.scoreView.value ?? ScoreView.both;
-    _library = context.getInheritedWidgetOfExactType<LibraryScope>()?.library;
+    _recent = RecentScope.maybeOf(context);
   }
 
   bool get _stringed => _score != null && _score!.tracks.isNotEmpty && _score!.tracks[_track].staff.isStringed;
@@ -90,14 +99,15 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
 
   Future<void> _load() async {
     try {
-      final score = await LibraryController.load(widget.piece.path);
+      final score = await ScoreFiles.load(widget.path);
       if (!mounted) return;
+      unawaited(_recent?.touch(widget.path, score));
       _score = score;
       _player = ScorePlayer(score);
       _editor = core.ScoreEditor(score, track: _track);
       _engrave();
     } catch (e, st) {
-      ErrorLog.record(e, st, where: 'Stück öffnen: ${widget.piece.fileName}');
+      ErrorLog.record(e, st, where: 'Stück öffnen: ${p.basename(widget.path)}');
       if (mounted) setState(() => _error = e);
     }
   }
@@ -131,7 +141,7 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
         }
       });
     } catch (e, st) {
-      ErrorLog.record(e, st, where: 'Stück öffnen: ${widget.piece.fileName}');
+      ErrorLog.record(e, st, where: 'Stück öffnen: ${p.basename(widget.path)}');
       if (mounted) setState(() => _error = e);
     }
   }
@@ -196,29 +206,178 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
     _saveTimer = Timer(const Duration(milliseconds: 800), _flushSave);
   }
 
-  /// Ungespeicherte Änderungen jetzt speichern.
+  /// Noch nicht an einem selbst gewählten Ort gespeichert (Entwurf oder fremdes Format).
+  bool get _unsaved => !ScoreFiles.isScrivi(_path) || (_recent?.isDraft(_path) ?? false);
+
+  /// Ungespeicherte Änderungen jetzt sichern: in die Datei bzw. in den Entwurf.
+  /// Eine Datei in fremdem Format wird nie überschrieben; beim ersten Ändern
+  /// entsteht ein Entwurf, das Original bleibt unberührt.
   void _flushSave() {
     _saveTimer?.cancel();
     final e = _editor;
     final score = _score;
     if (score == null || e == null || e.revision == _savedRevision) return;
     final rev = e.revision;
-    final lib = _library;
-    if (lib == null) return;
     final prev = _saving ?? Future.value();
     _saving = prev.then((_) async {
       try {
-        final updated = await lib.save(_piece, score);
-        _piece = updated;
+        if (!ScoreFiles.isScrivi(_path)) {
+          final recent = _recent;
+          if (recent == null) return;
+          _path = await recent.newDraft(score);
+        } else {
+          await ScoreFiles.writeScrivi(_path, score);
+          await _recent?.touch(_path, score);
+        }
         _savedRevision = rev;
+        if (mounted) setState(() {});
       } catch (err, st) {
-        ErrorLog.record(err, st, where: 'Speichern: ${_piece.fileName}');
+        ErrorLog.record(err, st, where: 'Speichern: ${p.basename(_path)}');
         if (mounted) {
           ScaffoldMessenger.of(context)
               .showSnackBar(SnackBar(content: Text(tr('Speichern ist fehlgeschlagen.', 'Saving failed.'))));
         }
       }
     });
+  }
+
+  /// Speichern: Ist das Stück schon eine eigene Datei, wird nur gesichert;
+  /// sonst „Speichern unter“.
+  @override
+  Future<void> save() async {
+    if (_unsaved) return saveAs();
+    _flushSave();
+    await _saving;
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('Gespeichert', 'Saved'))));
+    }
+  }
+
+  /// Speichern unter: Ort und Name wählen (Android: Ordner „Scrivi“ in den Dokumenten).
+  @override
+  Future<void> saveAs() async {
+    final score = _editor?.score ?? _score;
+    final recent = _recent;
+    if (score == null) return;
+    _flushSave();
+    await _saving;
+    final wasDraft = recent?.isDraft(_path) ?? false;
+    final base = score.info.title.trim().isNotEmpty
+        ? ScoreFiles.safeName(score.info.title)
+        : p.basenameWithoutExtension(widget.path);
+    final name = '$base.scrivi';
+    String target;
+    try {
+      if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+        final dir = wasDraft ? await _documentsDir() : p.dirname(_path);
+        final loc = await getSaveLocation(
+          suggestedName: name,
+          initialDirectory: dir,
+          acceptedTypeGroups: [
+            const XTypeGroup(label: 'Scrivi', extensions: ['scrivi']),
+          ],
+          confirmButtonText: tr('Speichern', 'Save'),
+        );
+        if (loc == null) return;
+        target = loc.path.toLowerCase().endsWith('.scrivi') ? loc.path : '${loc.path}.scrivi';
+      } else {
+        final dir = p.join(await _documentsDir() ?? Directory.systemTemp.path, 'Scrivi');
+        target = await ScoreFiles.uniquePath(dir, name);
+      }
+      await ScoreFiles.writeScrivi(target, score);
+      final old = _path;
+      _path = target;
+      _savedRevision = _editor?.revision ?? _savedRevision;
+      await recent?.touch(target, score);
+      if (wasDraft) await recent?.remove(old);
+      if (mounted) {
+        setState(() {});
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(tr('Gespeichert: $target', 'Saved: $target'))));
+      }
+    } catch (err, st) {
+      ErrorLog.record(err, st, where: 'Speichern unter');
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(tr('Speichern ist fehlgeschlagen.', 'Saving failed.'))));
+      }
+    }
+  }
+
+  /// Dokumente-Ordner; fehlt er, der Benutzerordner (oder null: der Dialog entscheidet).
+  Future<String?> _documentsDir() async {
+    try {
+      return (await getApplicationDocumentsDirectory()).path;
+    } catch (_) {
+      return Platform.environment['USERPROFILE'] ?? Platform.environment['HOME'];
+    }
+  }
+
+  /// Beim Verlassen eines nie gespeicherten Stücks nachfragen. Der Entwurf
+  /// bleibt bei „Später“ unter „Zuletzt geöffnet“ erhalten.
+  Future<void> _leave() async {
+    _flushSave();
+    await _saving;
+    final recent = _recent;
+    if (mounted && recent != null && recent.isDraft(_path)) {
+      final foreign = !ScoreFiles.isScrivi(widget.path);
+      final choice = await showDialog<String>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(tr('Noch nicht gespeichert', 'Not saved yet')),
+          content: Text(
+            foreign
+                ? tr(
+                    'Deine Änderungen liegen in einem Entwurf, das Original bleibt unverändert. Jetzt als Scrivi-Datei speichern?',
+                    'Your changes are kept in a draft; the original stays unchanged. Save as a Scrivi file now?',
+                  )
+                : tr(
+                    'Das Stück ist als Entwurf gesichert und bleibt unter „Zuletzt geöffnet“. Jetzt an einem Ort deiner Wahl speichern?',
+                    'The piece is kept as a draft under “Recently opened”. Save it somewhere of your choice now?',
+                  ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, 'later'), child: Text(tr('Später', 'Later'))),
+            FilledButton(onPressed: () => Navigator.pop(context, 'save'), child: Text(tr('Speichern …', 'Save …'))),
+          ],
+        ),
+      );
+      if (choice == null) return;
+      if (choice == 'save') await saveAs();
+    }
+    if (mounted) Navigator.of(context).pop();
+  }
+
+  /// Titel und Speicherstand oben links.
+  Widget _titleBlock(BuildContext context, bool compact) {
+    final c = context.scrivi;
+    final score = _editor?.score ?? _score;
+    final title = score != null && score.info.title.isNotEmpty ? score.info.title : p.basenameWithoutExtension(_path);
+    final state = _unsaved ? tr('nicht gespeichert', 'not saved') : p.basename(_path);
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: compact ? 130 : 210),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+            ),
+            Text(
+              state,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 11.5, color: _unsaved ? Theme.of(context).colorScheme.primary : c.muted),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -375,6 +534,8 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
         paste();
       } else if (k == LogicalKeyboardKey.keyA) {
         apply((e) => e.selectAll());
+      } else if (k == LogicalKeyboardKey.keyS) {
+        shift ? saveAs() : save();
       } else if (k == LogicalKeyboardKey.keyK || k == LogicalKeyboardKey.keyF) {
         showToolSearch(context, this);
       } else if (k == LogicalKeyboardKey.arrowLeft) {
@@ -491,14 +652,20 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
   @override
   Widget build(BuildContext context) {
     final settings = _settings;
-    return Scaffold(
-      backgroundColor: ScriviColors.pageSurround,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _topBar(context),
-            Expanded(child: _body()),
-          ],
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _leave();
+      },
+      child: Scaffold(
+        backgroundColor: ScriviColors.pageSurround,
+        body: SafeArea(
+          child: Column(
+            children: [
+              _topBar(context),
+              Expanded(child: _body()),
+            ],
+          ),
         ),
       ),
     ).withListen([?settings?.showTools, ?settings?.showFretboard, ?settings?.openToolGroups]);
@@ -593,12 +760,22 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
         padding: EdgeInsets.only(left: 6, right: hasWindowButtons ? windowButtonsWidth : 6),
         child: LayoutBuilder(
           builder: (context, box) {
-            final compact = box.maxWidth < 1100;
+            final compact = box.maxWidth < 1280;
             final left = <Widget>[
               IconButton(
-                tooltip: tr('Zur Bibliothek', 'Back to library'),
+                tooltip: tr('Zur Startseite', 'Back to start'),
                 icon: const Icon(Icons.arrow_back),
-                onPressed: () => Navigator.of(context).maybePop(),
+                onPressed: _leave,
+              ),
+              _titleBlock(context, compact),
+              IconButton(
+                tooltip: _unsaved
+                    ? tr('Speichern unter …  (Strg+S)', 'Save as …  (Ctrl+S)')
+                    : tr('Speichern  (Strg+S)', 'Save  (Ctrl+S)'),
+                isSelected: _unsaved,
+                style: IconButton.styleFrom(backgroundColor: _unsaved ? scheme.primaryContainer : null),
+                icon: Icon(Icons.save_outlined, color: _unsaved ? scheme.onPrimaryContainer : null),
+                onPressed: save,
               ),
               if (s != null) ...[
                 toggle(
@@ -673,7 +850,7 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
                   ),
                 ),
               const SizedBox(width: 8),
-              if (e != null && p != null) _display(context, e, p, compact),
+              if (e != null && p != null) Flexible(child: _display(context, e, p, compact)),
             ];
             final right = <Widget>[
               if (p != null)
@@ -817,7 +994,7 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
           ],
         );
         return Container(
-          constraints: BoxConstraints(minWidth: compact ? 160 : 300, maxWidth: compact ? 220 : 380),
+          constraints: BoxConstraints(maxWidth: compact ? 240 : 380),
           height: 44,
           padding: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(

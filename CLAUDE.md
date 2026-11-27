@@ -38,10 +38,10 @@ packages/scrivi_core/   Herz von Scrivi, reines Dart ohne Flutter (eigene Tests:
 lib/
   app/        Theme (ScriviColors), l10n, Updater, Fehlerprotokoll, Fensterknöpfe,
               Bildschirmtastatur, Geräte-Einstellungen (einstellungen.json)
-  core/library/  LibraryController (Bibliothek, Import, Papierkorb), Thumbnails (Vorschaubilder)
+  core/files/    ScoreFiles (laden, sicher schreiben, problemText), RecentFiles (Zuletzt geöffnet, Entwürfe),
+                 Thumbnails (Vorschaubilder)
   features/
-    shell/    Rahmen: Leiste links (breit) bzw. unten (schmal), ein Navigator pro Bereich
-    library/  Bibliothek (Raster mit Vorschau, Suche, Import, Ziehen und Ablegen)
+    start/    Startseite (Neues Stück, Öffnen, Zuletzt geöffnet, Ziehen und Ablegen); keine Seitenleiste
     score/    Notenansicht (obere Leiste, Seiten, Zoom, Blättern), score_painter (Zeichenliste → Bild),
               score_player (Abspielen), transport_bar (Dialoge Tempo/Schleife/Mischpult),
               tools (Werkzeugspalte, Suche), fretboard (Griffbrett), note_preview (Ton beim Eingeben),
@@ -67,7 +67,7 @@ tool/         make_icon.py (Symbol), make_glyphs.py (Notenzeichen aus Bravura)
 ## Schreiben
 - **Format `.scrivi`:** JSON `{"format":"scrivi","version":1,…}` mit dem ganzen Modell; Grundwerte werden weggelassen, unbekannte Felder beim Lesen übergangen. Schlüssel nie übersetzen. Erkannt über `ScriviFormat.looksLike` in `GpReader.read`.
 - **`ScoreEditor`** (Kern): Cursor = Takt, Schlag in Stimme 1, Saite. Überschreib-Eingabe: ein Ton ersetzt die Zeit, die er braucht; was übrig bleibt, wird Pause (`_restsAt`: zuerst bis zum nächsten Schlag). Jede Änderung: `_begin()` (Schnappschuss als JSON für Rückgängig) … `_done()` (`_normalize` führt Haltebögen und Hammer-on-Ziele nach). Klingend/geschrieben über `Track.transposeSemitones`. Saite und Bund: `_place` (bequem: nahe beim vorigen Bund bzw. bis Bund 12).
-- **App:** Es gibt keinen Bearbeiten-Modus (Wunsch des Besitzers): `ScoreScreen` legt beim Öffnen den Editor an. Nach einer Änderung neu setzen, Wiedergabe nachführen (`ScorePlayer.updateScore`), nach 0,8 s speichern (`LibraryController.save`: Zwischendatei, dann umbenennen; nicht-`.scrivi` → neue `.scrivi`, Original nach `Bibliothek/Originale/`). Antippen → `_hitAt` (Takt, Stelle, Saite über `SystemBox.stringAt`, Stammton über `diatonicAt`). Abspielen startet am Cursor (`ScorePlayer.seekTo`), beim Anhalten geht der Cursor dorthin.
+- **App:** Es gibt keinen Bearbeiten-Modus (Wunsch des Besitzers): `ScoreScreen` legt beim Öffnen den Editor an. Nach einer Änderung neu setzen, Wiedergabe nachführen (`ScorePlayer.updateScore`), nach 0,8 s sichern (`_flushSave`: `.scrivi` → in die Datei; fremdes Format → beim ersten Ändern ein Entwurf, das Original bleibt). `save`/`saveAs` (Strg+S, Strg+Umschalt+S): Dateidialog `getSaveLocation`, Android ohne Dialog in `<Dokumente>/Scrivi/`. Beim Verlassen eines Entwurfs fragt `_leave` (Speichern … / Später). Antippen → `_hitAt` (Takt, Stelle, Saite über `SystemBox.stringAt`, Stammton über `diatonicAt`). Abspielen startet am Cursor (`ScorePlayer.seekTo`), beim Anhalten geht der Cursor dorthin.
 - **Aufbau des Bildschirms:** obere Leiste (`_topBar`, rechts Platz für die Fensterknöpfe), links `ToolPanel` (`tools.dart`), Mitte Seiten, unten `Fretboard`. Alle Werkzeuge stehen einmal in `allTools` (Gruppe, Notenzeichen aus Bravura als `\uXXXX`, Name de/en, Kürzel, aktiv/möglich, Aktion); Spalte, Suche (`showToolSearch`) und Hinweise lesen daraus. Neues Werkzeug = ein Eintrag dort. Notenzeichen nur nach Gefühl skaliert (`size`, `dy`). Werkzeugspalte, Griffbrett und offene Gruppen merkt sich `einstellungen.json` (`werkzeuge`, `griffbrett`, `werkzeuggruppen`).
 - **Ton beim Eingeben:** `NotePreview` rechnet den Ton mit `Synth` (gemerkt pro Tonhöhe und Klangfarbe) und spielt ihn über die gemeinsame Audio-Technik.
 - Neue Icons: Der lokale Linux-Bau kann ein altes, gekürztes Icon-Schriftbild behalten (`build/flutter_assets`); bei fehlenden Icons `build/` löschen. Auf GitHub wird immer frisch gebaut.
@@ -88,16 +88,17 @@ tool/         make_icon.py (Symbol), make_glyphs.py (Notenzeichen aus Bravura)
 - **MIDI:** Raster Sechzehntel; Takte aus den Taktarten, Töne über den Taktstrich mit Haltebogen; Gitarre (Programm 24–31) und Bass (32–39) bekommen Tabulatur und Oktav-Transposition, Kanal 10 ist Schlagzeug.
 - Testdateien fremder Herkunft (alphaTab, MPL-2.0) nur lokal ausserhalb des Projekts verwenden; im Projekt bauen die Tests ihre Beispiele selbst (`test/formats_test.dart`).
 
-## Bibliothek
-- `<ApplicationSupport>/Bibliothek/Stücke/` enthält Kopien der importierten Dateien (alle lesbaren Formate, Endung bleibt; fehlt sie, wird sie aus dem Inhalt bestimmt), `Bibliothek/Papierkorb/` Gelöschtes, `Bibliothek/.scrivi/index.json` (Format `scrivi-library` v1: Titel, Interpret, Takte, Grösse, Änderungszeit pro Datei) und `.scrivi/vorschau/` (Vorschaubilder, Name mit Grösse, Änderungszeit und `Thumbnails.style`; diese Zahl erhöhen, wenn sich der Notensatz sichtbar ändert).
-- Import prüft jede Datei (im Hintergrund) und erkennt Doppelte (gleicher Inhalt).
-- `Bibliothek/Originale/`: Originale bearbeiteter Dateien (nicht in der Liste, nie gelöscht). Neue Stücke und bearbeitete Stücke sind `.scrivi`.
+## Dateien (keine Bibliothek, Wunsch des Besitzers)
+- Stücke sind Dateien, die man speichert, wo man will; Scrivi verwaltet keine eigene Sammlung. Die Startseite zeigt *Zuletzt geöffnet*.
+- Gerätespezifisch in `<ApplicationSupport>`: `zuletzt.json` (Format `scrivi-recent` v1: Pfad, Titel, Interpret, Takte, Grösse, Änderungszeit, zuletzt geöffnet, Entwurf), `Entwürfe/` (nie gespeicherte Stücke, laufend gesichert; Entwürfe fallen nie still aus der Liste) und `Vorschau/` (Name mit Pfad-Kennung, Grösse, Änderungszeit und `Thumbnails.style`; diese Zahl erhöhen, wenn sich der Notensatz sichtbar ändert).
+- Andere Formate werden nie überschrieben. Beim ersten Start übernimmt `RecentFiles` die Stücke der früheren Bibliothek (`Bibliothek/Stücke/`) in die Liste; die Dateien bleiben dort.
+- Windows: Der Installer verknüpft `.scrivi` mit Scrivi (`[Registry]` in `scrivi.iss`); die Datei kommt als Startargument (`main(args)`) an.
 
 ## Grundsätze
 1. **Kein Konto, keine Daten sammeln, keine Werbung, funktioniert ohne Internet.** Internet nur für Updates und (später) den eigenen Dropbox-Abgleich.
 2. **Nie Daten verlieren:** Dateien erst in eine Zwischendatei schreiben, dann umbenennen. Alte Formate bleiben lesbar.
-3. **Scrivi verwaltet seine Stücke selbst** in einer Bibliothek im Datenordner (Wunsch des Besitzers, wie Volti), dazu Import und Export einzelner Dateien.
-4. **Gerätespezifisch** (nie abgeglichen): `<ApplicationSupport>/einstellungen.json` (Darstellung, Sprache, Notenansicht), `fehler.log`, `update.log`.
+3. **Stücke sind Dateien** (`.scrivi`), gespeichert, wo der Besitzer will (Wunsch des Besitzers; anders als Volti keine Bibliothek). Startseite mit *Zuletzt geöffnet* und *Neues Stück*.
+4. **Gerätespezifisch** (nie abgeglichen): `<ApplicationSupport>/einstellungen.json` (Darstellung, Sprache, Notenansicht, Werkzeugspalte, Griffbrett), `zuletzt.json`, `Entwürfe/`, `fehler.log`, `update.log`.
 5. **Bedienbar mit Stift, Finger, Maus und Tastatur.** Langes Drücken = Rechtsklick.
 6. **Flüssig auf dem Surface:** messen statt raten; fertige Teile als Bild zwischenspeichern, keine Schatten und Durchsichtigkeit auf grossen Flächen (Erfahrung aus Volti).
 

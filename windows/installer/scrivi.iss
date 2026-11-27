@@ -2,7 +2,8 @@
 ;   iscc /DAppVersion=0.1.50 windows\installer\scrivi.iss
 ; Scrivi wird nur für den eigenen Benutzer installiert (keine Admin-Rechte nötig),
 ; in %LOCALAPPDATA%\Programs\Scrivi. Dort darf sich Scrivi selbst aktualisieren.
-; Die Stücke liegen woanders (%APPDATA%\Scrivi) und bleiben beim Deinstallieren.
+; Die Stücke liegen, wo man sie speichert; Entwürfe in %APPDATA%\Scrivi. Beides
+; bleibt beim Deinstallieren. .scrivi-Dateien öffnen sich per Doppelklick mit Scrivi.
 
 #ifndef AppVersion
   #define AppVersion "0.0.0"
@@ -33,6 +34,7 @@ ShowLanguageDialog=no
 LanguageDetectionMethod=uilanguage
 CloseApplications=force
 RestartApplications=no
+ChangesAssociations=yes
 
 [Languages]
 ; Sprache nach Windows: Deutsch (Schweizer Schreibweise) oder Englisch.
@@ -48,6 +50,14 @@ Source: "..\..\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: ign
 [Icons]
 Name: "{autoprograms}\Scrivi"; Filename: "{app}\Scrivi.exe"
 Name: "{autodesktop}\Scrivi"; Filename: "{app}\Scrivi.exe"; Tasks: desktopicon
+
+[Registry]
+; .scrivi-Dateien mit Scrivi öffnen (nur für den eigenen Benutzer, HKA = HKCU ohne Admin-Rechte)
+Root: HKA; Subkey: "Software\Classes\.scrivi"; ValueType: string; ValueName: ""; ValueData: "Scrivi.Stueck"; Flags: uninsdeletevalue
+Root: HKA; Subkey: "Software\Classes\.scrivi\OpenWithProgids"; ValueType: string; ValueName: "Scrivi.Stueck"; ValueData: ""; Flags: uninsdeletevalue
+Root: HKA; Subkey: "Software\Classes\Scrivi.Stueck"; ValueType: string; ValueName: ""; ValueData: "Scrivi"; Flags: uninsdeletekey
+Root: HKA; Subkey: "Software\Classes\Scrivi.Stueck\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\Scrivi.exe,0"
+Root: HKA; Subkey: "Software\Classes\Scrivi.Stueck\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\Scrivi.exe"" ""%1"""
 
 [Run]
 Filename: "{app}\Scrivi.exe"; Description: "{cm:LaunchProgram,Scrivi}"; Flags: nowait postinstall skipifsilent

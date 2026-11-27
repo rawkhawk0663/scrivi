@@ -1,8 +1,9 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import 'app/device_settings.dart';
@@ -12,14 +13,13 @@ import 'app/theme.dart';
 import 'app/touch_keyboard.dart';
 import 'app/updater.dart';
 import 'app/window_buttons.dart';
-import 'core/library/library_controller.dart';
-import 'core/library/thumbnails.dart';
-import 'features/library/library_screen.dart';
-import 'features/shell/home_shell.dart';
+import 'core/files/recent_files.dart';
+import 'core/files/score_files.dart';
+import 'features/start/start_screen.dart';
 
-Future<void> main() async {
+Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
-  // Scrivis eigener Datenordner (Einstellungen, Fehlerprotokoll, später die Bibliothek).
+  // Scrivis eigener Datenordner (Einstellungen, Fehlerprotokoll, Zuletzt geöffnet, Entwürfe).
   final support = (await getApplicationSupportDirectory()).path;
   // Fehler in eine Datei schreiben (Einstellungen → Über Scrivi → Fehlerprotokoll).
   ErrorLog.install(support);
@@ -30,27 +30,28 @@ Future<void> main() async {
   TouchKeyboard.install();
   final settings = await DeviceSettings.load(support);
   L10n.language.value = settings.effectiveLanguage;
-  // Die Bibliothek mit den Stücken (wird im Hintergrund eingelesen).
-  final library = LibraryController(p.join(support, 'Bibliothek'));
-  library.init();
+  // Zuletzt geöffnete Stücke und Entwürfe (wird im Hintergrund eingelesen).
+  final recent = RecentFiles(support);
+  recent.init();
+  // Beim Start mitgegebene Datei (Doppelklick auf eine .scrivi-Datei in Windows).
+  final initialFile = args.where((a) => ScoreFiles.isReadable(a) && File(a).existsSync()).firstOrNull;
   // Nach einem Update: alte, beiseitegeschobene Programmdateien wegräumen.
   Future<void>.delayed(const Duration(seconds: 5), Updater.cleanUp);
-  runApp(ScriviApp(settings: settings, library: library, thumbnails: Thumbnails(library.metaDir)));
+  runApp(ScriviApp(settings: settings, recent: recent, initialFile: initialFile));
 }
 
 class ScriviApp extends StatelessWidget {
-  const ScriviApp({super.key, required this.settings, required this.library, required this.thumbnails});
+  const ScriviApp({super.key, required this.settings, required this.recent, this.initialFile});
   final DeviceSettings settings;
-  final LibraryController library;
-  final Thumbnails thumbnails;
+  final RecentFiles recent;
+  final String? initialFile;
 
   @override
   Widget build(BuildContext context) {
     return SettingsScope(
       settings: settings,
-      child: LibraryScope(
-        library: library,
-        thumbnails: thumbnails,
+      child: RecentScope(
+        recent: recent,
         child: ListenableBuilder(
           listenable: Listenable.merge([settings.themeMode, L10n.language]),
           builder: (context, home) => MaterialApp(
@@ -67,7 +68,7 @@ class ScriviApp extends StatelessWidget {
             builder: (context, child) => WindowButtonsOverlay(child: child ?? const SizedBox.shrink()),
             home: home,
           ),
-          child: const HomeShell(),
+          child: StartScreen(initialFile: initialFile),
         ),
       ),
     );
