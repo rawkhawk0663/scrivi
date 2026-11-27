@@ -95,7 +95,10 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
     _recent = RecentScope.maybeOf(context);
   }
 
-  bool get _endless => _settings?.endless.value ?? false;
+  bool get _fullScore => _settings?.fullScore.value ?? false;
+
+  /// Endlos-Zeile (nicht zusammen mit der Partitur).
+  bool get _endless => !_fullScore && (_settings?.endless.value ?? false);
   bool get _transposed => _settings?.transposed.value ?? false;
 
   void _setTransposed(bool v) {
@@ -103,8 +106,10 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
     _engrave();
   }
 
-  void _setEndless(bool v) {
-    _settings?.setEndless(v);
+  /// Seiten, Endlos-Zeile oder Partitur.
+  void _setLayout(String v) {
+    _settings?.setEndless(v == 'endless');
+    _settings?.setFullScore(v == 'score');
     _engrave();
     WidgetsBinding.instance.addPostFrameCallback((_) => _viewer.currentState?.revealCursor());
   }
@@ -140,12 +145,9 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
       final options = _layoutOptions;
       // Eingaben in der Ansicht „transponiert“ zurückrechnen
       _editor?.viewShift = _transposed ? score.tracks[_track].instrumentKey : 0;
-      final layout = core.Engraver(
-        score,
-        trackIndex: _track,
-        options: options,
-        measurer: FlutterTextMeasurer(),
-      ).layout();
+      final layout = _fullScore && score.tracks.length > 1
+          ? core.ScoreEngraver(score, options: options, measurer: FlutterTextMeasurer()).layout()
+          : core.Engraver(score, trackIndex: _track, options: options, measurer: FlutterTextMeasurer()).layout();
       final pictures = layout.pages.map(PagePictures.record).toList();
       final old = _pictures;
       setState(() {
@@ -175,7 +177,7 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
   ScoreExport? get _export {
     final score = _editor?.score ?? _score;
     if (score == null) return null;
-    return ScoreExport(score: score, track: _track, options: _layoutOptions, sourcePath: _path);
+    return ScoreExport(score: score, track: _track, options: _layoutOptions, sourcePath: _path, fullScore: _fullScore);
   }
 
   /// Exportieren als PDF, MusicXML oder MIDI.
@@ -528,7 +530,13 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
     if (i == _track || _score == null || i >= _score!.tracks.length) return;
     _track = i;
     _editor?.track = i;
-    _engrave();
+    // In der Partitur bleibt das Bild, nur der Cursor wechselt die Zeile
+    if (_fullScore && _score!.tracks.length > 1) {
+      _editor?.viewShift = _transposed ? _score!.tracks[i].instrumentKey : 0;
+      setState(() {});
+    } else {
+      _engrave();
+    }
     _cursorTick.value++;
   }
 
@@ -893,6 +901,7 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
 
   /// Angetippt: Cursor dorthin; schreiben Maus und Finger wie der Stift, auch eine Note.
   void _onEditTap(_PageHit hit) {
+    if (hit.track != null) _selectTrack(hit.track!);
     if (_penNotes && hit.diatonic != null && hit.string == null) return _onPen(PenStroke.tap, hit, null);
     apply(
       (e) => e.setCursor(hit.bar, hit.position, string: hit.string, select: HardwareKeyboard.instance.isShiftPressed),
@@ -903,6 +912,7 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
   /// Strich wählt aus, Durchkritzeln oder Radierer löscht, Strich nach oben/unten
   /// verschiebt um einen Halbton.
   void _onPen(PenStroke kind, _PageHit from, _PageHit? to) {
+    if (from.track != null) _selectTrack(from.track!);
     final b = to ?? from;
     final (x, y) = from.bar < b.bar || (from.bar == b.bar && from.position <= b.position) ? (from, b) : (b, from);
     void range(core.ScoreEditor e) {
@@ -1254,9 +1264,18 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
                   icon: Icon(_endless ? Icons.view_column_outlined : Icons.view_agenda_outlined, size: 20),
                   onSelected: (v) => v is ScoreView
                       ? _setView(v)
-                      : (v == 'transposed' ? _setTransposed(!_transposed) : _setEndless(v == 'endless')),
+                      : (v == 'transposed' ? _setTransposed(!_transposed) : _setLayout(v as String)),
                   itemBuilder: (context) => [
-                    CheckedPopupMenuItem(value: 'pages', checked: !_endless, child: Text(tr('Seiten', 'Pages'))),
+                    CheckedPopupMenuItem(
+                      value: 'pages',
+                      checked: !_endless && !_fullScore,
+                      child: Text(tr('Seiten (eine Spur)', 'Pages (one track)')),
+                    ),
+                    CheckedPopupMenuItem(
+                      value: 'score',
+                      checked: _fullScore,
+                      child: Text(tr('Partitur (alle Spuren)', 'Full score (all tracks)')),
+                    ),
                     CheckedPopupMenuItem(
                       value: 'endless',
                       checked: _endless,
@@ -1426,11 +1445,14 @@ extension on Widget {
 
 /// Angetippte Stelle: Takt, Stelle im Takt (ganze Noten), Saite bzw. Stammton.
 class _PageHit {
-  const _PageHit(this.bar, this.position, this.string, this.diatonic);
+  const _PageHit(this.bar, this.position, this.string, this.diatonic, [this.track]);
   final int bar;
   final double position;
   final int? string;
   final int? diatonic;
+
+  /// Spur der Zeile (nur in der Partitur).
+  final int? track;
 }
 
 class _PagesViewer extends StatefulWidget {
@@ -1772,7 +1794,7 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
         }
         final tabTop = best.tabTop;
         final inTab = tabTop != null && y > tabTop - best.tabSpacing && y < tabTop + best.strings * best.tabSpacing;
-        return _PageHit(bar, pos, inTab ? best.stringAt(y) : null, inTab ? null : best.diatonicAt(y));
+        return _PageHit(bar, pos, inTab ? best.stringAt(y) : null, inTab ? null : best.diatonicAt(y), best.track);
       }
     }
     return null;
@@ -1788,6 +1810,7 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
       final page = widget.pages[i];
       for (final sys in page.systems) {
         if (bar < sys.firstBar || bar > sys.lastBar) continue;
+        if (sys.track != null && sys.track != e.track) continue;
         final x = sys.xAt(bar, onset);
         if (x == null) continue;
         final k = _pageW / page.width;
@@ -2019,6 +2042,7 @@ class _EditCursorPainter extends CustomPainter {
     if (sel != null) {
       final (a, b) = sel;
       for (final sys in page.systems) {
+        if (sys.track != null && sys.track != editor.track) continue;
         for (final span in sys.bars) {
           if (span.bar < a.bar || span.bar > b.bar) continue;
           final from = span.bar == a.bar ? editor.onsetOf(a.bar, a.beat).toDouble() : 0.0;
@@ -2038,6 +2062,7 @@ class _EditCursorPainter extends CustomPainter {
     final onset = editor.cursorOnset.toDouble();
     for (final sys in page.systems) {
       if (bar < sys.firstBar || bar > sys.lastBar) continue;
+      if (sys.track != null && sys.track != editor.track) continue;
       final x = sys.xAt(bar, onset);
       if (x == null) continue;
       final col = Rect.fromLTRB((x - 1.1) * k, (sys.top - 0.5) * k, (x + 1.1) * k, (sys.bottom + 0.5) * k);

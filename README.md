@@ -11,7 +11,7 @@ Scrivi ist ein Notenschreibprogramm für Musikerinnen und Musiker, gemacht für 
 
 Scrivi gibt es auf **Deutsch und Englisch**. Es braucht **kein Konto**, sammelt **keine Daten** und funktioniert **ohne Internet**.
 
-> **Scrivi ist noch am Anfang.** Heute öffnet es Guitar-Pro-Dateien aller Versionen, MusicXML und MIDI, zeigt sie sauber als Noten mit Tabulatur, spielt sie ab, und du kannst darin schreiben. Als Nächstes: eine Partitur-Ansicht mit allen Spuren. Den ganzen Plan findest du im [Bauplan](BAUPLAN.md).
+> **Scrivi ist noch am Anfang.** Heute öffnet es Guitar-Pro-Dateien aller Versionen, MusicXML und MIDI, zeigt sie sauber als Noten mit Tabulatur, spielt sie ab, und du kannst darin schreiben. Als Nächstes: feinerer Klang (Hall, Stereo, Mischpult im Stück gespeichert). Den ganzen Plan findest du im [Bauplan](BAUPLAN.md).
 
 ## Was Scrivi heute kann
 
@@ -33,6 +33,7 @@ Scrivi gibt es auf **Deutsch und Englisch**. Es braucht **kein Konto**, sammelt 
 - **Transponierende Instrumente:** Pro Spur einstellbar, wie das Instrument notiert wird (in B, Es, F, A …). Unter *Ansicht → Transponiert* erscheinen Trompete, Saxofon, Klarinette und Horn so, wie die Musiker sie lesen, mit passender Tonart und Akkordsymbolen; sonst klingend (C-Partitur). Eingaben in der transponierten Ansicht rechnet Scrivi zurück.
 - **Swing:** Ab einem beliebigen Takt die Achtel als Swing spielen (Werkzeug *Swing* oder Eigenschaften → Achtel); im Notenbild steht dort „Swing“ bzw. „Gerade“.
 - **Beispiele** auf der Startseite: *Sonntagmorgen* (Gitarren-Band), *Ode an die Freude* (Orchester, Beethoven) und *Wüstenwind* (Latin-Jazz mit Swing) zum Ausprobieren und Weiterschreiben.
+- **Partitur:** Unter *Ansicht → Partitur (alle Spuren)* stehen alle Instrumente untereinander, mit ihren Namen links und einer Klammer; was gleichzeitig klingt, steht genau übereinander. Antippen einer Zeile wechselt zu diesem Instrument, du schreibst direkt darin weiter. Beim Exportieren als PDF wählst du *Diese Spur*, *Alle Stimmen* (jede Spur einzeln, zum Verteilen an die Band) oder *Partitur*.
 - **Endlos-Ansicht:** Unter *Ansicht* stehen alle Takte in einer langen Zeile, die man waagrecht durchblättert; beim Abspielen läuft sie mit.
 - **Tastatur beim Schreiben:** Bundzahl tippen (zwei Ziffern schnell nacheinander für 10–24), ↑/↓ wechselt die Saite, ←/→ geht von Note zu Note (am Ende kommt ein neuer Takt dazu), A–G bzw. H setzt eine Note (mit Umschalt zum Akkord dazu), + / − kürzer/länger, Punkt, T Triole, L Haltebogen, K Akkord, Y Liedtext, Entf Pause, Umschalt + ↑/↓ Halbton, Strg + Z/Y, Strg + C/X/V.
 - **Speichern:** Stücke sind `.scrivi`-Dateien, die du speicherst, wo du willst (*Speichern* bzw. Strg+S). Danach sichert Scrivi jede Änderung von selbst in diese Datei. Ein neues Stück ist bis zum ersten Speichern ein Entwurf, der ebenfalls laufend gesichert wird und unter *Zuletzt geöffnet* bleibt; es geht also nichts verloren. Andere Formate (Guitar Pro, MusicXML, MIDI) überschreibt Scrivi nie: Änderungen daran werden als neue `.scrivi`-Datei gespeichert.

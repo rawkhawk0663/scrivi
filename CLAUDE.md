@@ -30,7 +30,8 @@ packages/scrivi_core/   Herz von Scrivi, reines Dart ohne Flutter (eigene Tests:
   io/         ScriviFormat (eigenes Format .scrivi, JSON), MusicXmlWriter, MidiWriter (Ausgabe), GpReader.read: erkennt das Format und liest .gp (ZIP mit score.gpif), .gpx (GpxContainer:
               BCFZ entpacken, BCFS-Dateisystem), .gp3/.gp4/.gp5 (GpBinaryReader), MusicXML
               (MusicXmlReader, auch .mxl und „timewise“), MIDI (MidiReader)
-  layout/     Engraver (Notensatz → Seiten), shapes (Bögen, Balken, Gabeln)
+  layout/     Engraver (Notensatz → Seiten), ScoreEngraver (Partitur, part-Datei score_engraver.dart),
+              shapes (Bögen, Balken, Gabeln)
   render/     Zeichenliste (DisplayItem), Glyphs (Bravura-Umrisse, erzeugt), SVG-Ausgabe
   edit/       ScoreEditor (Cursor, Eingabe, Takte, Transponieren, Rückgängig)
   playback/   PlaybackPlan (Abspiel-Reihenfolge, Zeiten, Töne mit Effekten, Metronom),
@@ -67,6 +68,7 @@ tool/         make_icon.py (Symbol), make_glyphs.py (Notenzeichen aus Bravura),
 - **Tabulatur:** Saite 0 = tiefste. Schläge mit Rhythmus-Schrägstrichen zeigen in der Tab nichts. Gehaltene Noten nur am Zeilenanfang in Klammern.
 - **Schlagzeug** (`Track.percussion`, neutraler Schlüssel): Lage und Kopf pro Instrument aus `_drumPosition` (Bassdrum unten, Snare Mitte, Toms dazwischen, Hi-Hat/Becken als Kreuz über der obersten Linie), Hälse nach oben, keine Tonart und keine Vorzeichen.
 - **Spurname** oben links auf Seite 1, sobald das Stück mehrere Spuren hat (Einzelstimmen beim Drucken).
+- **Partitur** (`ScoreEngraver`, `einstellungen.json`: `partitur`): pro Spur ein `Engraver` mit `_inScore` (ohne Kopf; `_topStaff` nur oben: Formteile, Tempo, Häuser, Sprünge, Taktnummern). `_shareSlots` vereinigt die Zeitpunkte aller Spuren pro Takt (Breite = grösste), `_justify` verteilt sie und schreibt `x` in die Spalten jeder Spur; dann zeichnet jede Spur ihre Zeile mit `_SystemBuilder`, gestapelt mit `staffGap`. Pro Spur eine `SystemBox` mit `track`: Antippen wählt die Spur, Cursor und Auswahl nur in der Zeile der gewählten Spur. Mit einer Spur = normale Seiten.
 - **Dynamik** erscheint nur bei Wechseln (die Dateien schreiben „mf“ an jeden Schlag).
 - **Vorschlagsnoten** nehmen keine Zeit: der Notensatz hängt sie an den nächsten Schlag (`_Ev.graces`) und reserviert vorne in der Spalte Platz (`_Col.graceW`).
 - **Endlos-Ansicht** (`LayoutOptions.endless`): alle Takte in einer Zeile ohne Blocksatz (`_endlessLayout`, Abstand `endlessSpacing`), ohne Titel; die Seite ist so breit wie nötig. Der Betrachter zeigt sie im Massstab einer A4-Seite und blättert waagrecht (`einstellungen.json`: `endlos`).

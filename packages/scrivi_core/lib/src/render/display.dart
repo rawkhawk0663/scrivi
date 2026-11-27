@@ -104,7 +104,11 @@ class SystemBox {
     this.tabTop,
     this.tabSpacing = 1.5,
     this.strings = 0,
+    this.track,
   });
+
+  /// Spur dieser Zeile (in der Partitur; sonst null = die gesetzte Spur).
+  final int? track;
   final double top;
   final double bottom;
   final int firstBar;

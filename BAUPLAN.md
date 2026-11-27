@@ -356,7 +356,7 @@ Plan in fünf Schritten:
 5. Mikrofon-Eingabe (einstimmig).
 
 Weitere Reihenfolge (vom Besitzer am 27. November 2026 bestätigt): 1. Drucken, PDF, MusicXML und
-MIDI ausgeben ✅; 2. Stift-Gesten ✅; 3. Band-Ansicht (alle Spuren als Partitur); 4. Klang verfeinern
+MIDI ausgeben ✅; 2. Stift-Gesten ✅; 3. Band-Ansicht (alle Spuren als Partitur) ✅; 4. Klang verfeinern
 (Mischpult in der Datei, Hall, Stereo, gedämpfte Noten und Flageoletts als Aufnahmen);
 5. Mikrofon-Eingabe; 6. Reiter für mehrere Stücke, schnellere Vorbereitung beim Abspielen.
 
@@ -378,6 +378,15 @@ Akkordton dazu; an derselben Stelle ändert sich nichts), waagrechter Strich wä
 Durchkritzeln löscht die Noten darunter, kurzer Strich nach oben/unten = Halbton höher/tiefer,
 Radierer-Ende oder Stift-Taste löscht. Die Spur des Stifts erscheint beim Zeichnen (Radierer rot).
 Das Werkzeug „Maus und Finger schreiben wie der Stift“ gibt der Maus dieselben Gesten.
+
+### Partitur (27. November 2026)
+
+*Ansicht → Partitur (alle Spuren)*: alle Spuren einer Zeile untereinander, Namen links (ab der
+zweiten Zeile gekürzt), Klammer und Linie über alle Spuren. Gleiche Zeitpunkte stehen in allen
+Spuren genau übereinander. Formteile, Tempo, Häuser, Sprünge und Taktnummern nur über der obersten
+Spur; Akkorde, Text und Dynamik bei jeder Spur. Antippen wählt die Spur. Im PDF: diese Spur, alle
+Stimmen einzeln oder die Partitur. Noch offen: leere Spuren ausblenden, Gruppen (Klammern für
+Bläser/Streicher), Takte über mehrere Systeme durchziehen, Endlos-Ansicht als Partitur.
 
 ### Dateien statt Bibliothek (27. November 2026)
 

@@ -11,7 +11,7 @@ Scrivi is a music notation app for musicians, made for the **Surface with pen** 
 
 Scrivi is available in **German and English**. It needs **no account**, collects **no data** and works **offline**.
 
-> **Scrivi is still at the beginning.** Today it opens Guitar Pro files of all versions, MusicXML and MIDI, shows them neatly as notation with tablature, plays them back, and you can write in them. Next: a full-score view with all tracks. The whole plan is in the [plan](BAUPLAN.md) (German).
+> **Scrivi is still at the beginning.** Today it opens Guitar Pro files of all versions, MusicXML and MIDI, shows them neatly as notation with tablature, plays them back, and you can write in them. Next: richer sound (reverb, stereo, mixer saved in the piece). The whole plan is in the [plan](BAUPLAN.md) (German).
 
 ## What Scrivi can do today
 
@@ -33,6 +33,7 @@ Scrivi is available in **German and English**. It needs **no account**, collects
 - **Transposing instruments:** set per track how the instrument is written (in B♭, E♭, F, A …). Under *View → Transposed*, trumpet, saxophone, clarinet and horn appear as the players read them, with the right key signature and chord symbols; otherwise at concert pitch. Scrivi converts input in the transposed view back.
 - **Swing:** play the eighths swung from any bar on (*Swing* tool or Properties → Eighths); the music shows “Swing” or “Straight” there.
 - **Examples** on the start page: *Sonntagmorgen* (guitar band), *Ode to Joy* (orchestra, Beethoven) and *Wüstenwind* (Latin jazz with swing) to try out and build on.
+- **Full score:** under *View → Full score (all tracks)* all instruments stand one below the other, with their names on the left and a bracket; whatever sounds at the same time is lined up exactly. Tapping a staff switches to that instrument and you keep writing right there. When exporting a PDF you choose *This track*, *All parts* (each track on its own, to hand out to the band) or *Full score*.
 - **Endless view:** under *View*, all bars stand in one long line that you scroll sideways; during playback it follows along.
 - **Keyboard while writing:** type a fret number (two digits quickly for 10–24), ↑/↓ changes the string, ←/→ moves from note to note (a new bar is added at the end), A–G or H places a note (with Shift added to the chord), + / − shorter/longer, full stop for a dot, T triplet, L tie, K chord, Y lyrics, Del rest, Shift + ↑/↓ semitone, Ctrl + Z/Y, Ctrl + C/X/V.
 - **Saving:** pieces are `.scrivi` files that you save wherever you like (*Save* or Ctrl+S). After that Scrivi keeps every change in that file by itself. A new piece is a draft until its first save; the draft is saved continuously too and stays under *Recently opened*, so nothing is lost. Scrivi never overwrites other formats (Guitar Pro, MusicXML, MIDI): changes to them are saved as a new `.scrivi` file.

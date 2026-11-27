@@ -9,6 +9,8 @@ import '../render/display.dart';
 import '../render/glyphs.dart';
 import 'shapes.dart';
 
+part 'score_engraver.dart';
+
 /// Seitengrösse und Ränder in Linienabständen. Grundwerte: A4 hoch mit einem
 /// Linienabstand von 1,75 mm (7 mm hohes Notensystem).
 class LayoutOptions {
@@ -230,6 +232,12 @@ class Engraver {
   final TextMeasurer measurer;
 
   late final Track _track = score.tracks[trackIndex];
+
+  /// Teil einer Partitur (alle Spuren untereinander): ohne eigenen Kopf.
+  bool _inScore = false;
+
+  /// Oberste Zeile der Partitur: nur dort Formteile, Tempo, Häuser, Sprünge, Taktnummern.
+  bool _topStaff = true;
   late final bool _tab = (options.showTab || !options.showNotation) && _track.staff.isStringed;
 
   /// Nur Tabulatur, mit Rhythmus darunter.
@@ -815,6 +823,7 @@ class Engraver {
 
   /// Lage einer gesetzten Zeile (für Markierung, Cursor und Antippen).
   SystemBox _box(_System s, _SystemBuilder sb, double top, double height, double outTop) => SystemBox(
+    track: _inScore ? trackIndex : null,
     top: top,
     bottom: top + height,
     firstBar: s.measures.first.index,
@@ -878,7 +887,7 @@ class Engraver {
     final info = score.info;
     final cx = options.pageWidth / 2;
     // Bei mehreren Spuren: Name des Instruments oben links (Einzelstimmen beim Drucken)
-    final part = score.tracks.length > 1 ? _track.name.trim() : '';
+    final part = score.tracks.length > 1 && !_inScore ? _track.name.trim() : '';
     if (part.isNotEmpty) {
       page.items.add(TextItem(part, options.marginLeft, y + 3.0, TextRole.credit, 1.6, bold: true));
     }
@@ -1210,7 +1219,7 @@ class _SystemBuilder {
       final m = s.measures[j];
       if (m.timeChange) _timeSig(m.mb.time, m.x + 0.3, center: mid);
     }
-    if (m0.index > 0) text('${m0.index + 1}', s.x0, _tabTop - 1.0, TextRole.barNumber, _smallSize);
+    if (m0.index > 0 && e._topStaff) text('${m0.index + 1}', s.x0, _tabTop - 1.0, TextRole.barNumber, _smallSize);
     final rhythmBottom = _tabRhythm();
     // Anschlag und Fermate über der Tabulatur
     final aboveY = top - 0.6;
@@ -1416,7 +1425,7 @@ class _SystemBuilder {
     x += kw + (kw > 0 ? 0.6 : 0);
     if (s.first || m.timeChange) _timeSig(m.mb.time, x);
     // Taktnummer über dem Schlüssel (ausser beim ersten Takt)
-    if (m.index > 0) text('${m.index + 1}', s.x0, -2.2, TextRole.barNumber, _smallSize);
+    if (m.index > 0 && e._topStaff) text('${m.index + 1}', s.x0, -2.2, TextRole.barNumber, _smallSize);
   }
 
   // ── Takt: Taktlinien, Wiederholungen, Wechsel ──
@@ -1948,7 +1957,7 @@ class _SystemBuilder {
   void _above(double notesTop) {
     var rowTop = math.min(notesTop, -1.0);
     // Häuser
-    final hasVolta = s.measures.any((m) => m.mb.endings.isNotEmpty);
+    final hasVolta = e._topStaff && s.measures.any((m) => m.mb.endings.isNotEmpty);
     if (hasVolta) {
       final vy = math.min(rowTop - 1.0, -2.2);
       _voltas(vy);
@@ -1971,10 +1980,12 @@ class _SystemBuilder {
     }
     // Freier Text, Sprungzeichen
     final textEvs = events.where((ev) => ev.voice == 0 && ev.beat.text != null).toList();
-    final jumps = s.measures.where((m) => m.mb.directions.isNotEmpty).toList();
+    final jumps = s.measures.where((m) => e._topStaff && m.mb.directions.isNotEmpty).toList();
     // Swing ein bzw. aus, wo es wechselt
     final mbs = e.score.masterBars;
-    final swings = s.measures.where((m) => mbs[m.index].swing != (m.index > 0 && mbs[m.index - 1].swing)).toList();
+    final swings = s.measures
+        .where((m) => e._topStaff && mbs[m.index].swing != (m.index > 0 && mbs[m.index - 1].swing))
+        .toList();
     if (textEvs.isNotEmpty || jumps.isNotEmpty || swings.isNotEmpty) {
       final y = rowTop - 0.6;
       for (final ev in textEvs) {
@@ -1992,7 +2003,7 @@ class _SystemBuilder {
     // Formteile und Tempo
     final sections = s.measures.where((m) => m.mb.section != null && m.mb.section!.label.isNotEmpty).toList();
     final tempos = e.score.tempos.where((t) => t.visible && t.bar >= firstBar && t.bar <= lastBar).toList();
-    if (sections.isNotEmpty || tempos.isNotEmpty) {
+    if (e._topStaff && (sections.isNotEmpty || tempos.isNotEmpty)) {
       final y = rowTop - 0.9;
       final tempoX = <int, double>{};
       for (final m in sections) {

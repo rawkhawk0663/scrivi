@@ -43,10 +43,24 @@ enum ExportKind {
   };
 }
 
+/// Was ins PDF kommt: die gewählte Spur, alle Spuren einzeln (Stimmen) oder die Partitur.
+enum PdfScope { track, parts, score }
+
 /// Ausgeben: Fenster mit Format (und beim PDF: diese Spur oder alle), dann
 /// Ort wählen (Android: Ordner „Scrivi“ in den Dokumenten).
 class ScoreExport {
-  ScoreExport({required this.score, required this.track, required this.options, required this.sourcePath});
+  ScoreExport({
+    required this.score,
+    required this.track,
+    required this.options,
+    required this.sourcePath,
+    this.fullScore = false,
+  });
+
+  /// Am Bildschirm ist die Partitur zu sehen: Drucken und PDF nehmen sie zuerst.
+  final bool fullScore;
+
+  PdfScope get initialScope => fullScore && score.tracks.length > 1 ? PdfScope.score : PdfScope.track;
 
   final core.Score score;
   final int track;
@@ -59,42 +73,51 @@ class ScoreExport {
       ? ScoreFiles.safeName(score.info.title)
       : p.basenameWithoutExtension(sourcePath);
 
-  /// Seiten für das PDF: die gewählte Spur oder alle hintereinander.
-  List<core.PageDisplay> _pages({required bool allTracks}) {
+  /// Seiten für das PDF: die gewählte Spur, alle hintereinander oder die Partitur.
+  List<core.PageDisplay> _pages(PdfScope scope) {
     final opts = core.LayoutOptions(
       showTab: options.showTab,
       showNotation: options.showNotation,
       germanNoteNames: options.germanNoteNames,
       transposed: options.transposed,
     );
+    if (scope == PdfScope.score) {
+      return core.ScoreEngraver(score, options: opts, measurer: FlutterTextMeasurer()).layout().pages;
+    }
     return [
       for (var i = 0; i < score.tracks.length; i++)
-        if (allTracks || i == track)
+        if (scope == PdfScope.parts || i == track)
           ...core.Engraver(score, trackIndex: i, options: opts, measurer: FlutterTextMeasurer()).layout().pages,
     ];
   }
 
-  Future<Uint8List> _bytes(ExportKind kind, {bool allTracks = false}) async => switch (kind) {
-    ExportKind.pdf => PdfExport.build(_pages(allTracks: allTracks), title: score.info.title),
+  Future<Uint8List> _bytes(ExportKind kind, {PdfScope scope = PdfScope.track}) async => switch (kind) {
+    ExportKind.pdf => PdfExport.build(_pages(scope), title: score.info.title),
     ExportKind.musicXml => core.MusicXmlWriter.write(score),
     ExportKind.midi => core.MidiWriter.write(score),
   };
 
   /// Fenster zeigen und ausgeben.
   Future<void> show(BuildContext context) async {
-    final choice = await showDialog<(ExportKind, bool)>(
+    final choice = await showDialog<(ExportKind, PdfScope)>(
       context: context,
-      builder: (context) => _ExportDialog(trackCount: score.tracks.length),
+      builder: (context) => _ExportDialog(trackCount: score.tracks.length, initial: initialScope),
     );
     if (choice == null || !context.mounted) return;
-    final (kind, all) = choice;
+    final (kind, scope) = choice;
     final messenger = ScaffoldMessenger.of(context);
     try {
-      final suffix = kind == ExportKind.pdf && score.tracks.length > 1 && !all ? ' – ${_trackName(track)}' : '';
+      final suffix = kind != ExportKind.pdf || score.tracks.length < 2
+          ? ''
+          : switch (scope) {
+              PdfScope.track => ' – ${_trackName(track)}',
+              PdfScope.parts => tr(' – Stimmen', ' – parts'),
+              PdfScope.score => tr(' – Partitur', ' – score'),
+            };
       final name = '$_baseName$suffix.${kind.extension}';
       final target = await _target(name, kind);
       if (target == null) return;
-      final bytes = await _bytes(kind, allTracks: all);
+      final bytes = await _bytes(kind, scope: scope);
       await ScoreFiles.writeAtomic(target, bytes);
       messenger.showSnackBar(SnackBar(content: Text(tr('Gespeichert: $target', 'Saved: $target'))));
     } catch (err, st) {
@@ -108,7 +131,7 @@ class ScoreExport {
   Future<void> print(BuildContext context) async {
     final messenger = ScaffoldMessenger.of(context);
     try {
-      final bytes = await _bytes(ExportKind.pdf);
+      final bytes = await _bytes(ExportKind.pdf, scope: initialScope);
       final name = '$_baseName.pdf';
       if (Platform.isAndroid || Platform.isIOS) {
         final dir = p.join(await _documentsDir() ?? Directory.systemTemp.path, 'Scrivi');
@@ -174,8 +197,9 @@ class ScoreExport {
 }
 
 class _ExportDialog extends StatefulWidget {
-  const _ExportDialog({required this.trackCount});
+  const _ExportDialog({required this.trackCount, required this.initial});
   final int trackCount;
+  final PdfScope initial;
 
   @override
   State<_ExportDialog> createState() => _ExportDialogState();
@@ -183,7 +207,7 @@ class _ExportDialog extends StatefulWidget {
 
 class _ExportDialogState extends State<_ExportDialog> {
   ExportKind _kind = ExportKind.pdf;
-  bool _all = false;
+  late PdfScope _scope = widget.initial;
 
   @override
   Widget build(BuildContext context) {
@@ -209,13 +233,14 @@ class _ExportDialogState extends State<_ExportDialog> {
               ),
             if (_kind == ExportKind.pdf && widget.trackCount > 1) ...[
               const SizedBox(height: 12),
-              SegmentedButton<bool>(
+              SegmentedButton<PdfScope>(
                 segments: [
-                  ButtonSegment(value: false, label: Text(tr('Diese Spur', 'This track'))),
-                  ButtonSegment(value: true, label: Text(tr('Alle Spuren', 'All tracks'))),
+                  ButtonSegment(value: PdfScope.track, label: Text(tr('Diese Spur', 'This track'))),
+                  ButtonSegment(value: PdfScope.parts, label: Text(tr('Alle Stimmen', 'All parts'))),
+                  ButtonSegment(value: PdfScope.score, label: Text(tr('Partitur', 'Full score'))),
                 ],
-                selected: {_all},
-                onSelectionChanged: (s) => setState(() => _all = s.first),
+                selected: {_scope},
+                onSelectionChanged: (s) => setState(() => _scope = s.first),
               ),
             ],
           ],
@@ -223,7 +248,10 @@ class _ExportDialogState extends State<_ExportDialog> {
       ),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('Abbrechen', 'Cancel'))),
-        FilledButton(onPressed: () => Navigator.pop(context, (_kind, _all)), child: Text(tr('Speichern …', 'Save …'))),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, (_kind, _scope)),
+          child: Text(tr('Speichern …', 'Save …')),
+        ),
       ],
     );
   }
