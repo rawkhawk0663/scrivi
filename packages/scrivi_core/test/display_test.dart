@@ -165,6 +165,57 @@ void main() {
     });
   });
 
+  group('Gitarre', () {
+    test('ohne gespeicherte Schreibweise eine Oktave höher geschrieben', () {
+      // Tiefe E-Saite leer: klingt E2, geschrieben E3 (unter dem Notensystem)
+      Score one(Note n) => Score(
+        info: const ScoreInfo(),
+        masterBars: [MasterBar(time: const TimeSignature(4, 4), key: const KeySignature(0))],
+        tracks: [
+          Track(
+            name: 'G',
+            staff: const StaffDef(tuning: [40, 45, 50, 55, 59, 64], showTab: false),
+            transposeSemitones: 12,
+            bars: [
+              Bar(
+                clef: Clef.treble8vb,
+                voices: [
+                  Voice([
+                    Beat(duration: const NoteDuration(NoteValue.whole), notes: [n]),
+                  ]),
+                ],
+              ),
+            ],
+          ),
+        ],
+      );
+      double headY(Score s) {
+        final l = Engraver(s).layout();
+        final top = l.pages.first.systems.first.staffTop!;
+        return _all<GlyphItem>(l).firstWhere((g) => g.name.startsWith('notehead')).y - top;
+      }
+
+      final e2 = Pitch.fromMidi(40);
+      final without = headY(one(Note(pitch: e2, string: 0, fret: 0)));
+      final withWritten = headY(one(Note(pitch: e2, written: Pitch.fromMidi(52), string: 0, fret: 0)));
+      expect(without, closeTo(withWritten, 0.001));
+      // E3 im Violinschlüssel: unter der dritten Hilfslinie (oberste Linie y = 0, unterste E4 y = 4)
+      expect(without, closeTo(7.5, 0.001));
+    });
+
+    test('Auf- und Abschläge einer Zeile auf einer Linie', () {
+      final e = ScoreEditor(ScoreEditor.newScore(bars: 2));
+      e.setChordLine('G | C');
+      e.applyPattern(StrumPattern.byId('pop')!, 0, 1);
+      final l = Engraver(e.score).layout();
+      final ys = {
+        for (final g in _all<GlyphItem>(l))
+          if (g.name == 'stringsDownBow' || g.name == 'stringsUpBow') g.y.toStringAsFixed(3),
+      };
+      expect(ys, hasLength(1));
+    });
+  });
+
   group('Endlos-Ansicht', () {
     test('alle Takte in einer Zeile, Seite so breit wie nötig', () {
       final e = ScoreEditor(ScoreEditor.newScore(bars: 40));

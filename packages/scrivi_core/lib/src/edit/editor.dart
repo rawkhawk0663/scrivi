@@ -472,7 +472,7 @@ class ScoreEditor {
     final key = _score.masterBars[cursor.bar].key;
     final alter = key.alterFor(step);
     final prev = _previousNote();
-    final ref = prev?.shown ?? _middleOfStaff();
+    final ref = prev?.shownFor(_track.transposeSemitones) ?? _middleOfStaff();
     // Oktave so wählen, dass der Abstand zum vorigen Ton höchstens eine Quarte ist
     var best = Pitch(step, alter, ref.octave);
     for (final o in [ref.octave - 1, ref.octave, ref.octave + 1]) {

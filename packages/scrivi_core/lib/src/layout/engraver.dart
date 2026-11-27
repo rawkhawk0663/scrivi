@@ -345,7 +345,7 @@ class Engraver {
           e.heads.sort((a, b) => a.y.compareTo(b.y));
         } else {
           for (final n in e.beat.notes) {
-            e.heads.add(_Head(n, (top - n.shown.diatonic) / 2, _headGlyph(e.beat, n)));
+            e.heads.add(_Head(n, (top - n.shownFor(_track.transposeSemitones).diatonic) / 2, _headGlyph(e.beat, n)));
           }
           e.heads.sort((a, b) => a.y.compareTo(b.y));
         }
@@ -360,7 +360,7 @@ class Engraver {
         for (final h in e.heads) {
           final n = h.note;
           if (n == null || _drums) continue;
-          final p = n.shown;
+          final p = n.shownFor(_track.transposeSemitones);
           final current = state[p.diatonic] ?? m.mb.key.alterFor(p.step);
           if (n.tieDestination) {
             state[p.diatonic] = p.alter;
@@ -1683,14 +1683,28 @@ class _SystemBuilder {
     _tremolo(ev);
   }
 
-  /// Anschlag (auf/ab), Fermate und – ohne Tabulatur – Vibrato über der Note.
-  void _aboveNote(_Ev ev) {
+  /// Platz über einer Note (unter dem Notenkopf bzw. der Halsspitze nach oben).
+  static double _clearAbove(_Ev ev) {
     var y = math.min(ev.top - 1.0, -0.6);
     if (ev.stemUp && ev.hasStem) y = math.min(y, ev.stemTip - 0.6);
+    return y;
+  }
+
+  /// Gemeinsame Linie für alle Anschlagszeichen der Zeile (über der höchsten
+  /// Note bzw. Halsspitze), damit Auf- und Abschläge sauber in einer Reihe stehen.
+  late final double _strokeLine = events
+      .where((ev) => ev.voice == 0 && ev.beat.pickStroke != 0)
+      .fold(-0.6, (y, ev) => math.min(y, _clearAbove(ev)));
+
+  /// Anschlag (auf/ab), Fermate und – ohne Tabulatur – Vibrato über der Note.
+  void _aboveNote(_Ev ev) {
+    var y = _clearAbove(ev);
     final cx = ev.x + ev.headW / 2;
     if (ev.beat.pickStroke != 0) {
       final name = ev.beat.pickStroke > 0 ? 'stringsDownBow' : 'stringsUpBow';
       final g = Glyphs.get(name);
+      y = _strokeLine;
+      // Beide Zeichen stehen auf ihrer Grundlinie: gleiche Unterkante
       glyph(name, cx - g.right / 2, y);
       y -= g.height + 0.4;
     }
@@ -1744,7 +1758,7 @@ class _SystemBuilder {
     for (var k = 0; k < ev.graces.length; k++) {
       final g = ev.graces[k];
       final x = start + k * _graceStep;
-      final ys = [for (final n in g.notes) (top - n.shown.diatonic) / 2]..sort();
+      final ys = [for (final n in g.notes) (top - n.shownFor(track.transposeSemitones).diatonic) / 2]..sort();
       if (ys.isEmpty) continue;
       // Hilfslinien
       for (final y in ys) {
@@ -1757,7 +1771,7 @@ class _SystemBuilder {
       }
       for (var i = 0; i < g.notes.length; i++) {
         final n = g.notes[i];
-        final y = (top - n.shown.diatonic) / 2;
+        final y = (top - n.shownFor(track.transposeSemitones).diatonic) / 2;
         glyph(n.dead ? 'noteheadXBlack' : 'noteheadBlack', x, y, scale: _graceScale);
       }
       // Hals nach oben mit Fähnchen und Querstrich

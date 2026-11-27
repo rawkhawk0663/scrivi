@@ -518,6 +518,16 @@ class Note {
 
   Pitch get shown => written ?? pitch;
 
+  /// Geschriebene Tonhöhe in einer Spur, die [transposeSemitones] höher
+  /// geschrieben wird als sie klingt (Gitarre: 12). Fehlt die Schreibweise
+  /// aus der Datei, wird die klingende Tonhöhe entsprechend verschoben.
+  Pitch shownFor(int transposeSemitones) {
+    final w = written;
+    if (w != null || transposeSemitones == 0) return w ?? pitch;
+    if (transposeSemitones % 12 == 0) return pitch.octaves(transposeSemitones ~/ 12);
+    return Pitch.fromMidi(pitch.midi + transposeSemitones);
+  }
+
   /// Kopie mit Änderungen. [clearBend] entfernt das Saitenziehen.
   Note copyWith({
     Pitch? pitch,
