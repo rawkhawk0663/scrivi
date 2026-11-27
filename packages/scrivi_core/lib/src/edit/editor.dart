@@ -47,6 +47,17 @@ enum Technique {
   tenuto,
   marcato,
   tapping,
+  shiftSlide,
+  slideInBelow,
+  slideInAbove,
+  slideOutDown,
+  slideOutUp,
+  wideVibrato,
+  artificialHarmonic,
+  pinchHarmonic,
+  slap,
+  pop,
+  trill,
 }
 
 /// Bearbeitet ein Stück: Cursor, Eingabe, Takte, Rückgängig.
@@ -615,6 +626,56 @@ class ScoreEditor {
     _done();
   }
 
+  /// Eigenschaft der Schläge in der Auswahl bzw. am Cursor ändern (ein Rückgängig-Schritt).
+  void _changeBeats(Beat Function(Beat b) change, {bool notesOnly = true}) {
+    final targets = _targets;
+    _begin();
+    var changed = false;
+    for (final (bar, i) in targets) {
+      final beats = beatsOf(bar);
+      if (notesOnly && beats[i].isRest) continue;
+      beats[i] = change(beats[i]);
+      changed = true;
+    }
+    if (!changed) {
+      _undo.removeLast();
+      return;
+    }
+    _done();
+  }
+
+  /// Wert einer Schlag-Eigenschaft: gesetzt, wenn alle Ziele ihn schon haben, sonst [value] (dann 0).
+  bool _allBeats(bool Function(Beat b) test) => _targets.every((t) => test(beatsOf(t.$1)[t.$2]));
+
+  /// Tremolo-Picking (schnell wiederholt, Zweiunddreissigstel) ein/aus.
+  void toggleTremolo() {
+    final off = _allBeats((b) => b.tremolo > 0);
+    _changeBeats((b) => b.copyWith(tremolo: off ? 0 : 3));
+  }
+
+  /// Akkord brechen: 1 aufwärts, −1 abwärts (nochmals = aus).
+  void setArpeggio(int dir) {
+    final off = _allBeats((b) => b.arpeggio == dir);
+    _changeBeats((b) => b.copyWith(arpeggio: off ? 0 : dir));
+  }
+
+  void toggleRasgueado() {
+    final off = _allBeats((b) => b.rasgueado);
+    _changeBeats((b) => b.copyWith(rasgueado: !off));
+  }
+
+  /// Einblenden (1), Ausblenden (2), Anschwellen (3); nochmals = aus.
+  void setFade(int fade) {
+    final off = _allBeats((b) => b.fade == fade);
+    _changeBeats((b) => b.copyWith(fade: off ? 0 : fade));
+  }
+
+  /// Tremolo-Hebel: kurz [semitones] hinunter und zurück (negativ); nochmals = aus.
+  void setWhammy(int semitones) {
+    final off = _allBeats((b) => b.whammy == semitones);
+    _changeBeats((b) => b.copyWith(whammy: off ? 0 : semitones));
+  }
+
   /// Oktavierung am Cursor (für die Eingabe im Notensystem).
   int get _ottavaHere => currentBeat?.ottava ?? 0;
 
@@ -1014,7 +1075,7 @@ class ScoreEditor {
     Technique.dead => n.dead,
     Technique.ghost => n.ghost,
     Technique.vibrato => n.vibrato,
-    Technique.harmonic => n.harmonic,
+    Technique.harmonic => n.harmonic && n.harmonicType == 0,
     Technique.hammer => n.hammerOrigin,
     Technique.slide => n.slide & 2 != 0,
     Technique.bend => n.bend != null && (n.bend!.maxSemitones - 2).abs() < 0.01,
@@ -1024,7 +1085,24 @@ class ScoreEditor {
     Technique.tenuto => n.accent & 16 != 0,
     Technique.marcato => n.accent & 4 != 0,
     Technique.tapping => n.tapped,
+    Technique.shiftSlide => n.slide & 1 != 0,
+    Technique.slideInBelow => n.slide & 16 != 0,
+    Technique.slideInAbove => n.slide & 32 != 0,
+    Technique.slideOutDown => n.slide & 4 != 0,
+    Technique.slideOutUp => n.slide & 8 != 0,
+    Technique.wideVibrato => n.wideVibrato,
+    Technique.artificialHarmonic => n.harmonic && n.harmonicType == 1,
+    Technique.pinchHarmonic => n.harmonic && n.harmonicType == 2,
+    Technique.slap => n.slap,
+    Technique.pop => n.pop,
+    Technique.trill => n.trill != 0,
   };
+
+  /// Slide-Art setzen: die Bits einer Gruppe (zum nächsten Ton, hinein, hinaus) schliessen sich aus.
+  static Note _slide(Note n, int bit, bool on) {
+    final group = bit <= 2 ? 3 : (bit <= 8 ? 12 : 48);
+    return n.copyWith(slide: on ? (n.slide & ~group) | bit : n.slide & ~bit);
+  }
 
   static Note _set(Note n, Technique t, bool on) => switch (t) {
     Technique.palmMute => n.copyWith(palmMuted: on),
@@ -1032,9 +1110,20 @@ class ScoreEditor {
     Technique.dead => n.copyWith(dead: on),
     Technique.ghost => n.copyWith(ghost: on),
     Technique.vibrato => n.copyWith(vibrato: on),
-    Technique.harmonic => n.copyWith(harmonic: on),
+    Technique.harmonic => n.copyWith(harmonic: on, harmonicType: 0),
     Technique.hammer => n.copyWith(hammerOrigin: on),
-    Technique.slide => n.copyWith(slide: on ? 2 : 0),
+    Technique.slide => _slide(n, 2, on),
+    Technique.shiftSlide => _slide(n, 1, on),
+    Technique.slideInBelow => _slide(n, 16, on),
+    Technique.slideInAbove => _slide(n, 32, on),
+    Technique.slideOutDown => _slide(n, 4, on),
+    Technique.slideOutUp => _slide(n, 8, on),
+    Technique.wideVibrato => n.copyWith(wideVibrato: on, vibrato: on ? false : n.vibrato),
+    Technique.artificialHarmonic => n.copyWith(harmonic: on, harmonicType: on ? 1 : 0),
+    Technique.pinchHarmonic => n.copyWith(harmonic: on, harmonicType: on ? 2 : 0),
+    Technique.slap => n.copyWith(slap: on, pop: on ? false : n.pop),
+    Technique.pop => n.copyWith(pop: on, slap: on ? false : n.slap),
+    Technique.trill => n.copyWith(trill: on ? 2 : 0),
     Technique.bend =>
       on
           ? n.copyWith(bend: const Bend([BendPoint(0, 0), BendPoint(0.5, 2), BendPoint(1, 2)]))

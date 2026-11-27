@@ -98,16 +98,18 @@ class Synth {
     final out = Float32List((seconds * rate).ceil() + 1);
     final rnd = math.Random(t.index + 7);
     for (final n in t.notes) {
-      switch (v) {
-        case Voicing.guitar || Voicing.overdrive || Voicing.nylon || Voicing.bass:
-          _string(out, n, v, rnd);
-        case Voicing.drums:
-          _drum(out, n, rnd);
-        case Voicing.piano:
-          _piano(out, n);
-        default:
-          _sustained(out, n, v);
-      }
+      _shaped(out, n, (o, m) {
+        switch (v) {
+          case Voicing.guitar || Voicing.overdrive || Voicing.nylon || Voicing.bass:
+            _string(o, m, v, rnd);
+          case Voicing.drums:
+            _drum(o, m, rnd);
+          case Voicing.piano:
+            _piano(o, m);
+          default:
+            _sustained(o, m, v);
+        }
+      });
     }
     if (v == Voicing.overdrive) _overdrive(out);
     _limit(out, v == Voicing.drums ? 0.5 : 0.35);
@@ -154,25 +156,36 @@ class Synth {
       }
     }
     for (final n in notes) {
-      if (n.dead && !drums) {
-        // Gedämpfte Note: ganz kurz der aufgenommene Ton, dunkel, dazu das Anschlaggeräusch
-        for (final r in preset.regionsFor(n.midi, _vel(n))) {
-          _voice(out, sf, r, n, drums: false, muted: true, dead: true);
+      _shaped(out, n, (o, m) {
+        if (m.dead && !drums) {
+          // Gedämpfte Note: ganz kurz der aufgenommene Ton, dunkel, dazu das Anschlaggeräusch
+          for (final r in preset.regionsFor(m.midi, _vel(m))) {
+            _voice(o, sf, r, m, drums: false, muted: true, dead: true);
+          }
+          _string(o, m, Voicing.guitar, rnd, gain: 0.5);
+          return;
         }
-        _string(out, n, Voicing.guitar, rnd, gain: 0.5);
-        continue;
-      }
-      if (n.harmonic && !drums) {
-        // Flageolett: der aufgenommene Ton weich und ausklingend, dazu ein glockiger Anteil
-        for (final r in preset.regionsFor(n.midi, _vel(n))) {
-          _voice(out, sf, r, n, drums: false, muted: false, harmonic: true);
+        if (m.harmonic && !drums) {
+          // Flageolett: der aufgenommene Ton weich und ausklingend, dazu ein glockiger Anteil
+          for (final r in preset.regionsFor(m.midi, _vel(m))) {
+            _voice(o, sf, r, m, drums: false, muted: false, harmonic: true);
+          }
+          _bell(o, m, math.pow(m.velocity, 1.4).toDouble() * 1.1);
+          return;
         }
-        _bell(out, n, math.pow(n.velocity, 1.4).toDouble() * 1.1);
-        continue;
-      }
-      for (final r in preset.regionsFor(n.midi, _vel(n))) {
-        _voice(out, sf, r, n, drums: drums, muted: allMuted || n.palmMuted, cut: cutAt[n]);
-      }
+        final cut = cutAt[n];
+        for (final r in preset.regionsFor(m.midi, _vel(m))) {
+          _voice(
+            o,
+            sf,
+            r,
+            m,
+            drums: drums,
+            muted: allMuted || m.palmMuted,
+            cut: cut == null ? null : cut - n.start + m.start,
+          );
+        }
+      });
     }
     if (v == Voicing.overdrive || program == 29 || program == 30) _overdrive(out);
     _limit(out, drums ? 0.9 : 0.8);
@@ -180,6 +193,32 @@ class Synth {
   }
 
   static int _vel(PlayNote n) => (n.velocity * 127).round().clamp(1, 127);
+
+  /// Ton mit Lautstärkeverlauf (Ein-/Ausblenden, Anschwellen, Hinausgleiten):
+  /// in einem eigenen Puffer rechnen und mit dem Verlauf dazumischen.
+  static void _shaped(Float32List out, PlayNote n, void Function(Float32List o, PlayNote m) render) {
+    if (n.fade == 0 && n.slideOut == 0) {
+      render(out, n);
+      return;
+    }
+    final s0 = (n.start * rate).round();
+    final len = math.min(out.length - s0, ((n.duration + 3.0) * rate).ceil());
+    if (len <= 0) return;
+    final buf = Float32List(len);
+    render(buf, n.at(0));
+    final d = math.max(0.02, n.duration);
+    for (var i = 0; i < len; i++) {
+      final x = i / rate / d;
+      var g = switch (n.fade) {
+        1 => math.min(1.0, x),
+        2 => math.max(0.0, 1 - x),
+        3 => x >= 1 ? 0.0 : math.sin(math.pi * x),
+        _ => 1.0,
+      };
+      if (n.slideOut != 0 && x > 0.65) g *= math.max(0.0, 1 - (x - 0.65) / 0.35 * 0.85);
+      out[s0 + i] += buf[i] * g;
+    }
+  }
 
   /// Ein aufgenommener Ton: abspielen mit veränderlicher Tonhöhe, Hüllkurve und Tiefpass.
   static void _voice(
@@ -331,7 +370,12 @@ class Synth {
     }
     final to = n.slideTo;
     if (to != null && x > 0.6) p += (to - n.midi) * ((x - 0.6) / 0.4);
+    // Hineingleiten: in den ersten 0,12 s von drei Halbtönen unter (über) dem Ton
+    if (n.slideIn != 0 && sec < 0.12) p += n.slideIn * 3 * (1 - sec / 0.12);
+    // Hinausgleiten: im letzten Drittel bis fünf Halbtöne weg
+    if (n.slideOut != 0 && x > 0.65) p += n.slideOut * 5 * ((x - 0.65) / 0.35);
     if (n.vibrato && sec > 0.12) p += 0.22 * math.sin(2 * math.pi * 5.5 * sec);
+    if (n.wideVibrato && sec > 0.1) p += 0.55 * math.sin(2 * math.pi * 4.2 * sec);
     return p;
   }
 

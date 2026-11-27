@@ -337,7 +337,7 @@ class Engraver {
       };
     }
     final dead = n?.dead ?? false;
-    final harm = n?.harmonic ?? false;
+    final harm = (n?.harmonic ?? false) && n!.harmonicType == 0;
     return switch (v) {
       NoteValue.doubleWhole => dead ? 'noteheadXWhole' : 'noteheadDoubleWhole',
       NoteValue.whole => dead ? 'noteheadXWhole' : (harm ? 'noteheadDiamondWhole' : 'noteheadWhole'),
@@ -1157,7 +1157,7 @@ class Engraver {
   String _fretText(Note n, bool parens) {
     var t = n.dead ? 'x' : '${n.fret}';
     // Flageolett: Bund in spitzen Klammern
-    if (n.harmonic && !n.dead) t = '<$t>';
+    if (n.harmonic && n.harmonicType == 0 && !n.dead) t = '<$t>';
     return (parens || n.ghost) ? '($t)' : t;
   }
 }
@@ -1768,6 +1768,23 @@ class _SystemBuilder {
         glyph('accidentalParensRight', x + h.dx + h.width + 0.1, h.y);
       }
     }
+    // Hineingleiten und Hinausgleiten: kurze schräge Striche am Kopf
+    for (final h in ev.heads) {
+      final sl = h.note?.slide ?? 0;
+      if (sl & 60 == 0) continue;
+      final hx = x + h.dx, hw = h.width;
+      if (sl & 4 != 0) line(hx + hw + 0.25, h.y - 0.1, hx + hw + 1.6, h.y + 0.9, 0.13);
+      if (sl & 8 != 0) line(hx + hw + 0.25, h.y + 0.1, hx + hw + 1.6, h.y - 0.9, 0.13);
+      final left = hx - (h.accidental != null ? -h.accX + 0.3 : 0) - 0.25;
+      if (sl & 16 != 0) line(left - 1.35, h.y + 0.9, left, h.y + 0.1, 0.13);
+      if (sl & 32 != 0) line(left - 1.35, h.y - 0.9, left, h.y - 0.1, 0.13);
+    }
+    // Gebrochener Akkord: Wellenlinie links der Köpfe
+    if (ev.beat.arpeggio != 0 && ev.heads.isNotEmpty) {
+      final ys = ev.heads.map((h) => h.y);
+      final minAcc = ev.heads.map((h) => h.accidental != null ? h.accX : 0.0).reduce(math.min);
+      _arpeggioLine(x + minAcc - 0.7, ys.reduce(math.min) - 0.6, ys.reduce(math.max) + 0.6, ev.beat.arpeggio);
+    }
     // Punkte
     final dots = ev.beat.duration.dots;
     if (dots > 0) {
@@ -1837,23 +1854,100 @@ class _SystemBuilder {
       glyph('fermataAbove', cx - g.right / 2, y);
       y -= g.height + 0.3;
     }
+    final end = ev.nextInVoice != null && inSystem(ev.nextInVoice!) ? ev.nextInVoice!.x - 0.4 : ev.x + 3.0;
     if (!e._tab && ev.beat.notes.any((n) => n.vibrato)) {
-      final end = ev.nextInVoice != null && inSystem(ev.nextInVoice!) ? ev.nextInVoice!.x - 0.4 : ev.x + 3.0;
       add(_wavy(ev.x, end, y - 0.3));
+      y -= 1.0;
+    }
+    if (!e._tab && ev.beat.notes.any((n) => n.wideVibrato)) {
+      add(_wavy(ev.x, end, y - 0.5, wide: true));
+      y -= 1.3;
+    }
+    // Triller: „tr“ und Wellenlinie bis zum nächsten Schlag
+    if (ev.beat.notes.any((n) => n.trill != 0)) {
+      final g = Glyphs.get('ornamentTrill');
+      glyph('ornamentTrill', ev.x, y);
+      final wx = ev.x + g.right + 0.2;
+      if (end > wx + 0.8) add(_wavy(wx, end, y - 0.45));
+      y -= g.height + 0.4;
+    }
+    if (ev.beat.fade != 0) {
+      _fadeMark(cx, y - 0.4, ev.beat.fade);
+      y -= 1.3;
+    }
+    // Ohne Tabulatur stehen die Gitarren-Hinweise über den Noten
+    if (!e._tab) {
+      for (final t in _labels(ev)) {
+        text(t, cx, y, TextRole.technique, _techniqueSize, align: TextAlign.center, italic: true);
+        y -= 1.3;
+      }
     }
   }
 
   /// Wellenlinie (Vibrato) von x1 bis x2.
-  PathItem _wavy(double x1, double x2, double y) {
+  PathItem _wavy(double x1, double x2, double y, {bool wide = false}) {
+    final step = wide ? 0.6 : 0.35, amp = wide ? 0.5 : 0.28;
     final c = <double>[0, x1, y];
     var x = x1;
     var up = true;
-    while (x + 0.35 <= x2) {
-      x += 0.35;
-      c.addAll([1, x, y + (up ? -0.28 : 0.28)]);
+    while (x + step <= x2) {
+      x += step;
+      c.addAll([1, x, y + (up ? -amp : amp)]);
       up = !up;
     }
-    return PathItem(c, fill: false, thickness: 0.16);
+    return PathItem(c, fill: false, thickness: wide ? 0.22 : 0.16);
+  }
+
+  /// Senkrechte Wellenlinie (gebrochener Akkord) von [y1] bis [y2] bei [x], mit Pfeil.
+  void _arpeggioLine(double x, double y1, double y2, int dir) {
+    final c = <double>[0, x, y2];
+    var y = y2;
+    var left = true;
+    while (y - 0.35 >= y1) {
+      y -= 0.35;
+      c.addAll([1, x + (left ? -0.22 : 0.22), y]);
+      left = !left;
+    }
+    add(PathItem(c, fill: false, thickness: 0.14));
+    final name = dir > 0 ? 'arrowheadBlackUp' : 'arrowheadBlackDown';
+    final g = Glyphs.get(name);
+    const sc = 0.6;
+    glyph(name, x - g.right * sc / 2, dir > 0 ? y1 + 0.1 : y2 + g.height * sc - 0.1, scale: sc);
+  }
+
+  /// Kleine Gabel für Ein-/Ausblenden (1/2) bzw. An- und Abschwellen (3), mitten bei [cx].
+  void _fadeMark(double cx, double y, int fade) {
+    const h = 0.32;
+    void opening(double x1, double x2) {
+      line(x1, y, x2, y - h, 0.11);
+      line(x1, y, x2, y + h, 0.11);
+    }
+
+    switch (fade) {
+      case 1:
+        opening(cx - 0.8, cx + 0.8);
+      case 2:
+        opening(cx + 0.8, cx - 0.8);
+      case 3:
+        opening(cx - 1.2, cx);
+        opening(cx + 1.2, cx);
+    }
+  }
+
+  /// Gitarren-Hinweise als kurzer Text (A.H., P.H., S, P, rasg., w/bar).
+  List<String> _labels(_Ev ev, {bool trill = false}) {
+    final ns = ev.beat.notes;
+    final w = ev.beat.whammy;
+    final half = w.abs() == 1 ? '½' : (w.abs().isOdd ? '${w.abs() ~/ 2}½' : '${w.abs() ~/ 2}');
+    return [
+      if (ns.any((n) => n.harmonic && n.harmonicType == 1)) 'A.H.',
+      if (ns.any((n) => n.harmonic && n.harmonicType == 2)) 'P.H.',
+      if (ns.any((n) => n.slap)) 'S',
+      if (ns.any((n) => n.pop)) 'P',
+      if (ev.beat.rasgueado) 'rasg.',
+      if (trill && ns.any((n) => n.trill != 0)) 'tr',
+      if (w != 0) 'w/bar −$half',
+    ];
   }
 
   /// Tremolo-Picking: schräge Striche am Hals (bei Ganzen über dem Kopf).
@@ -2358,9 +2452,13 @@ class _SystemBuilder {
     final n = track.staff.stringCount;
     final voice0 = events.toList();
     final hasPm = voice0.any((ev) => ev.beat.notes.any((x) => x.palmMuted || x.letRing));
+    final hasLabels = voice0.any(
+      (ev) => _labels(ev, trill: e._tabOnly).isNotEmpty || (e._tabOnly && ev.beat.fade != 0),
+    );
     final hasBend = voice0.any((ev) => ev.beat.notes.any((x) => x.bend != null));
     var y = e._tabOnly ? 0.0 : math.max(bottom, 4.0) + 2.2;
     if (hasPm) y += 1.4;
+    if (hasLabels) y += 1.8;
     if (hasBend) y += 2.0;
     _tabTop = y;
     _tabBottom = y + (n - 1) * sp;
@@ -2390,12 +2488,37 @@ class _SystemBuilder {
     }
     // P.M. und let ring
     if (hasPm) _techniqueLines(_tabTop - (hasBend ? 3.2 : 1.2));
+    // Hinweise wie A.H., S, P, rasg., w/bar und Ein-/Ausblenden in einer Reihe darüber
+    if (hasLabels) {
+      final ly = _tabTop - (hasBend ? 3.2 : 1.6) - (hasPm ? 1.4 : 0);
+      for (final ev in voice0) {
+        final cx = ev.x + ev.headW / 2;
+        final labels = _labels(ev, trill: e._tabOnly);
+        if (labels.isNotEmpty) {
+          text(labels.join(' '), cx, ly, TextRole.technique, _techniqueSize, align: TextAlign.center, italic: true);
+        }
+        // Ein-/Ausblenden nur hier, wenn keine Notenzeile da ist (sonst steht es über den Noten)
+        if (e._tabOnly && ev.beat.fade != 0) {
+          final w = labels.isEmpty ? 0.0 : tw(labels.join(' '), TextRole.technique, _techniqueSize, italic: true);
+          _fadeMark(cx + (w > 0 ? w / 2 + 1.4 : 0), ly - 0.35, ev.beat.fade);
+        }
+      }
+    }
     // Vibrato: Wellenlinie über der Tabulatur
     for (final ev in events) {
-      if (!ev.beat.notes.any((n) => n.vibrato)) continue;
+      final wide = ev.beat.notes.any((n) => n.wideVibrato);
+      if (!wide && !ev.beat.notes.any((n) => n.vibrato)) continue;
       final next = ev.nextInVoice;
       final end = next != null && inSystem(next) ? next.x - 0.3 : math.min(ev.x + 3.0, s.x1 - 0.3);
-      if (end > ev.x + 0.8) add(_wavy(ev.x, end, _tabTop - 0.6));
+      if (end > ev.x + 0.8) add(_wavy(ev.x, end, _tabTop - 0.6, wide: wide));
+    }
+    // Gebrochener Akkord: Pfeil-Wellenlinie links der Zahlen
+    for (final ev in events) {
+      if (ev.beat.arpeggio == 0) continue;
+      final strs = [for (final nt in ev.beat.notes) ?nt.string];
+      if (strs.isEmpty) continue;
+      final ys = strs.map(_stringY);
+      _arpeggioLine(ev.x - 0.5, ys.reduce(math.min) - 0.5, ys.reduce(math.max) + 0.5, ev.beat.arpeggio);
     }
     // Zahlen der Vorschlagsnoten (klein, mit Bogen zur Hauptnote)
     for (final ev in events) {

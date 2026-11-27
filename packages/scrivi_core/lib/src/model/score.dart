@@ -479,6 +479,10 @@ class Beat {
     this.letRingText = false,
     this.tremolo = 0,
     this.ottava = 0,
+    this.arpeggio = 0,
+    this.rasgueado = false,
+    this.fade = 0,
+    this.whammy = 0,
   }) : notes = notes ?? [],
        lyrics = lyrics ?? [];
 
@@ -512,6 +516,18 @@ class Beat {
   /// −1 = 8vb, −2 = 15mb. Die Töne bleiben klingend gespeichert.
   final int ottava;
 
+  /// Akkord gebrochen: 1 = aufwärts (vom tiefsten Ton), −1 = abwärts.
+  final int arpeggio;
+
+  /// Rasgueado: schneller Fächerschlag mit den Fingern.
+  final bool rasgueado;
+
+  /// Lautstärke im Ton: 1 = einblenden, 2 = ausblenden, 3 = anschwellen und abschwellen.
+  final int fade;
+
+  /// Tremolo-Hebel: kurz so viele Halbtöne hinunter und zurück (negativ, 0 = keiner).
+  final int whammy;
+
   bool get isRest => notes.isEmpty;
 
   /// Kopie mit Änderungen. Für null-fähige Felder: [clearChord], [clearText], [clearDynamic].
@@ -533,6 +549,10 @@ class Beat {
     bool? letRingText,
     int? tremolo,
     int? ottava,
+    int? arpeggio,
+    bool? rasgueado,
+    int? fade,
+    int? whammy,
   }) => Beat(
     duration: duration ?? this.duration,
     notes: notes ?? [...this.notes],
@@ -548,6 +568,10 @@ class Beat {
     letRingText: letRingText ?? this.letRingText,
     tremolo: tremolo ?? this.tremolo,
     ottava: ottava ?? this.ottava,
+    arpeggio: arpeggio ?? this.arpeggio,
+    rasgueado: rasgueado ?? this.rasgueado,
+    fade: fade ?? this.fade,
+    whammy: whammy ?? this.whammy,
   );
 }
 
@@ -573,7 +597,25 @@ class Note {
     this.harmonic = false,
     this.tapped = false,
     this.courtesy = false,
+    this.wideVibrato = false,
+    this.harmonicType = 0,
+    this.slap = false,
+    this.pop = false,
+    this.trill = 0,
   });
+
+  /// Weites Vibrato (grosse, langsame Welle).
+  final bool wideVibrato;
+
+  /// Art des Flageoletts, wenn [harmonic]: 0 natürlich, 1 künstlich (A.H.), 2 gezupft „Pinch“ (P.H.).
+  final int harmonicType;
+
+  /// Bass: geschlagen (S) bzw. gezupft-geschnalzt (P).
+  final bool slap;
+  final bool pop;
+
+  /// Triller mit dem Ton so viele Halbtöne höher (0 = kein Triller).
+  final int trill;
 
   /// Vorzeichen zur Erinnerung zeigen, in Klammern (auch wenn es nicht nötig wäre).
   final bool courtesy;
@@ -647,6 +689,11 @@ class Note {
     bool? harmonic,
     bool? tapped,
     bool? courtesy,
+    bool? wideVibrato,
+    int? harmonicType,
+    bool? slap,
+    bool? pop,
+    int? trill,
   }) => Note(
     pitch: pitch ?? this.pitch,
     written: clearWritten ? null : (written ?? this.written),
@@ -667,6 +714,11 @@ class Note {
     harmonic: harmonic ?? this.harmonic,
     tapped: tapped ?? this.tapped,
     courtesy: courtesy ?? this.courtesy,
+    wideVibrato: wideVibrato ?? this.wideVibrato,
+    harmonicType: harmonicType ?? this.harmonicType,
+    slap: slap ?? this.slap,
+    pop: pop ?? this.pop,
+    trill: trill ?? this.trill,
   );
 }
 

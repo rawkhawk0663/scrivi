@@ -93,7 +93,39 @@ class PlayNote {
     this.dead = false,
     this.harmonic = false,
     this.legato = false,
+    this.slideIn = 0,
+    this.slideOut = 0,
+    this.wideVibrato = false,
+    this.fade = 0,
   });
+
+  /// Derselbe Ton zu einer anderen Zeit (zum Rechnen in einem eigenen Puffer).
+  PlayNote at(double start) => PlayNote(
+    start: start,
+    duration: duration,
+    midi: midi,
+    velocity: velocity,
+    string: string,
+    bend: bend,
+    slideTo: slideTo,
+    vibrato: vibrato,
+    palmMuted: palmMuted,
+    dead: dead,
+    harmonic: harmonic,
+    legato: legato,
+    slideIn: slideIn,
+    slideOut: slideOut,
+    wideVibrato: wideVibrato,
+    fade: fade,
+  );
+
+  /// Hineingleiten: −1 von unten, 1 von oben; hinausgleiten: −1 nach unten, 1 nach oben.
+  final int slideIn;
+  final int slideOut;
+  final bool wideVibrato;
+
+  /// Lautstärke im Ton: 1 einblenden, 2 ausblenden, 3 an- und abschwellen.
+  final int fade;
 
   /// Beginn und Dauer in Sekunden.
   final double start;
@@ -434,8 +466,17 @@ class PlaybackPlan {
           graces.clear();
           // Anschlag: Saiten kurz nacheinander
           final notes = [...beat.notes]..sort((a, b) => (a.string ?? a.pitch.midi).compareTo(b.string ?? b.pitch.midi));
-          if (beat.pickStroke < 0) notes.setAll(0, notes.reversed.toList());
-          final strum = stringed && notes.length >= 3 ? (beat.pickStroke != 0 ? 0.018 : 0.008) : 0.0;
+          if (beat.pickStroke < 0 || beat.arpeggio < 0) notes.setAll(0, notes.reversed.toList());
+          // Gebrochen: deutlich nacheinander; Rasgueado: sehr schnell; Anschlag: kurz versetzt
+          final strum = notes.length < 2
+              ? 0.0
+              : beat.arpeggio != 0
+              ? 0.06
+              : beat.rasgueado
+              ? 0.011
+              : stringed && notes.length >= 3
+              ? (beat.pickStroke != 0 ? 0.018 : 0.008)
+              : 0.0;
           for (var ni = 0; ni < notes.length; ni++) {
             final n = notes[ni];
             final key = stringed && n.string != null ? '$v/s${n.string}' : '$v/p${n.pitch.midi}';
@@ -457,25 +498,41 @@ class PlaybackPlan {
             if (n.ghost) vel *= 0.55;
             if (n.accent & 8 != 0) vel = math.min(1, vel * 1.2);
             if (n.accent & 4 != 0) vel = math.min(1, vel * 1.3);
-            final midi = n.harmonic ? _harmonicMidi(n) : n.pitch.midi;
+            if (n.slap || n.pop) vel = math.min(1, vel * 1.2);
+            final midi = !n.harmonic
+                ? n.pitch.midi
+                : switch (n.harmonicType) {
+                    1 => n.pitch.midi + 12, // künstlich: eine Oktave über dem gegriffenen Ton
+                    2 => n.pitch.midi + 19, // Pinch: Oktave und Quinte
+                    _ => _harmonicMidi(n),
+                  };
             final b = n.bend;
-            // Tremolo-Picking: der Ton wird schnell wiederholt
-            final trem = beat.tremolo;
+            // Tremolo-Hebel: kurz hinunter und zurück
+            final whammy = beat.whammy != 0 && b == null
+                ? [(0.0, 0.0), (0.25, beat.whammy.toDouble()), (0.5, 0.0), (1.0, 0.0)]
+                : null;
+            // Tremolo-Picking: der Ton wird schnell wiederholt; Triller: im Wechsel mit dem oberen Ton
+            final trem = n.trill != 0 ? 3 : beat.tremolo;
             final pieces = trem > 0 ? math.max(1, ((t1 - start) / (pb.secondsAt(1.0 / (4 << trem)))).round()) : 1;
             final pieceLen = (t1 - start) / pieces;
             for (var p = 0; p < pieces; p++) {
+              final first = p == 0, last = p == pieces - 1;
               final note = PlayNote(
                 start: start + p * pieceLen,
                 duration: pieces > 1 ? pieceLen * 0.9 : dur,
-                midi: midi,
-                velocity: vel,
+                midi: n.trill != 0 && p.isOdd ? midi + n.trill : midi,
+                velocity: n.trill != 0 && p > 0 ? vel * 0.85 : vel,
                 string: n.string,
-                bend: b == null ? const [] : [for (final pt in b.points) (pt.position, pt.semitones)],
+                bend: b == null ? (whammy ?? const []) : [for (final pt in b.points) (pt.position, pt.semitones)],
                 vibrato: n.vibrato,
                 palmMuted: n.palmMuted,
                 dead: n.dead,
                 harmonic: n.harmonic,
-                legato: p == 0 && n.hammerDestination,
+                legato: (p == 0 && n.hammerDestination) || (n.trill != 0 && p > 0),
+                slideIn: first ? (n.slide & 16 != 0 ? -1 : (n.slide & 32 != 0 ? 1 : 0)) : 0,
+                slideOut: last ? (n.slide & 4 != 0 ? -1 : (n.slide & 8 != 0 ? 1 : 0)) : 0,
+                wideVibrato: n.wideVibrato,
+                fade: beat.fade,
               );
               out.add(note);
               sounding[key] = note;

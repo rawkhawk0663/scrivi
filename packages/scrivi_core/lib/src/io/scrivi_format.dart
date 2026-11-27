@@ -176,6 +176,10 @@ class ScriviFormat {
       'letRingText': b.letRingText,
       'tremolo': b.tremolo == 0 ? null : b.tremolo,
       'ottava': b.ottava == 0 ? null : b.ottava,
+      'arpeggio': b.arpeggio == 0 ? null : b.arpeggio,
+      'rasgueado': b.rasgueado,
+      'fade': b.fade == 0 ? null : b.fade,
+      'whammy': b.whammy == 0 ? null : b.whammy,
     });
   }
 
@@ -205,6 +209,11 @@ class ScriviFormat {
     'harmonic': n.harmonic,
     'tapped': n.tapped,
     'courtesy': n.courtesy,
+    'wideVibrato': n.wideVibrato,
+    'harmonicType': n.harmonicType == 0 ? null : n.harmonicType,
+    'slap': n.slap,
+    'pop': n.pop,
+    'trill': n.trill == 0 ? null : n.trill,
   });
 
   // ───────────────────────── Lesen ─────────────────────────
@@ -360,6 +369,10 @@ class ScriviFormat {
       letRingText: _bool(b['letRingText']),
       tremolo: _int(b['tremolo']),
       ottava: _int(b['ottava']).clamp(-2, 2),
+      arpeggio: _int(b['arpeggio']).clamp(-1, 1),
+      rasgueado: _bool(b['rasgueado']),
+      fade: _int(b['fade']).clamp(0, 3),
+      whammy: _int(b['whammy']).clamp(-24, 0),
     );
   }
 
@@ -396,6 +409,11 @@ class ScriviFormat {
       harmonic: _bool(n['harmonic']),
       tapped: _bool(n['tapped']),
       courtesy: _bool(n['courtesy']),
+      wideVibrato: _bool(n['wideVibrato']),
+      harmonicType: _int(n['harmonicType']).clamp(0, 2),
+      slap: _bool(n['slap']),
+      pop: _bool(n['pop']),
+      trill: _int(n['trill']).clamp(0, 12),
     );
   }
 }

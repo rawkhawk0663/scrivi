@@ -119,4 +119,51 @@ void main() {
     e.setOttava(1);
     expect(e.currentBeat!.ottava, 0);
   });
+
+  test('Gitarre (Paket 2): Zeichen in Tab und Noten, Klang', () {
+    final e = ScoreEditor(ScoreEditor.newScore(bars: 2));
+    e.duration = const NoteDuration(NoteValue.half);
+    e.cursor = const EditCursor(string: 3);
+    e.inputFret(2);
+    e.toggleTechnique(Technique.artificialHarmonic);
+    e.toggleTechnique(Technique.trill);
+    e.setFade(1);
+    e.moveBeat(1);
+    // Akkord, gebrochen aufwärts, mit Hinausgleiten
+    e.cursor = e.cursor.copyWith(string: 2);
+    e.inputFret(2);
+    e.cursor = e.cursor.copyWith(string: 3);
+    e.inputFret(2);
+    e.cursor = e.cursor.copyWith(string: 4);
+    e.inputFret(1);
+    e.setArpeggio(1);
+    e.toggleTechnique(Technique.slideOutDown);
+    e.setWhammy(-1);
+    final page = Engraver(e.score).layout().pages.first;
+    final texts = page.items.whereType<TextItem>().map((t) => t.text).join(' ');
+    expect(texts, contains('A.H.'));
+    expect(texts, contains('w/bar'));
+    expect(page.items.whereType<GlyphItem>().map((g) => g.name), containsAll(['ornamentTrill', 'arrowheadBlackUp']));
+    // Gespeichert
+    final back = ScriviFormat.decode(ScriviFormat.encode(e.score));
+    final b0 = back.tracks[0].bars[0].voices[0].beats;
+    expect(b0[0].notes.single.harmonicType, 1);
+    expect(b0[0].notes.single.trill, 2);
+    expect(b0[0].fade, 1);
+    expect(b0[1].arpeggio, 1);
+    expect(b0[1].whammy, -1);
+    // Klang
+    final plan = PlaybackPlan.build(e.score);
+    final notes = plan.tracks[0].notes;
+    final first = notes.where((n) => n.start < 1.19).toList();
+    expect(first.map((n) => n.midi).toSet().length, 2); // Triller: Hauptton und oberer Ton
+    expect(first.first.midi, e.score.tracks[0].bars[0].voices[0].beats[0].notes.single.pitch.midi + 12); // A.H.
+    expect(first.first.fade, 1);
+    final chord = notes.where((n) => n.start >= 1.19).toList()..sort((a, b) => a.start.compareTo(b.start));
+    expect(chord.length, 3);
+    expect(chord[1].start - chord[0].start, closeTo(0.06, 1e-9));
+    expect(chord.first.midi, lessThan(chord.last.midi)); // aufwärts: tiefster zuerst
+    expect(chord.every((n) => n.slideOut == -1 || n.slideOut == 0), isTrue);
+    expect(chord.any((n) => n.bend.isNotEmpty), isTrue); // Hebel als kurzes Hinunter und Zurück
+  });
 }
