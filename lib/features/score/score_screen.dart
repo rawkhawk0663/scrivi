@@ -23,6 +23,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../core/files/recent_files.dart';
 import '../../core/files/score_files.dart';
 import '../../widgets/visuals.dart';
+import '../settings/settings_screen.dart';
 
 import 'cursor_strip.dart';
 import 'edit_tools.dart';
@@ -353,6 +354,7 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
         e.setMix(i, p.mixOf(i));
       }
       e.setReverb(p.reverb);
+      e.setMasterVolume(p.master);
     }
     _score = e.score;
     _engrave();
@@ -376,7 +378,9 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
   void _onMix(int track) {
     final e = _editor, p = _player;
     if (e == null || p == null) return;
-    if (track < 0) {
+    if (track == -2) {
+      e.setMasterVolume(p.master);
+    } else if (track < 0) {
       e.setReverb(p.reverb);
     } else {
       e.setMix(track, p.mixOf(track));
@@ -639,6 +643,13 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
         const Divider(height: 1),
         item(tr('Angaben zum Stück …', 'Piece information …'), Icons.info_outline_rounded, null, editTitle),
         const Divider(height: 1),
+        item(
+          tr('Einstellungen …', 'Settings …'),
+          Icons.settings_outlined,
+          null,
+          () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const SettingsScreen())),
+        ),
+        const Divider(height: 1),
         item(tr('Schliessen', 'Close'), Icons.close_rounded, tr('Strg+W', 'Ctrl+W'), _leave),
       ],
       builder: (context, controller, _) => TextButton(
@@ -647,6 +658,65 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [Text(tr('Datei', 'File')), const Icon(Icons.arrow_drop_down_rounded, size: 20)],
+        ),
+      ),
+    );
+  }
+
+  /// Menü „Ansicht“: Seiten/Partitur/Endlos, transponiert, Noten/Tab und welche Bereiche zu sehen sind.
+  Widget _viewMenu(BuildContext context) {
+    final s = _settings;
+    Widget check(String label, bool on, VoidCallback onChanged) =>
+        CheckboxMenuButton(value: on, onChanged: (_) => onChanged(), child: Text(label));
+    Widget radio(String label, bool on, VoidCallback onPressed) => MenuItemButton(
+      leadingIcon: Icon(on ? Icons.radio_button_checked : Icons.radio_button_unchecked, size: 18),
+      onPressed: onPressed,
+      child: Text(label),
+    );
+    return MenuAnchor(
+      alignmentOffset: const Offset(0, 4),
+      menuChildren: [
+        if (_pages != null) ...[
+          radio(tr('Seiten (eine Spur)', 'Pages (one track)'), !_endless && !_fullScore, () => _setLayout('pages')),
+          radio(tr('Partitur (alle Spuren)', 'Full score (all tracks)'), _fullScore, () => _setLayout('score')),
+          radio(tr('Endlos (eine lange Zeile)', 'Endless (one long line)'), _endless, () => _setLayout('endless')),
+          const Divider(height: 1),
+          check(
+            tr('Transponiert (wie die Musiker lesen)', 'Transposed (as the players read)'),
+            _transposed,
+            () => _setTransposed(!_transposed),
+          ),
+          if (_stringed) ...[
+            const Divider(height: 1),
+            for (final v in ScoreView.values) radio(_viewName(v), v == _view, () => _setView(v)),
+          ],
+          const Divider(height: 1),
+        ],
+        if (s != null) ...[
+          check(tr('Werkzeugspalte links', 'Tool column on the left'), s.showTools.value, () {
+            s.setShowTools(!s.showTools.value);
+          }),
+          check(tr('Leiste am Cursor', 'Strip at the cursor'), s.cursorStrip.value, () {
+            s.setCursorStrip(!s.cursorStrip.value);
+          }),
+          if (_stringed)
+            check(tr('Griffbrett unten', 'Fretboard at the bottom'), s.showFretboard.value, () {
+              s.setShowFretboard(!s.showFretboard.value);
+            }),
+          check(tr('Spuren unten', 'Tracks at the bottom'), s.showTracks.value, () {
+            s.setShowTracks(!s.showTracks.value);
+          }),
+          check(tr('Eigenschaften rechts', 'Properties on the right'), s.showInspector.value, () {
+            s.setShowInspector(!s.showInspector.value);
+          }),
+        ],
+      ],
+      builder: (context, controller, _) => TextButton(
+        onPressed: () => controller.isOpen ? controller.close() : controller.open(),
+        style: TextButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.onSurface),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [Text(tr('Ansicht', 'View')), const Icon(Icons.arrow_drop_down_rounded, size: 20)],
         ),
       ),
     );
@@ -1262,6 +1332,20 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
   @override
   Widget build(BuildContext context) {
     final settings = _settings;
+    // Einstellungen (Bereiche ein/aus …): bei jeder Änderung neu aufbauen
+    final listen = <Listenable>[
+      ?settings?.showTools,
+      ?settings?.showFretboard,
+      ?settings?.openToolGroups,
+      ?settings?.showTracks,
+      ?settings?.cursorStrip,
+      ?settings?.showInspector,
+      ?settings?.tracksHeight,
+    ];
+    return ListenableBuilder(listenable: Listenable.merge(listen), builder: (context, _) => _screen(context));
+  }
+
+  Widget _screen(BuildContext context) {
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
@@ -1279,14 +1363,7 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
           ),
         ),
       ),
-    ).withListen([
-      ?settings?.showTools,
-      ?settings?.showFretboard,
-      ?settings?.openToolGroups,
-      ?settings?.showTracks,
-      ?settings?.cursorStrip,
-      ?settings?.showInspector,
-    ]);
+    );
   }
 
   Widget _body() {
@@ -1371,6 +1448,8 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
         Divider(height: 1, thickness: 1, color: c.line),
         TrackLanes(
           maxLanes: MediaQuery.sizeOf(context).height < 800 ? 3 : 4,
+          height: _settings?.tracksHeight.value,
+          onResize: (h) => _settings?.setTracksHeight(h),
           editor: e,
           player: _player,
           cursorTick: _cursorTick,
@@ -1389,7 +1468,6 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
     final c = context.scrivi;
     final e = _editor;
     final p = _player;
-    final s = _settings;
     final scheme = Theme.of(context).colorScheme;
     Widget toggle(IconData icon, String tip, bool on, VoidCallback onTap) => IconButton(
       tooltip: tip,
@@ -1416,49 +1494,18 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
                 onPressed: _leave,
               ),
               _fileMenu(context),
+              _viewMenu(context),
               _titleBlock(context, compact),
-              IconButton(
-                tooltip: _unsaved
-                    ? tr('Speichern unter …  (Strg+S)', 'Save as …  (Ctrl+S)')
-                    : tr('Speichern  (Strg+S)', 'Save  (Ctrl+S)'),
-                isSelected: _unsaved,
-                style: IconButton.styleFrom(backgroundColor: _unsaved ? scheme.primaryContainer : null),
-                icon: Icon(Icons.save_outlined, color: _unsaved ? scheme.onPrimaryContainer : null),
-                onPressed: save,
-              ),
-              if (s != null) ...[
-                toggle(
-                  Icons.handyman_outlined,
-                  tr('Werkzeuge ein/aus', 'Show/hide tools'),
-                  s.showTools.value,
-                  () => s.setShowTools(!s.showTools.value),
-                ),
-                if (_stringed)
-                  toggle(
-                    Icons.view_week_outlined,
-                    tr('Griffbrett ein/aus', 'Show/hide fretboard'),
-                    s.showFretboard.value,
-                    () => s.setShowFretboard(!s.showFretboard.value),
+              // Nur wenn das Stück noch nicht an einem eigenen Ort gespeichert ist
+              if (_unsaved)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: FilledButton.tonalIcon(
+                    onPressed: save,
+                    icon: const Icon(Icons.save_outlined, size: 18),
+                    label: Text(tr('Speichern', 'Save')),
                   ),
-                toggle(
-                  Icons.call_to_action_outlined,
-                  tr('Leiste am Cursor ein/aus', 'Show/hide the strip at the cursor'),
-                  s.cursorStrip.value,
-                  () => s.setCursorStrip(!s.cursorStrip.value),
                 ),
-                toggle(
-                  Icons.table_rows_outlined,
-                  tr('Spuren ein/aus', 'Show/hide tracks'),
-                  s.showTracks.value,
-                  () => s.setShowTracks(!s.showTracks.value),
-                ),
-                toggle(
-                  Icons.view_sidebar_outlined,
-                  tr('Eigenschaften ein/aus', 'Show/hide properties'),
-                  s.showInspector.value,
-                  () => s.setShowInspector(!s.showInspector.value),
-                ),
-              ],
               const SizedBox(width: 4),
               IconButton(
                 tooltip: tr('Rückgängig  (Strg+Z)', 'Undo  (Ctrl+Z)'),
@@ -1564,50 +1611,9 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
                           () => p.setMetronome(!p.metronome),
                         ),
                         _chip(context, '1·2', tr('Einzähler', 'Count-in'), p.countIn, () => p.setCountIn(!p.countIn)),
-                        IconButton(
-                          tooltip: tr('Mischpult', 'Mixer'),
-                          icon: const Icon(Icons.tune_rounded, size: 20),
-                          onPressed: () => t.mixer(context),
-                        ),
                       ],
                     );
                   },
-                ),
-              if (_pages != null)
-                PopupMenuButton<Object>(
-                  tooltip: tr('Ansicht', 'View'),
-                  icon: Icon(_endless ? Icons.view_column_outlined : Icons.view_agenda_outlined, size: 20),
-                  onSelected: (v) => v is ScoreView
-                      ? _setView(v)
-                      : (v == 'transposed' ? _setTransposed(!_transposed) : _setLayout(v as String)),
-                  itemBuilder: (context) => [
-                    CheckedPopupMenuItem(
-                      value: 'pages',
-                      checked: !_endless && !_fullScore,
-                      child: Text(tr('Seiten (eine Spur)', 'Pages (one track)')),
-                    ),
-                    CheckedPopupMenuItem(
-                      value: 'score',
-                      checked: _fullScore,
-                      child: Text(tr('Partitur (alle Spuren)', 'Full score (all tracks)')),
-                    ),
-                    CheckedPopupMenuItem(
-                      value: 'endless',
-                      checked: _endless,
-                      child: Text(tr('Endlos (eine lange Zeile)', 'Endless (one long line)')),
-                    ),
-                    const PopupMenuDivider(),
-                    CheckedPopupMenuItem(
-                      value: 'transposed',
-                      checked: _transposed,
-                      child: Text(tr('Transponiert (wie die Musiker lesen)', 'Transposed (as the players read)')),
-                    ),
-                    if (_stringed) ...[
-                      const PopupMenuDivider(),
-                      for (final v in ScoreView.values)
-                        CheckedPopupMenuItem(value: v, checked: v == _view, child: Text(_viewName(v))),
-                    ],
-                  ],
                 ),
               if (e != null)
                 IconButton(
@@ -1750,12 +1756,6 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
       },
     );
   }
-}
-
-extension on Widget {
-  /// Neu aufbauen, wenn sich eine der Einstellungen ändert.
-  Widget withListen(List<Listenable> ls) =>
-      ls.isEmpty ? this : ListenableBuilder(listenable: Listenable.merge(ls), builder: (_, _) => this);
 }
 
 /// Angetippte Stelle: Takt, Stelle im Takt (ganze Noten), Saite bzw. Stammton.

@@ -25,7 +25,8 @@ class ScorePlayer extends ChangeNotifier {
       muted = [for (final t in _score.tracks) t.mix.muted],
       solo = [for (final t in _score.tracks) t.mix.solo],
       pan = [for (final t in _score.tracks) t.mix.pan],
-      _reverb = _score.reverb {
+      _reverb = _score.reverb,
+      _master = _score.masterVolume {
     _plan = core.PlaybackPlan.build(_score);
   }
 
@@ -124,7 +125,18 @@ class ScorePlayer extends ChangeNotifier {
   double gain(int i) {
     final anySolo = solo.any((s) => s);
     final on = anySolo ? solo[i] : !muted[i];
-    return on ? volume[i] : 0;
+    return on ? volume[i] * _master : 0;
+  }
+
+  double _master;
+
+  /// Gesamtlautstärke (Masterspur).
+  double get master => _master;
+
+  void setMaster(double v) {
+    _master = v.clamp(0.0, 1.0);
+    _applyMix();
+    onMixChanged?.call(-2);
   }
 
   // Geladene Klänge (zum aktuellen Tempo)

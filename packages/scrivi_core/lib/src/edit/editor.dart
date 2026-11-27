@@ -2003,6 +2003,14 @@ class ScoreEditor {
         mix: mix ?? t.mix,
       );
 
+  /// Gesamtlautstärke (Masterspur, 0..1), wie das Mischpult ohne Rückgängig-Schritt.
+  void setMasterVolume(double v) {
+    final m = v.clamp(0.0, 1.0);
+    if (m == _score.masterVolume) return;
+    _score.masterVolume = m;
+    revision++;
+  }
+
   /// Hall beim Abspielen (0..1). Wie das Mischpult ohne Rückgängig-Schritt.
   void setReverb(double v) {
     final r = v.clamp(0.0, 1.0);

@@ -166,4 +166,11 @@ void main() {
     expect(chord.every((n) => n.slideOut == -1 || n.slideOut == 0), isTrue);
     expect(chord.any((n) => n.bend.isNotEmpty), isTrue); // Hebel als kurzes Hinunter und Zurück
   });
+
+  test('Copyright bekommt das ©-Zeichen von selbst', () {
+    expect(const ScoreInfo(copyright: '2026 Muster').copyrightLine, '© 2026 Muster');
+    expect(const ScoreInfo(copyright: '© 2026 Muster').copyrightLine, '© 2026 Muster');
+    expect(const ScoreInfo(copyright: 'Copyright 2026').copyrightLine, 'Copyright 2026');
+    expect(const ScoreInfo().copyrightLine, '');
+  });
 }

@@ -805,7 +805,7 @@ class Engraver {
       firstOnPage = false;
     }
     // Copyright unten auf der ersten Seite, Seitenzahlen
-    final cr = score.info.copyright;
+    final cr = score.info.copyrightLine;
     if (cr.isNotEmpty) {
       pages.first.items.add(
         TextItem(

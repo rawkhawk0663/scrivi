@@ -416,6 +416,17 @@ Anschwellen, Slap/Pop, Triller, Arpeggio, Rasgueado (mit Klang; noch nicht aus G
 gelesen). Offen: Paket 3 (Fingersätze, Saitennummern, Pedal); Oktavierung und Wiederholungszeichen
 noch nicht in MusicXML und Guitar-Pro-Dateien.
 
+### Mischpult in den Spuren, Menü „Ansicht“ (27. November 2026)
+
+Rückmeldung des Besitzers: Die Ein/Aus-Knöpfe oben waren unverständlich (und taten nichts mehr);
+ein eigenes Mischpult-Fenster braucht es nicht. Jetzt: Menü „Ansicht“ neben „Datei“ mit Häkchen
+für Werkzeugspalte, Leiste am Cursor, Griffbrett, Spuren und Eigenschaften (dazu Seiten/Partitur/
+Endlos, transponiert, Noten/Tab); „Speichern“ oben nur bei ungesicherten Änderungen; Einstellungen
+im Menü „Datei“. Die Spuren unten sind das Mischpult: Drehknopf links/rechts pro Spur, Master-Spur
+mit Gesamtlautstärke (im Stück gespeichert), Hall und „Im Raum verteilen“; der Bereich lässt sich
+am oberen Rand höher und niedriger ziehen und scrollt bei vielen Spuren. Copyright bekommt das
+©-Zeichen von selbst.
+
 ### Reiter und schneller Start (27. November 2026)
 
 Mehrere Stücke gleichzeitig offen: Reiterleiste unter der oberen Leiste (ab zwei Stücken),

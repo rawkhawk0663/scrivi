@@ -9,7 +9,11 @@ class Score {
     required this.tracks,
     List<TempoMark>? tempos,
     this.reverb = defaultReverb,
+    this.masterVolume = 1,
   }) : tempos = tempos ?? [];
+
+  /// Gesamtlautstärke (Masterspur), 0..1.
+  double masterVolume;
 
   /// Hall beim Abspielen, 0 (trocken) bis 1 (grosser Raum).
   double reverb;
@@ -28,8 +32,14 @@ class Score {
   /// Tempo am Anfang (Viertel pro Minute), falls angegeben.
   TempoMark? get initialTempo => tempos.isEmpty ? null : tempos.first;
 
-  Score copyWith({ScoreInfo? info}) =>
-      Score(info: info ?? this.info, masterBars: masterBars, tracks: tracks, tempos: tempos, reverb: reverb);
+  Score copyWith({ScoreInfo? info}) => Score(
+    info: info ?? this.info,
+    masterBars: masterBars,
+    tracks: tracks,
+    tempos: tempos,
+    reverb: reverb,
+    masterVolume: masterVolume,
+  );
 }
 
 class ScoreInfo {
@@ -53,6 +63,15 @@ class ScoreInfo {
   final String words;
   final String music;
   final String copyright;
+
+  /// Copyright, wie es auf dem Blatt steht: immer mit „©“ vorne (ausser es steht schon da).
+  String get copyrightLine {
+    final c = copyright.trim();
+    if (c.isEmpty) return '';
+    if (RegExp(r'^(©|\(c\)|copyright\b)', caseSensitive: false).hasMatch(c)) return c;
+    return '© $c';
+  }
+
   final String tabber;
 
   /// Anleitungen: stehen über der ersten Zeile (z. B. „Kapo 2, mit Plektrum“).

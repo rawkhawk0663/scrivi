@@ -283,19 +283,26 @@ Future<core.ScoreInfo?> askScoreInfo(BuildContext context, core.ScoreInfo info) 
     'album': TextEditingController(text: info.album),
     'words': TextEditingController(text: info.words),
     'music': TextEditingController(text: info.music),
-    'copyright': TextEditingController(text: info.copyright),
+    'copyright': TextEditingController(text: _withoutSign(info.copyright)),
     'tabber': TextEditingController(text: info.tabber),
     'instructions': TextEditingController(text: info.instructions),
     'notice': TextEditingController(text: info.notice),
   };
-  Widget field(String key, String label, {String? hint, bool autofocus = false, int lines = 1}) => TextField(
-    controller: fields[key],
-    autofocus: autofocus,
-    minLines: lines,
-    maxLines: lines == 1 ? 1 : 6,
-    keyboardType: lines == 1 ? TextInputType.text : TextInputType.multiline,
-    decoration: InputDecoration(labelText: label, helperText: hint, border: const OutlineInputBorder(), isDense: true),
-  );
+  Widget field(String key, String label, {String? hint, bool autofocus = false, int lines = 1, String? prefix}) =>
+      TextField(
+        controller: fields[key],
+        autofocus: autofocus,
+        minLines: lines,
+        maxLines: lines == 1 ? 1 : 6,
+        keyboardType: lines == 1 ? TextInputType.text : TextInputType.multiline,
+        decoration: InputDecoration(
+          labelText: label,
+          helperText: hint,
+          prefixText: prefix,
+          border: const OutlineInputBorder(),
+          isDense: true,
+        ),
+      );
   Widget pair(Widget a, Widget b) => Row(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
@@ -311,7 +318,7 @@ Future<core.ScoreInfo?> askScoreInfo(BuildContext context, core.ScoreInfo info) 
     album: fields['album']!.text.trim(),
     words: fields['words']!.text.trim(),
     music: fields['music']!.text.trim(),
-    copyright: fields['copyright']!.text.trim(),
+    copyright: _withoutSign(fields['copyright']!.text),
     tabber: fields['tabber']!.text.trim(),
     instructions: fields['instructions']!.text.trim(),
     notice: fields['notice']!.text.trim(),
@@ -346,6 +353,7 @@ Future<core.ScoreInfo?> askScoreInfo(BuildContext context, core.ScoreInfo info) 
                   'copyright',
                   tr('Copyright', 'Copyright'),
                   hint: tr('steht unten auf Seite 1', 'shown at the bottom of page 1'),
+                  prefix: '© ',
                 ),
                 field('tabber', tr('Transkription', 'Transcribed by'), hint: tr('steht links oben', 'shown top left')),
               ),
@@ -566,3 +574,6 @@ Future<NewPieceSettings?> askNewPiece(BuildContext context) {
     bars.dispose();
   });
 }
+
+/// Copyright ohne „©“ vorne: das Zeichen setzt Scrivi selbst.
+String _withoutSign(String text) => text.trim().replaceFirst(RegExp(r'^(©|\(c\))\s*', caseSensitive: false), '').trim();

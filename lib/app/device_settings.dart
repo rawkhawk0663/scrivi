@@ -18,6 +18,8 @@ class DeviceSettings {
     showFretboard.value = data['griffbrett'] as bool? ?? true;
     showTracks.value = data['spuren'] as bool? ?? true;
     showInspector.value = data['eigenschaften'] as bool? ?? true;
+    final th = data['spurenhoehe'];
+    tracksHeight.value = th is num ? th.toDouble() : null;
     endless.value = data['endlos'] as bool? ?? false;
     fullScore.value = data['partitur'] as bool? ?? false;
     cursorStrip.value = data['cursorleiste'] as bool? ?? true;
@@ -55,6 +57,15 @@ class DeviceSettings {
 
   Future<void> setShowTracks(bool v) => _set(showTracks, 'spuren', v);
   Future<void> setShowInspector(bool v) => _set(showInspector, 'eigenschaften', v);
+
+  /// Höhe des Spurenbereichs unten (null = so hoch wie nötig, höchstens ein paar Spuren).
+  final tracksHeight = ValueNotifier<double?>(null);
+  Future<void> setTracksHeight(double v) async {
+    tracksHeight.value = v;
+    _data['spurenhoehe'] = v.roundToDouble();
+    await _save();
+  }
+
   Future<void> setEndless(bool v) => _set(endless, 'endlos', v);
 
   /// Alle Spuren untereinander als Partitur (statt nur die gewählte Spur).

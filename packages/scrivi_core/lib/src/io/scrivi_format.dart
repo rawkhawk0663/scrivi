@@ -52,6 +52,7 @@ class ScriviFormat {
     'info': _info(s.info),
     'tempos': [for (final t in s.tempos) _tempo(t)],
     'reverb': s.reverb == Score.defaultReverb ? null : s.reverb,
+    'master': s.masterVolume == 1 ? null : s.masterVolume,
     'masterBars': [for (final m in s.masterBars) _masterBar(m)],
     'tracks': [for (final t in s.tracks) _track(t)],
   };
@@ -248,6 +249,7 @@ class ScriviFormat {
         notice: _str(info['notice']),
       ),
       reverb: j['reverb'] is num ? (j['reverb'] as num).toDouble().clamp(0.0, 1.0) : Score.defaultReverb,
+      masterVolume: j['master'] is num ? (j['master'] as num).toDouble().clamp(0.0, 1.0) : 1.0,
       tempos: [
         for (final t in _list(j['tempos']).map(_map))
           TempoMark(

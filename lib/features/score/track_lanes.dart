@@ -8,6 +8,7 @@ import 'package:scrivi_core/scrivi_core.dart' as core;
 import '../../app/l10n.dart';
 import '../../app/theme.dart';
 import 'score_player.dart';
+import 'transport_bar.dart';
 
 /// Farbe einer Spur (in Bahnen, Köpfen und Eigenschaften gleich).
 Color trackColor(int i) => const [
@@ -37,7 +38,15 @@ class TrackLanes extends StatefulWidget {
     required this.onTrackMenu,
     required this.onAddTrack,
     this.maxLanes = 4,
+    this.height,
+    this.onResize,
   });
+
+  /// Höhe des ganzen Bereichs (vom Besitzer gezogen); null = nach [maxLanes].
+  final double? height;
+
+  /// Oberkante gezogen: neue Höhe.
+  final ValueChanged<double>? onResize;
 
   /// So viele Spuren sind ohne Blättern zu sehen.
   final int maxLanes;
@@ -55,7 +64,12 @@ class TrackLanes extends StatefulWidget {
 
   static const laneHeight = 34.0;
   static const rulerHeight = 40.0;
-  static const headerWidth = 250.0;
+  static const headerWidth = 300.0;
+  static const masterHeight = 36.0;
+  static const handleHeight = 7.0;
+
+  /// Kleinste Höhe: Lineal, eine Spur und die Masterspur.
+  static const minHeight = handleHeight + rulerHeight + 1 + laneHeight + 1 + masterHeight;
 
   @override
   State<TrackLanes> createState() => _TrackLanesState();
@@ -157,8 +171,10 @@ class _TrackLanesState extends State<TrackLanes> {
         return;
       }
       if (!_hLanes.hasClients) return;
-      // Mausrad: waagrecht durch die Takte; mit Umschalt senkrecht durch die Spuren
-      if (hw.isShiftPressed && _vLanes.hasClients) {
+      // Mausrad: senkrecht durch die Spuren (wenn nicht alle zu sehen sind), mit Umschalt
+      // waagrecht durch die Takte; waagrechtes Wischen auf dem Touchpad immer waagrecht
+      final canV = _vLanes.hasClients && _vLanes.position.maxScrollExtent > 0;
+      if (!hw.isShiftPressed && canV && e.scrollDelta.dx == 0) {
         _vLanes.jumpTo((_vLanes.offset + e.scrollDelta.dy).clamp(0.0, _vLanes.position.maxScrollExtent));
       } else {
         final d = e.scrollDelta.dx != 0 ? e.scrollDelta.dx : e.scrollDelta.dy;
@@ -178,11 +194,35 @@ class _TrackLanesState extends State<TrackLanes> {
     final lanesHeight = TrackLanes.laneHeight * n;
     final m = widget.maxLanes;
     final visibleLanes = math.min(n, m) * TrackLanes.laneHeight + (n > m ? TrackLanes.laneHeight / 2 : 0);
+    const fixed = TrackLanes.handleHeight + TrackLanes.rulerHeight + 1 + 1 + TrackLanes.masterHeight;
+    final maxH = math.max(TrackLanes.minHeight, MediaQuery.sizeOf(context).height * 0.7);
+    final height = (widget.height ?? fixed + visibleLanes).clamp(TrackLanes.minHeight, maxH);
     return Container(
       color: c.card,
-      height: TrackLanes.rulerHeight + 1 + visibleLanes,
+      height: height,
       child: Column(
         children: [
+          // Oberkante: ziehen macht den Bereich grösser oder kleiner
+          MouseRegion(
+            cursor: SystemMouseCursors.resizeRow,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onVerticalDragUpdate: (d) {
+                final h = (height - d.delta.dy).clamp(TrackLanes.minHeight, maxH);
+                widget.onResize?.call(h);
+              },
+              child: SizedBox(
+                height: TrackLanes.handleHeight,
+                child: Center(
+                  child: Container(
+                    width: 44,
+                    height: 3,
+                    decoration: BoxDecoration(color: c.line, borderRadius: BorderRadius.circular(2)),
+                  ),
+                ),
+              ),
+            ),
+          ),
           SizedBox(
             height: TrackLanes.rulerHeight,
             child: Row(
@@ -281,59 +321,139 @@ class _TrackLanesState extends State<TrackLanes> {
           ),
           Divider(height: 1, thickness: 1, color: c.line),
           Expanded(
-            child: SingleChildScrollView(
+            child: Scrollbar(
               controller: _vLanes,
-              child: SizedBox(
-                height: lanesHeight,
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: TrackLanes.headerWidth,
-                      child: Column(children: [for (var i = 0; i < n; i++) _header(context, i)]),
-                    ),
-                    VerticalDivider(width: 1, thickness: 1, color: c.line),
-                    Expanded(
-                      child: Listener(
-                        onPointerSignal: _onWheel,
-                        child: SingleChildScrollView(
-                          controller: _hLanes,
-                          scrollDirection: Axis.horizontal,
-                          child: GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            onTapUp: (t) {
-                              final track = (t.localPosition.dy ~/ TrackLanes.laneHeight).clamp(0, n - 1);
-                              final bar = d.barAt(t.localPosition.dx);
-                              final pos = d.positionIn(bar, t.localPosition.dx);
-                              widget.onSelect(track, bar, pos);
-                            },
-                            child: RepaintBoundary(
-                              child: CustomPaint(
-                                size: Size(d.width + 40, lanesHeight),
-                                painter: _LanesPainter(
-                                  d,
-                                  track: e.track,
-                                  cursorBar: e.cursor.bar,
-                                  loop: _dragLoop ?? p?.loop,
-                                  colors: c,
+              thumbVisibility: true,
+              child: SingleChildScrollView(
+                controller: _vLanes,
+                child: SizedBox(
+                  height: lanesHeight,
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: TrackLanes.headerWidth,
+                        child: Column(children: [for (var i = 0; i < n; i++) _header(context, i)]),
+                      ),
+                      VerticalDivider(width: 1, thickness: 1, color: c.line),
+                      Expanded(
+                        child: Listener(
+                          onPointerSignal: _onWheel,
+                          child: SingleChildScrollView(
+                            controller: _hLanes,
+                            scrollDirection: Axis.horizontal,
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTapUp: (t) {
+                                final track = (t.localPosition.dy ~/ TrackLanes.laneHeight).clamp(0, n - 1);
+                                final bar = d.barAt(t.localPosition.dx);
+                                final pos = d.positionIn(bar, t.localPosition.dx);
+                                widget.onSelect(track, bar, pos);
+                              },
+                              child: RepaintBoundary(
+                                child: CustomPaint(
+                                  size: Size(d.width + 40, lanesHeight),
+                                  painter: _LanesPainter(
+                                    d,
+                                    track: e.track,
+                                    cursorBar: e.cursor.bar,
+                                    loop: _dragLoop ?? p?.loop,
+                                    colors: c,
+                                  ),
+                                  foregroundPainter: p == null
+                                      ? null
+                                      : _PlayheadPainter(d, p, Theme.of(context).colorScheme.onSurface),
                                 ),
-                                foregroundPainter: p == null
-                                    ? null
-                                    : _PlayheadPainter(d, p, Theme.of(context).colorScheme.onSurface),
                               ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
+          Divider(height: 1, thickness: 1, color: c.line),
+          SizedBox(height: TrackLanes.masterHeight, child: _master(context)),
         ],
       ),
     );
   }
+
+  /// Masterspur: Gesamtlautstärke, Hall, Instrumente im Raum verteilen.
+  Widget _master(BuildContext context) {
+    final c = context.scrivi;
+    final p = widget.player;
+    return Row(
+      children: [
+        SizedBox(
+          width: TrackLanes.headerWidth,
+          child: Row(
+            children: [
+              Container(width: 4, color: Theme.of(context).colorScheme.onSurface),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Master',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: c.muted),
+                ),
+              ),
+              if (p != null)
+                ListenableBuilder(
+                  listenable: p,
+                  builder: (context, _) => Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Tooltip(
+                        message: tr('Instrumente im Raum verteilen (links/rechts)', 'Spread the instruments in stereo'),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(6),
+                          onTap: () => spreadStereo(p),
+                          child: const Padding(
+                            padding: EdgeInsets.all(3),
+                            child: Icon(Icons.surround_sound_outlined, size: 18),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      _Knob(
+                        value: p.reverb,
+                        min: 0,
+                        max: 1,
+                        reset: core.Score.defaultReverb,
+                        tooltip: '${tr('Hall', 'Reverb')}: ${reverbText(p.reverb)}',
+                        label: tr('Hall', 'Rev'),
+                        onChanged: p.setReverb,
+                      ),
+                      _volume(context, p.master, p.setMaster, tr('Gesamtlautstärke', 'Master volume')),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+        VerticalDivider(width: 1, thickness: 1, color: c.line),
+        const Expanded(child: SizedBox()),
+      ],
+    );
+  }
+
+  Widget _volume(BuildContext context, double v, ValueChanged<double> onChanged, String what) => SizedBox(
+    width: 86,
+    child: SliderTheme(
+      data: SliderTheme.of(context).copyWith(
+        trackHeight: 2,
+        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+        overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
+      ),
+      child: Tooltip(
+        message: '$what ${(v * 100).round()} %',
+        waitDuration: const Duration(milliseconds: 400),
+        child: Slider(value: v, onChanged: onChanged),
+      ),
+    ),
+  );
 
   Widget _header(BuildContext context, int i) {
     final c = context.scrivi;
@@ -373,21 +493,17 @@ class _TrackLanesState extends State<TrackLanes> {
                       _small(context, 'M', tr('Stumm', 'Mute'), p.muted[i], () => p.toggleMute(i)),
                       const SizedBox(width: 3),
                       _small(context, 'S', tr('Solo', 'Solo'), p.solo[i], () => p.toggleSolo(i)),
-                      SizedBox(
-                        width: 86,
-                        child: SliderTheme(
-                          data: SliderTheme.of(context).copyWith(
-                            trackHeight: 2,
-                            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-                            overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
-                          ),
-                          child: Tooltip(
-                            message: '${tr('Lautstärke', 'Volume')} ${(p.volume[i] * 100).round()} %',
-                            waitDuration: const Duration(milliseconds: 400),
-                            child: Slider(value: p.volume[i], onChanged: (v) => p.setVolume(i, v)),
-                          ),
-                        ),
+                      const SizedBox(width: 6),
+                      _Knob(
+                        value: p.pan[i],
+                        min: -1,
+                        max: 1,
+                        reset: 0,
+                        tooltip: '${tr('Links/Rechts', 'Pan')}: ${panText(p.pan[i])}',
+                        label: 'L R',
+                        onChanged: (v) => p.setPan(i, v),
                       ),
+                      _volume(context, p.volume[i], (v) => p.setVolume(i, v), tr('Lautstärke', 'Volume')),
                     ],
                   );
                 },
@@ -423,6 +539,96 @@ class _TrackLanesState extends State<TrackLanes> {
       ),
     );
   }
+}
+
+/// Links/Rechts in Worten.
+String panText(double v) {
+  if (v.abs() < 0.05) return tr('Mitte', 'Centre');
+  final n = (v.abs() * 100).round();
+  return v < 0 ? tr('links $n', 'left $n') : tr('rechts $n', 'right $n');
+}
+
+/// Kleiner Drehknopf: senkrecht ziehen (oder Mausrad) ändert den Wert, Doppeltippen setzt ihn zurück.
+class _Knob extends StatelessWidget {
+  const _Knob({
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.reset,
+    required this.tooltip,
+    required this.label,
+    required this.onChanged,
+  });
+  final double value, min, max, reset;
+  final String tooltip, label;
+  final ValueChanged<double> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final range = max - min;
+    return Tooltip(
+      message: tooltip,
+      waitDuration: const Duration(milliseconds: 300),
+      child: Listener(
+        onPointerSignal: (e) {
+          if (e is PointerScrollEvent) {
+            GestureBinding.instance.pointerSignalResolver.register(e, (_) {
+              onChanged((value - e.scrollDelta.dy.sign * range / 40).clamp(min, max));
+            });
+          }
+        },
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onDoubleTap: () => onChanged(reset),
+          onVerticalDragUpdate: (d) => onChanged((value - d.delta.dy * range / 120).clamp(min, max)),
+          onHorizontalDragUpdate: (d) => onChanged((value + d.delta.dx * range / 120).clamp(min, max)),
+          child: SizedBox(
+            width: 28,
+            height: 28,
+            child: CustomPaint(
+              painter: _KnobPainter((value - min) / range, scheme.primary, context.scrivi.line, min < 0),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _KnobPainter extends CustomPainter {
+  _KnobPainter(this.t, this.color, this.track, this.centred);
+  final double t;
+  final Color color, track;
+  final bool centred;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final c = size.center(Offset.zero);
+    final r = size.width / 2 - 3;
+    const start = math.pi * 0.75, sweep = math.pi * 1.5;
+    final rect = Rect.fromCircle(center: c, radius: r);
+    final base = Paint()
+      ..color = track
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5
+      ..strokeCap = StrokeCap.round;
+    canvas.drawArc(rect, start, sweep, false, base);
+    final on = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5
+      ..strokeCap = StrokeCap.round;
+    // Mittenknopf (links/rechts) zeichnet von der Mitte aus, sonst vom Anfang
+    final from = centred ? start + sweep / 2 : start;
+    final to = start + sweep * t;
+    canvas.drawArc(rect, math.min(from, to), (to - from).abs(), false, on);
+    final a = start + sweep * t;
+    canvas.drawLine(c, c + Offset(math.cos(a), math.sin(a)) * (r - 1), on..strokeWidth = 2);
+  }
+
+  @override
+  bool shouldRepaint(_KnobPainter old) => old.t != t || old.color != color;
 }
 
 /// Lage der Takte und kleine Notenstriche pro Spur (einmal pro Änderung gerechnet).

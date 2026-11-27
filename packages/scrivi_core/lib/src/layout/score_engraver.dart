@@ -307,7 +307,7 @@ class ScoreEngraver {
       y = cursor;
       firstOnPage = false;
     }
-    final cr = score.info.copyright;
+    final cr = score.info.copyrightLine;
     if (cr.isNotEmpty) {
       pages.first.items.add(
         TextItem(
