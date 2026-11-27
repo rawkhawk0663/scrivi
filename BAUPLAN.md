@@ -410,9 +410,10 @@ Akkorde.
 Vorzeichen ♯ ♭ ♮ 𝄪 𝄫 und zur Erinnerung in Klammern, Doppelpunkt, Quintolen/Sextolen/Septolen
 (Eingabe in die freien Plätze behält die Gruppe), Vorschlagsnoten schreiben, ppp und fff, 8va/8vb/
 15ma/15mb, Häuser, Segno/Coda/D.C./D.S./Fine/To Coda als Werkzeuge, Wiederholungszeichen für einen
-oder zwei Takte. Neue Werkzeuggruppe „Vorzeichen“. Offen: Paket 2 (Gitarre: Slides in/out,
-künstliche Flageoletts, weites Vibrato, Whammy, Fade, Swell, Tap/Slap/Pop, Triller, Arpeggio,
-Rasgueado), Paket 3 (Fingersätze, Saitennummern, Pedal); Oktavierung und Wiederholungszeichen
+oder zwei Takte. Neue Werkzeuggruppe „Vorzeichen“. Paket 2 (Gitarre) ✅: Slides hinein/hinaus,
+künstliche und Pinch-Flageoletts, weites Vibrato, Tremolo-Picking, Whammy-Dip, Ein-/Ausblenden,
+Anschwellen, Slap/Pop, Triller, Arpeggio, Rasgueado (mit Klang; noch nicht aus Guitar-Pro-Dateien
+gelesen). Offen: Paket 3 (Fingersätze, Saitennummern, Pedal); Oktavierung und Wiederholungszeichen
 noch nicht in MusicXML und Guitar-Pro-Dateien.
 
 ### Reiter und schneller Start (27. November 2026)
