@@ -24,6 +24,7 @@ dependencies:
   # Herz von Scrivi: Notenmodell, Dateiformate, Notensatz (reines Dart)
   scrivi_core:
     path: packages/scrivi_core
+  pdf: ^3.13.0
 
 dev_dependencies:
   flutter_test:

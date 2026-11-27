@@ -27,7 +27,7 @@ Der Plan mit allen Etappen steht in **`BAUPLAN.md`**. Nach jeder Etappe dort den
 packages/scrivi_core/   Herz von Scrivi, reines Dart ohne Flutter (eigene Tests: dart test)
   model/      Fraction (genaue Notenlängen), Pitch (mit Schreibweise), Score/MasterBar/Track/Bar/Voice/Beat/Note,
               ChordLibrary (eingebaute Griffbilder)
-  io/         ScriviFormat (eigenes Format .scrivi, JSON), GpReader.read: erkennt das Format und liest .gp (ZIP mit score.gpif), .gpx (GpxContainer:
+  io/         ScriviFormat (eigenes Format .scrivi, JSON), MusicXmlWriter, MidiWriter (Ausgabe), GpReader.read: erkennt das Format und liest .gp (ZIP mit score.gpif), .gpx (GpxContainer:
               BCFZ entpacken, BCFS-Dateisystem), .gp3/.gp4/.gp5 (GpBinaryReader), MusicXML
               (MusicXmlReader, auch .mxl und „timewise“), MIDI (MidiReader)
   layout/     Engraver (Notensatz → Seiten), shapes (Bögen, Balken, Gabeln)
@@ -40,7 +40,7 @@ lib/
   app/        Theme (ScriviColors), l10n, Updater, Fehlerprotokoll, Fensterknöpfe,
               Bildschirmtastatur, Geräte-Einstellungen (einstellungen.json)
   core/files/    ScoreFiles (laden, sicher schreiben, problemText), RecentFiles (Zuletzt geöffnet, Entwürfe),
-                 Thumbnails (Vorschaubilder)
+                 Thumbnails (Vorschaubilder), PdfExport (Zeichenliste → PDF)
   features/
     start/    Startseite (Neues Stück, Öffnen, Zuletzt geöffnet, Ziehen und Ablegen); keine Seitenleiste
     score/    Notenansicht (obere Leiste, Seiten, Zoom, Blättern), score_painter (Zeichenliste → Bild),
@@ -48,7 +48,7 @@ lib/
               track_lanes (Spur-Bahnen unten), inspector (Eigenschaften rechts),
               track_dialogs (Klang, Stimmung/Kapo, Namen von Tönen und Tonarten),
               tools (Werkzeugspalte, Suche), fretboard (Griffbrett), note_preview (Ton beim Eingeben),
-              edit_tools (Dialoge zum Schreiben)
+              edit_tools (Dialoge zum Schreiben), export_dialog (Exportieren, Drucken)
     settings/ Einstellungen, Über Scrivi, Updates
   widgets/    gemeinsame Bausteine (ScriviMark, SectionCard, EmptyState …)
 tool/         make_icon.py (Symbol), make_glyphs.py (Notenzeichen aus Bravura),
@@ -65,6 +65,7 @@ tool/         make_icon.py (Symbol), make_glyphs.py (Notenzeichen aus Bravura),
 - **Zeilen:** Die Takte pro Zeile aus der Datei (`SystemsLayout`) werden übernommen, solange sie passen; sonst wird gefüllt. Jede Zeile im Blocksatz.
 - **Tabulatur:** Saite 0 = tiefste. Schläge mit Rhythmus-Schrägstrichen zeigen in der Tab nichts. Gehaltene Noten nur am Zeilenanfang in Klammern.
 - **Schlagzeug** (`Track.percussion`, neutraler Schlüssel): Lage und Kopf pro Instrument aus `_drumPosition` (Bassdrum unten, Snare Mitte, Toms dazwischen, Hi-Hat/Becken als Kreuz über der obersten Linie), Hälse nach oben, keine Tonart und keine Vorzeichen.
+- **Spurname** oben links auf Seite 1, sobald das Stück mehrere Spuren hat (Einzelstimmen beim Drucken).
 - **Dynamik** erscheint nur bei Wechseln (die Dateien schreiben „mf“ an jeden Schlag).
 - **Vorschlagsnoten** nehmen keine Zeit: der Notensatz hängt sie an den nächsten Schlag (`_Ev.graces`) und reserviert vorne in der Spalte Platz (`_Col.graceW`).
 - **Endlos-Ansicht** (`LayoutOptions.endless`): alle Takte in einer Zeile ohne Blocksatz (`_endlessLayout`, Abstand `endlessSpacing`), ohne Titel; die Seite ist so breit wie nötig. Der Betrachter zeigt sie im Massstab einer A4-Seite und blättert waagrecht (`einstellungen.json`: `endlos`).
@@ -100,6 +101,7 @@ tool/         make_icon.py (Symbol), make_glyphs.py (Notenzeichen aus Bravura),
 - **Bundzahlen ohne gespeicherte Tonhöhe** zählen ab dem Kapodaster (klingend = Stimmung + Kapo + Bund). Noch nicht mit echter Datei geprüft.
 - **MusicXML:** Jede Notenzeile (`<staff>`) eines Instruments wird eine Spur; eine TAB-Zeile desselben Instruments liefert Saite/Bund (über Zeitpunkt und Tonhöhe zugeordnet). Ohne Saitenangabe wählt Scrivi die tiefste Lage bis Bund 12. Noten sind geschrieben; klingend = geschrieben − Transposition − Oktavierung des Schlüssels. Lücken in einer Stimme werden Pausen. Beim Ordner-Import werden fremde `.xml`-Dateien still übersprungen.
 - **MIDI:** Raster Sechzehntel; Takte aus den Taktarten, Töne über den Taktstrich mit Haltebogen; Gitarre (Programm 24–31) und Bass (32–39) bekommen Tabulatur und Oktav-Transposition, Kanal 10 ist Schlagzeug.
+- **Ausgeben:** `MusicXmlWriter.write` (partwise 4.0, 96 Einheiten pro Viertel, klingend; Oktav-Instrumente mit 8er-Schlüssel bzw. `<transpose>`; Saite von oben gezählt; Schlagzeug als `unpitched` mit `<instrument>` → `midi-unpitched`, das der Leser zurück in die Taste übersetzt). `staff-lines` nicht schreiben: der Leser nimmt sonst nur so viele Saiten. `MidiWriter.write` (Typ 1, 480 Ticks/Viertel) aus dem `PlaybackPlan`: Zeiten über `PlayBar.positionAt` zurück in Ticks (Swing wird wieder gerade), was eine Fermate über das Ende verlängert, wird abgeschnitten. Tests: `export_test.dart` (die drei Beispiele hin und zurück). `PdfExport.build` (App) zeichnet die Zeichenliste mit dem Paket `pdf` (Umrisse aus `Glyphs`, Schriften aus `assets/fonts`, fehlende Zeichen wie ♯/♭ werden # bzw. b). Drucken = PDF in den Temp-Ordner und mit `openUrl(Uri.file(…))` öffnen (kein eigenes Druck-Plugin).
 - Testdateien fremder Herkunft (alphaTab, MPL-2.0) nur lokal ausserhalb des Projekts verwenden; im Projekt bauen die Tests ihre Beispiele selbst (`test/formats_test.dart`).
 
 ## Dateien (keine Bibliothek, Wunsch des Besitzers)

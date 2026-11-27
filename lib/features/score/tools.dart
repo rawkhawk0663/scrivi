@@ -40,6 +40,10 @@ abstract class ToolHost {
   Future<void> quickSection();
   Future<void> save();
   Future<void> saveAs();
+
+  /// Ausgeben als PDF, MusicXML oder MIDI; Drucken.
+  Future<void> exportPiece();
+  Future<void> printPiece();
   void copy();
   void cut();
   void paste();
@@ -595,6 +599,26 @@ final List<ToolDef> allTools = [
     shortcut: 'Strg+Umschalt+S',
     keywords: const ['sichern', 'datei', 'file', 'kopie'],
     run: (h) => h.saveAs(),
+  ),
+  ToolDef(
+    id: 'export',
+    group: ToolGroup.piece,
+    look: const IconLook(Icons.ios_share_rounded),
+    de: 'Exportieren (PDF, MusicXML, MIDI) …',
+    en: 'Export (PDF, MusicXML, MIDI) …',
+    shortcut: 'Strg+E',
+    keywords: const ['pdf', 'musicxml', 'midi', 'xml', 'ausgeben', 'teilen', 'share', 'weitergeben'],
+    run: (h) => h.exportPiece(),
+  ),
+  ToolDef(
+    id: 'print',
+    group: ToolGroup.piece,
+    look: const IconLook(Icons.print_outlined),
+    de: 'Drucken …',
+    en: 'Print …',
+    shortcut: 'Strg+P',
+    keywords: const ['drucker', 'papier', 'pdf', 'printer'],
+    run: (h) => h.printPiece(),
   ),
   ToolDef(
     id: 'title',

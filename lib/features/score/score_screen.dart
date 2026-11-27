@@ -24,6 +24,7 @@ import '../../core/files/score_files.dart';
 import '../../widgets/visuals.dart';
 
 import 'edit_tools.dart';
+import 'export_dialog.dart';
 import 'fretboard.dart';
 import 'inspector.dart';
 import 'note_preview.dart';
@@ -135,13 +136,7 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
     final score = _editor?.score ?? _score;
     if (score == null) return;
     try {
-      final options = core.LayoutOptions(
-        showTab: _view != ScoreView.notation,
-        showNotation: _view != ScoreView.tab,
-        germanNoteNames: !L10n.isEnglish,
-        endless: _endless,
-        transposed: _transposed,
-      );
+      final options = _layoutOptions;
       // Eingaben in der Ansicht „transponiert“ zurückrechnen
       _editor?.viewShift = _transposed ? score.tracks[_track].instrumentKey : 0;
       final layout = core.Engraver(
@@ -167,6 +162,28 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
       if (mounted) setState(() => _error = e);
     }
   }
+
+  core.LayoutOptions get _layoutOptions => core.LayoutOptions(
+    showTab: _view != ScoreView.notation,
+    showNotation: _view != ScoreView.tab,
+    germanNoteNames: !L10n.isEnglish,
+    endless: _endless,
+    transposed: _transposed,
+  );
+
+  ScoreExport? get _export {
+    final score = _editor?.score ?? _score;
+    if (score == null) return null;
+    return ScoreExport(score: score, track: _track, options: _layoutOptions, sourcePath: _path);
+  }
+
+  /// Exportieren als PDF, MusicXML oder MIDI.
+  @override
+  Future<void> exportPiece() async => _export?.show(context);
+
+  /// Drucken über das PDF-Programm des Systems.
+  @override
+  Future<void> printPiece() async => _export?.print(context);
 
   String _viewName(ScoreView v) => switch (v) {
     ScoreView.both => tr('Noten und Tabulatur', 'Notation and tab'),
@@ -787,6 +804,10 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
         apply((e) => e.selectAll());
       } else if (k == LogicalKeyboardKey.keyS) {
         shift ? saveAs() : save();
+      } else if (k == LogicalKeyboardKey.keyE) {
+        exportPiece();
+      } else if (k == LogicalKeyboardKey.keyP) {
+        printPiece();
       } else if (k == LogicalKeyboardKey.keyK || k == LogicalKeyboardKey.keyF) {
         showToolSearch(context, this);
       } else if (k == LogicalKeyboardKey.arrowLeft) {

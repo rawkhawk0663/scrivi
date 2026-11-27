@@ -205,7 +205,7 @@ Jede Etappe endet mit einem Release, das man ausprobieren kann.
 | 3 | **Tabulatur vollständig** ✅ | alle Spieltechniken in Noten und Tab (Bending-Kurven, Vibrato, Flageolett, Tapping …), alle Stimmungen, Kapo, Rhythmus in der Tab, 7- und 8-saitige Gitarre, Bass | Gitarrenstücke mit allen Spieltechniken sehen vollständig aus | L |
 | 4 | **Abspielen** ✅ | Abspiel-Liste, Gitarrenklang, Tempo, Schleife, Einzähler, Metronom, mitlaufende Markierung, Mischpult; danach SoundFont-Klänge | ein Stück klingt richtig, auch mit Wiederholungen, Bends und Slides | M–L |
 | 5 | **Schreiben** ✅ | Cursor, Eingabe über Tastatur, Stift und Griffbrett, Auswahl, Kopieren, Rückgängig, Transponieren, Takte einfügen und löschen, Akkordsymbole, Liedtext, Titel | ein Leadsheet und eine Tab lassen sich vollständig in Scrivi schreiben | L |
-| 6 | **Ausgeben** | PDF, PNG/SVG, MusicXML, MIDI, Tonspur (WAV), „An Volti senden“, Drucken | ein PDF ist bereit für Schüler und Band | M |
+| 6 | **Ausgeben** (teilweise ✅) | PDF, PNG/SVG, MusicXML, MIDI, Tonspur (WAV), „An Volti senden“, Drucken | ein PDF ist bereit für Schüler und Band | M |
 | 7 | **Partitur** | Mehrere Instrumente, Klammern, Stimmen-Auszüge, Transposition, mehrere Stimmen pro System, Dynamik, Bögen, n-tolen, Vorschläge, Schlagzeug | ein Band-Arrangement mit Auszügen ist druckreif | XL |
 | 8 | **Feinschliff Notensatz** | Kollisionen vermeiden, Abstände von Hand, Stilvorlagen, Schriften (Petaluma), Umbrüche, Kopf- und Fusszeilen | Ergebnis braucht kaum Handarbeit | L |
 | 9 | **Extras** | Dropbox-Abgleich, Mikrofon-Eingabe, MIDI-Keyboard, Übungsblatt-Generator, Lieder an Suona, macOS, iPadOS | nach Wunsch | je M |
@@ -354,6 +354,22 @@ Plan in fünf Schritten:
    „transponiert“), Swing ab einem Takt, drei Beispielstücke auf der Startseite.
 4. Stift-Gesten, waagrechte Band-Ansicht.
 5. Mikrofon-Eingabe (einstimmig).
+
+Weitere Reihenfolge (vom Besitzer am 27. November 2026 bestätigt): 1. Drucken, PDF, MusicXML und
+MIDI ausgeben ✅; 2. Stift-Gesten; 3. Band-Ansicht (alle Spuren als Partitur); 4. Klang verfeinern
+(Mischpult in der Datei, Hall, Stereo, gedämpfte Noten und Flageoletts als Aufnahmen);
+5. Mikrofon-Eingabe; 6. Reiter für mehrere Stücke, schnellere Vorbereitung beim Abspielen.
+
+### Ausgeben (27. November 2026)
+
+*Exportieren …* (Strg+E, Gruppe „Stück“): **PDF** der gewählten Spur oder aller Spuren, in der
+Ansicht vom Bildschirm (Noten/Tab, transponiert), immer als A4-Seiten; Notenzeichen als Umrisse,
+Texte mit eingebetteten Schriften. **MusicXML** mit allen Spuren (Saite/Bund, Stimmung, Kapo,
+Akkorde, Liedtext, Tempo, Formteile, Wiederholungen, Häuser, Schlagzeug), klingend geschrieben;
+Scrivi liest die eigene Ausgabe verlustfrei wieder ein (Tests mit den Beispielstücken). **MIDI**
+(Typ 1) so, wie es klingt: Wiederholungen ausgeschrieben, Tempo, Taktart, Tonart, Klang pro Spur,
+Bendings. *Drucken …* (Strg+P) öffnet das PDF im PDF-Programm des Systems; auf Android landet es
+in `Dokumente/Scrivi`. Noch offen: PNG/SVG, Tonspur (WAV), „An Volti senden“.
 
 ### Dateien statt Bibliothek (27. November 2026)
 

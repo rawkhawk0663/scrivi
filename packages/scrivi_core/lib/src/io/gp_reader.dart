@@ -183,7 +183,7 @@ class _Parser {
       );
       final chords = <int, ChordDef>{};
       for (final item in _children(
-        _child(staffProps['DiagramCollection'] ?? XmlElement(XmlName('x')), 'Items'),
+        _child(staffProps['DiagramCollection'] ?? XmlElement(XmlName.qualified('x')), 'Items'),
         'Item',
       )) {
         final id = int.tryParse(item.getAttribute('id') ?? '');
@@ -253,7 +253,7 @@ class _Parser {
   List<TempoMark> _tempos() {
     final list = <TempoMark>[];
     for (final a in _children(
-      _child(_child(root, 'MasterTrack') ?? XmlElement(XmlName('x')), 'Automations'),
+      _child(_child(root, 'MasterTrack') ?? XmlElement(XmlName.qualified('x')), 'Automations'),
       'Automation',
     )) {
       if (_text(a, 'Type') != 'Tempo') continue;
@@ -513,7 +513,7 @@ class _Parser {
     if (midi == null && tone != null && toneOctave != null) midi = toneOctave * 12 + tone;
     if (midi == null) {
       // Nur Tonhöhe angegeben (ohne Saite): aus der Schreibweise rechnen.
-      final cp = _child(p['ConcertPitch'] ?? XmlElement(XmlName('x')), 'Pitch');
+      final cp = _child(p['ConcertPitch'] ?? XmlElement(XmlName.qualified('x')), 'Pitch');
       if (cp == null) return null;
       final step = _stepOf(_text(cp, 'Step'));
       final alter = _alterOf(_text(cp, 'Accidental'));
@@ -522,7 +522,7 @@ class _Parser {
       midi = oct * 12 + const [0, 2, 4, 5, 7, 9, 11][step] + alter;
     }
     Pitch spelled(String propName, int m) {
-      final el = _child(p[propName] ?? XmlElement(XmlName('x')), 'Pitch');
+      final el = _child(p[propName] ?? XmlElement(XmlName.qualified('x')), 'Pitch');
       if (el == null) return Pitch.fromMidi(m, fifths: fifths);
       return Pitch.fromMidiSpelled(m, _stepOf(_text(el, 'Step')), _alterOf(_text(el, 'Accidental')));
     }
@@ -530,7 +530,7 @@ class _Parser {
     final concert = spelled('ConcertPitch', midi);
     Pitch? written;
     if (transpose != 0) {
-      final hasWritten = _child(p['TransposedPitch'] ?? XmlElement(XmlName('x')), 'Pitch') != null;
+      final hasWritten = _child(p['TransposedPitch'] ?? XmlElement(XmlName.qualified('x')), 'Pitch') != null;
       // Fehlt die geschriebene Tonhöhe: bei ganzen Oktaven die Schreibweise übernehmen.
       written = hasWritten || transpose % 12 != 0
           ? spelled('TransposedPitch', midi + transpose)

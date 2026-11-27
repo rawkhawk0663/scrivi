@@ -3,6 +3,8 @@ library;
 
 export 'src/io/gp_reader.dart';
 export 'src/io/scrivi_format.dart';
+export 'src/io/midi_writer.dart';
+export 'src/io/musicxml_writer.dart';
 export 'src/edit/editor.dart';
 export 'src/edit/patterns.dart';
 export 'src/model/chord_library.dart';

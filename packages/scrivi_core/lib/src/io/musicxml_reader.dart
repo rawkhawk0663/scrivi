@@ -77,7 +77,7 @@ class MusicXmlReader {
 
 /// „timewise“ (Takte enthalten Stimmen) in „partwise“ (Stimmen enthalten Takte) umbauen.
 XmlElement _timewiseToPartwise(XmlElement tw) {
-  final out = XmlElement(XmlName('score-partwise'));
+  final out = XmlElement(XmlName.qualified('score-partwise'));
   final parts = <String, XmlElement>{};
   for (final c in tw.childElements) {
     if (c.name.local != 'measure') {
@@ -87,13 +87,13 @@ XmlElement _timewiseToPartwise(XmlElement tw) {
     for (final p in c.childElements.where((e) => e.name.local == 'part')) {
       final id = p.getAttribute('id') ?? '';
       final part = parts.putIfAbsent(id, () {
-        final e = XmlElement(XmlName('part'), [XmlAttribute(XmlName('id'), id)]);
+        final e = XmlElement(XmlName.qualified('part'), [XmlAttribute(XmlName.qualified('id'), id)]);
         out.children.add(e);
         return e;
       });
       part.children.add(
         XmlElement(
-          XmlName('measure'),
+          XmlName.qualified('measure'),
           [for (final a in c.attributes) a.copy()],
           [for (final n in p.children) n.copy()],
         ),
@@ -142,6 +142,9 @@ class _Ev {
 class _N {
   _N(this.written);
   final Pitch written;
+
+  /// Schlagzeug: MIDI-Taste aus `<instrument>` (über `midi-unpitched`).
+  int? drumKey;
   int? string;
   int? fret;
   bool tieStart = false;
@@ -170,6 +173,7 @@ class _Parser {
 
   final _tempos = <TempoMark>[];
   final _programs = <String, int>{};
+  final _drumKeys = <String, int>{};
   final _masters = <_Master>[];
 
   Score parse() {
@@ -180,6 +184,10 @@ class _Parser {
       // Klangfarbe: in der Datei ab 1 gezählt
       final prog = int.tryParse(_text(_child(sp, 'midi-instrument'), 'midi-program'));
       if (prog != null && prog >= 1 && prog <= 128) _programs[id] = prog - 1;
+      for (final mi in _children(sp, 'midi-instrument')) {
+        final key = int.tryParse(_text(mi, 'midi-unpitched'));
+        if (key != null && key >= 1 && key <= 128) _drumKeys[mi.getAttribute('id') ?? ''] = key - 1;
+      }
     }
     final parts = _children(root, 'part').toList();
     if (parts.isEmpty) throw const ScoreFileException(ScoreFileProblem.unknownFormat, 'keine Stimmen');
@@ -712,10 +720,11 @@ class _Parser {
             }
           }
         }
+        final drum = n.drumKey;
         notes.add(
           Note(
-            pitch: concert,
-            written: transpose == 0 ? null : n.written,
+            pitch: drum != null ? Pitch.fromMidi(drum) : concert,
+            written: transpose == 0 || drum != null ? null : n.written,
             string: stringIndex,
             fret: stringIndex == null ? null : fret,
             tieOrigin: n.tieStart,
@@ -825,6 +834,7 @@ class _Parser {
     }
     if (written == null) return null;
     final n = _N(written);
+    if (unpitched != null) n.drumKey = _drumKeys[_child(el, 'instrument')?.getAttribute('id') ?? ''];
     for (final t in _children(el, 'tie')) {
       if (t.getAttribute('type') == 'start') n.tieStart = true;
       if (t.getAttribute('type') == 'stop') n.tieStop = true;

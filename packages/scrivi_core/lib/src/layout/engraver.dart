@@ -877,10 +877,17 @@ class Engraver {
   double _drawHeader(PageDisplay page, double y) {
     final info = score.info;
     final cx = options.pageWidth / 2;
+    // Bei mehreren Spuren: Name des Instruments oben links (Einzelstimmen beim Drucken)
+    final part = score.tracks.length > 1 ? _track.name.trim() : '';
+    if (part.isNotEmpty) {
+      page.items.add(TextItem(part, options.marginLeft, y + 3.0, TextRole.credit, 1.6, bold: true));
+    }
     if (info.title.isNotEmpty) {
       y += 3.0;
       page.items.add(TextItem(info.title, cx, y, TextRole.title, 3.2, align: TextAlign.center, bold: true));
       y += 1.2;
+    } else if (part.isNotEmpty) {
+      y += 4.2;
     }
     if (info.subtitle.isNotEmpty) {
       y += 2.0;
