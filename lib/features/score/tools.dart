@@ -30,6 +30,7 @@ abstract class ToolHost {
   Future<void> editTrackName(int track);
   Future<void> editTrackSound(int track);
   Future<void> editTuning();
+  Future<void> editInstrumentKey(int track);
   Future<void> addTrack();
 
   /// Schnell-Eingaben: Akkordzeile, Begleitmuster, Liedtext einfügen, Formteil wiederholen.
@@ -475,6 +476,16 @@ final List<ToolDef> allTools = [
     en: 'Double bar line',
     active: (e) => e.score.masterBars[e.cursor.bar].doubleBar,
     run: (h) => h.apply((e) => e.toggleDoubleBar()),
+  ),
+  ToolDef(
+    id: 'swing',
+    group: ToolGroup.bar,
+    look: const TextLook('Swing'),
+    de: 'Swing ein/aus (ab hier)',
+    en: 'Swing on/off (from here)',
+    keywords: const ['jazz', 'triolen', 'achtel', 'shuffle', 'gerade', 'straight'],
+    active: (e) => e.score.masterBars[e.cursor.bar].swing,
+    run: (h) => h.apply((e) => e.setSwing(!e.score.masterBars[e.cursor.bar].swing)),
   ),
   ToolDef(
     id: 'section',

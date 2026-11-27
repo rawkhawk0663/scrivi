@@ -37,6 +37,20 @@ class Pitch {
   }
 
   /// Um ganze Oktaven verschoben.
+  /// Um [semitones] Halbtöne transponiert, mit der passenden Stufe
+  /// (D♭ einen Ganzton höher ist E♭, nicht D♯). Nur wenn das nicht geht
+  /// (mehr als zwei Vorzeichen), nach dem Klang mit Kreuzen bzw. Bs.
+  Pitch transposedBy(int semitones, {int fifths = 0}) {
+    if (semitones == 0) return this;
+    final steps = (semitones * 7 / 12).round();
+    final d = diatonic + steps;
+    final step = d % 7, octave = d ~/ 7;
+    final natural = (octave + 1) * 12 + _stepSemitones[step];
+    final alter = midi + semitones - natural;
+    if (alter.abs() <= 2) return Pitch(step, alter, octave);
+    return Pitch.fromMidi(midi + semitones, fifths: fifths);
+  }
+
   Pitch octaves(int n) => Pitch(step, alter, octave + n);
 
   String get letter => _letters[step];

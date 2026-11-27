@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import '../model/chord_library.dart';
 import '../model/fraction.dart';
+import '../model/pitch.dart';
+import '../edit/editor.dart';
 import '../model/score.dart';
 import '../render/display.dart';
 import '../render/glyphs.dart';
@@ -25,6 +27,7 @@ class LayoutOptions {
     this.showChordDiagrams = true,
     this.germanNoteNames = false,
     this.endless = false,
+    this.transposed = false,
   });
 
   final double pageWidth;
@@ -57,6 +60,10 @@ class LayoutOptions {
   /// Alle Takte in einer einzigen langen Zeile (ohne Titel), die Seite ist
   /// so breit wie nötig. Zum waagrechten Durchblättern beim Schreiben.
   final bool endless;
+
+  /// Transponierende Instrumente so zeigen, wie die Musiker sie lesen
+  /// (`Track.instrumentKey`), statt klingend.
+  final bool transposed;
 
   /// Abstand der Takte in der Endlos-Zeile (1 = so eng wie möglich).
   static const endlessSpacing = 1.25;
@@ -248,9 +255,9 @@ class Engraver {
       final bar = i < _track.bars.length ? _track.bars[i] : Bar(clef: Clef.treble, voices: []);
       final m = _Meas(i, mb, bar);
       // Ohne Notenzeile gibt es keine Tonart.
-      m.keyChange = !_tabOnly && prevKey != null && prevKey != mb.key;
+      m.keyChange = !_tabOnly && prevKey != null && prevKey != _keyOf(mb);
       m.timeChange = prevTime != null && prevTime != mb.time;
-      prevKey = mb.key;
+      prevKey = _keyOf(mb);
       prevTime = mb.time;
       final cols = <Fraction, _Col>{};
       for (var v = 0; v < bar.voices.length; v++) {
@@ -345,7 +352,7 @@ class Engraver {
           e.heads.sort((a, b) => a.y.compareTo(b.y));
         } else {
           for (final n in e.beat.notes) {
-            e.heads.add(_Head(n, (top - n.shownFor(_track.transposeSemitones).diatonic) / 2, _headGlyph(e.beat, n)));
+            e.heads.add(_Head(n, (top - _shown(n, m.index).diatonic) / 2, _headGlyph(e.beat, n)));
           }
           e.heads.sort((a, b) => a.y.compareTo(b.y));
         }
@@ -360,8 +367,8 @@ class Engraver {
         for (final h in e.heads) {
           final n = h.note;
           if (n == null || _drums) continue;
-          final p = n.shownFor(_track.transposeSemitones);
-          final current = state[p.diatonic] ?? m.mb.key.alterFor(p.step);
+          final p = _shown(n, m.index);
+          final current = state[p.diatonic] ?? _keyOf(m.mb).alterFor(p.step);
           if (n.tieDestination) {
             state[p.diatonic] = p.alter;
             continue;
@@ -596,6 +603,19 @@ class Engraver {
   /// Schlagzeug: eigene Lage der Instrumente, keine Tonart, keine Vorzeichen.
   late final bool _drums = _track.percussion;
 
+  /// Zusätzliche Verschiebung in der Ansicht „transponiert“.
+  late final int _viewShift = options.transposed ? _track.instrumentKey : 0;
+
+  /// Tonart des Takts, wie sie für diese Spur erscheint.
+  KeySignature _keyOf(MasterBar mb) => mb.key.transposed(_viewShift);
+
+  /// Geschriebene Tonhöhe einer Note im Takt [bar].
+  Pitch _shown(Note n, int bar) {
+    final p = n.shownFor(_track.transposeSemitones);
+    if (_viewShift == 0) return p;
+    return p.transposedBy(_viewShift, fifths: _keyOf(score.masterBars[bar]).fifths);
+  }
+
   /// Lage (Linienabstände unter der obersten Linie) und Kopf eines Schlagzeug-Tons.
   static (double, bool) _drumPosition(int key) => switch (key) {
     35 || 36 => (3.5, false), // Bassdrum
@@ -619,7 +639,7 @@ class Engraver {
   double _headerWidth(_Meas m, bool firstSystem) {
     var w = 0.8 + 2.7 + 0.9;
     if (_tabOnly) w += math.max(0.0, _tabClefWidth - 2.7);
-    if (!_tabOnly) w += _keyWidth(m.mb.key);
+    if (!_tabOnly) w += _keyWidth(_keyOf(m.mb));
     if (firstSystem || m.timeChange) w += _timeWidth(m.mb.time);
     return w;
   }
@@ -628,7 +648,7 @@ class Engraver {
     var w = m.padL + m.padR + m.colSum;
     if (m.empty) w += 6;
     if (!atStart) {
-      if (m.keyChange) w += _keyWidth(m.mb.key) + 0.4;
+      if (m.keyChange) w += _keyWidth(_keyOf(m.mb)) + 0.4;
       if (m.timeChange) w += _timeWidth(m.mb.time);
     }
     return w;
@@ -705,11 +725,11 @@ class Engraver {
         m.x = j == 0 ? s.x0 : x;
         var cx = x + m.padL;
         if (j > 0) {
-          if (m.keyChange) cx += _keyWidth(m.mb.key) + 0.4;
+          if (m.keyChange) cx += _keyWidth(_keyOf(m.mb)) + 0.4;
           if (m.timeChange) cx += _timeWidth(m.mb.time);
         }
         m.changeW = j > 0
-            ? (m.keyChange ? _keyWidth(m.mb.key) + 0.4 : 0) + (m.timeChange ? _timeWidth(m.mb.time) : 0)
+            ? (m.keyChange ? _keyWidth(_keyOf(m.mb)) + 0.4 : 0) + (m.timeChange ? _timeWidth(m.mb.time) : 0)
             : 0;
         for (final c in m.cols) {
           c.x = cx + c.accW;
@@ -744,7 +764,7 @@ class Engraver {
       final s = systems[si];
       final sb = _SystemBuilder(this, s, si, systems);
       final out = sb.build(prevKey);
-      prevKey = s.measures.last.mb.key;
+      prevKey = _keyOf(s.measures.last.mb);
       final height = out.bottom - out.top;
       var top = firstOnPage ? y : y + options.systemGap;
       if (top + height > options.pageHeight - options.marginBottom && !firstOnPage) {
@@ -828,7 +848,7 @@ class Engraver {
       final m = s.measures[j];
       m.x = j == 0 ? s.x0 : x;
       m.changeW = j > 0
-          ? (m.keyChange ? _keyWidth(m.mb.key) + 0.4 : 0) + (m.timeChange ? _timeWidth(m.mb.time) : 0)
+          ? (m.keyChange ? _keyWidth(_keyOf(m.mb)) + 0.4 : 0) + (m.timeChange ? _timeWidth(m.mb.time) : 0)
           : 0;
       var cx = x + m.padL + m.changeW;
       for (final c in m.cols) {
@@ -1056,7 +1076,10 @@ class Engraver {
   // ───────────────────────── Hilfen ─────────────────────────
 
   String _chordName(int id) {
-    final name = _track.chords[id]?.name ?? '';
+    var name = _track.chords[id]?.name ?? '';
+    if (_viewShift != 0) {
+      name = ScoreEditor.transposeChordName(name, _viewShift, score.masterBars.first.key.transposed(_viewShift).fifths);
+    }
     return name.replaceAll('#', '♯').replaceAllMapped(RegExp(r'([A-G])b'), (m) => '${m[1]}♭');
   }
 
@@ -1360,6 +1383,7 @@ class _SystemBuilder {
   }
 
   String _clefGlyph(Clef c) => switch (c) {
+    Clef.treble8vb when e._viewShift != 0 => 'gClef',
     Clef.treble8vb => 'gClef8vb',
     Clef.bass => 'fClef',
     Clef.alto || Clef.tenor => 'cClef',
@@ -1381,7 +1405,7 @@ class _SystemBuilder {
     var x = s.x0 + 0.8;
     glyph(_clefGlyph(clef), x, _clefY(clef));
     x += 2.7 + 0.9;
-    final kw = _keySig(m.mb.key, x, clef);
+    final kw = _keySig(e._keyOf(m.mb), x, clef);
     x += kw + (kw > 0 ? 0.6 : 0);
     if (s.first || m.timeChange) _timeSig(m.mb.time, x);
     // Taktnummer über dem Schlüssel (ausser beim ersten Takt)
@@ -1398,7 +1422,7 @@ class _SystemBuilder {
     if (j > 0) {
       if (m.keyChange) {
         x += 0.4;
-        x += _keySig(m.mb.key, x, m.bar.clef) + 0.4;
+        x += _keySig(e._keyOf(m.mb), x, m.bar.clef) + 0.4;
       }
       if (m.timeChange) {
         _timeSig(m.mb.time, x + 0.3);
@@ -1758,7 +1782,7 @@ class _SystemBuilder {
     for (var k = 0; k < ev.graces.length; k++) {
       final g = ev.graces[k];
       final x = start + k * _graceStep;
-      final ys = [for (final n in g.notes) (top - n.shownFor(track.transposeSemitones).diatonic) / 2]..sort();
+      final ys = [for (final n in g.notes) (top - e._shown(n, ev.bar).diatonic) / 2]..sort();
       if (ys.isEmpty) continue;
       // Hilfslinien
       for (final y in ys) {
@@ -1771,7 +1795,7 @@ class _SystemBuilder {
       }
       for (var i = 0; i < g.notes.length; i++) {
         final n = g.notes[i];
-        final y = (top - n.shownFor(track.transposeSemitones).diatonic) / 2;
+        final y = (top - e._shown(n, ev.bar).diatonic) / 2;
         glyph(n.dead ? 'noteheadXBlack' : 'noteheadBlack', x, y, scale: _graceScale);
       }
       // Hals nach oben mit Fähnchen und Querstrich
@@ -1941,10 +1965,17 @@ class _SystemBuilder {
     // Freier Text, Sprungzeichen
     final textEvs = events.where((ev) => ev.voice == 0 && ev.beat.text != null).toList();
     final jumps = s.measures.where((m) => m.mb.directions.isNotEmpty).toList();
-    if (textEvs.isNotEmpty || jumps.isNotEmpty) {
+    // Swing ein bzw. aus, wo es wechselt
+    final mbs = e.score.masterBars;
+    final swings = s.measures.where((m) => mbs[m.index].swing != (m.index > 0 && mbs[m.index - 1].swing)).toList();
+    if (textEvs.isNotEmpty || jumps.isNotEmpty || swings.isNotEmpty) {
       final y = rowTop - 0.6;
       for (final ev in textEvs) {
         text(ev.beat.text!, ev.x, y, TextRole.text, _textSize, italic: true);
+      }
+      for (final m in swings) {
+        final label = m.mb.swing ? 'Swing' : (e.options.germanNoteNames ? 'Gerade' : 'Straight');
+        text(label, m.x + 1.0, y, TextRole.text, _textSize, bold: true);
       }
       for (final m in jumps) {
         _directions(m, y);

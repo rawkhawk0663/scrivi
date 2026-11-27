@@ -68,6 +68,12 @@ class Inspector extends StatelessWidget {
       _row(context, tr('Formteil', 'Section'), mb.section?.label ?? '–', onTap: host.editSection),
       _row(
         context,
+        tr('Achtel', 'Eighths'),
+        mb.swing ? 'Swing' : tr('gerade', 'straight'),
+        onTap: () => host.apply((e) => e.setSwing(!mb.swing)),
+      ),
+      _row(
+        context,
         tr('Wiederholung', 'Repeat'),
         mb.hasRepeatEnd ? tr('${mb.repeatEnd}× spielen', 'play ${mb.repeatEnd}×') : '–',
         onTap: host.editRepeatEnd,
@@ -84,6 +90,13 @@ class Inspector extends StatelessWidget {
       _title(context, tr('Spur', 'Track'), color: trackColor(i)),
       _row(context, tr('Name', 'Name'), name, onTap: () => host.editTrackName(i)),
       _row(context, tr('Klang', 'Sound'), soundName(t.program), onTap: () => host.editTrackSound(i)),
+      if (!t.percussion && !t.staff.isStringed)
+        _row(
+          context,
+          tr('Notiert', 'Written'),
+          instrumentKeyName(t.instrumentKey + (t.instrumentKey > 0 && t.transposeSemitones == 12 ? 12 : 0)),
+          onTap: () => host.editInstrumentKey(i),
+        ),
       if (t.staff.isStringed) ...[
         _row(context, tr('Stimmung', 'Tuning'), tuningText(t.staff.tuning), onTap: host.editTuning),
         _row(

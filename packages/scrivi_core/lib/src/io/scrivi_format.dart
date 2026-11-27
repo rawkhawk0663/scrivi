@@ -94,6 +94,7 @@ class ScriviFormat {
     'doubleBar': m.doubleBar,
     'freeTime': m.freeTime,
     'directions': [for (final d in m.directions) d.name],
+    'swing': m.swing,
   });
 
   static Map<String, dynamic> _track(Track t) => _compact({
@@ -101,6 +102,7 @@ class ScriviFormat {
     'shortName': t.shortName,
     'program': t.program < 0 ? null : t.program,
     'transpose': t.transposeSemitones == 0 ? null : t.transposeSemitones,
+    'instrumentKey': t.instrumentKey == 0 ? null : t.instrumentKey,
     'layout': t.layoutHint,
     'staff': _compact({
       'tuning': t.staff.tuning,
@@ -249,6 +251,7 @@ class ScriviFormat {
       section: sec == null ? null : Section(letter: _str(_map(sec)['letter']), text: _str(_map(sec)['text'])),
       doubleBar: _bool(m['doubleBar']),
       freeTime: _bool(m['freeTime']),
+      swing: _bool(m['swing']),
       directions: {
         for (final d in _list(m['directions']))
           if (Direction.values.any((x) => x.name == d)) _enum(Direction.values, d, Direction.fine),
@@ -264,6 +267,7 @@ class ScriviFormat {
       shortName: _str(t['shortName']),
       program: _int(t['program'], -1),
       transposeSemitones: _int(t['transpose']),
+      instrumentKey: _int(t['instrumentKey']),
       layoutHint: layout is List ? [for (final x in layout) _int(x)] : null,
       staff: StaffDef(
         tuning: [for (final x in _list(st['tuning'])) _int(x)],

@@ -19,6 +19,7 @@ class DeviceSettings {
     showTracks.value = data['spuren'] as bool? ?? true;
     showInspector.value = data['eigenschaften'] as bool? ?? true;
     endless.value = data['endlos'] as bool? ?? false;
+    transposed.value = data['transponiert'] as bool? ?? false;
     final groups = data['werkzeuggruppen'];
     if (groups is List) openToolGroups.value = {for (final g in groups) '$g'};
     // Neue Gruppe „Schnell“ einmal aufklappen, auch wenn schon Gruppen gemerkt sind
@@ -51,6 +52,10 @@ class DeviceSettings {
   Future<void> setShowTracks(bool v) => _set(showTracks, 'spuren', v);
   Future<void> setShowInspector(bool v) => _set(showInspector, 'eigenschaften', v);
   Future<void> setEndless(bool v) => _set(endless, 'endlos', v);
+
+  /// Transponierende Instrumente so zeigen, wie die Musiker lesen (statt klingend).
+  final transposed = ValueNotifier<bool>(false);
+  Future<void> setTransposed(bool v) => _set(transposed, 'transponiert', v);
 
   Future<void> _set(ValueNotifier<bool> n, String key, bool v) async {
     n.value = v;

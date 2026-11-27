@@ -60,6 +60,8 @@ tool/         make_icon.py (Symbol), make_glyphs.py (Notenzeichen aus Bravura),
 - **Notenzeichen** kommen als Umrisse aus `glyphs.g.dart` (erzeugt mit `tool/make_glyphs.py` aus `assets/fonts/Bravura.otf`, `glyphnames.json` der SMuFL und `Bravura.json` aus dem Bravura-Paket; nicht von Hand ändern). Neue Zeichen: in die Liste `GLYPHS` eintragen und neu erzeugen. Masse und Ansatzpunkte (Hals am Notenkopf, Fähnchen) stammen aus den Metadaten.
 - Der Notensatz liefert eine **Zeichenliste** (`PageDisplay` mit `GlyphItem`, `LineItem`, `RectItem`, `PathItem`, `TextItem`). Die App zeichnet sie (`PagePictures`), `pageToSvg` schreibt SVG. Texte misst ein `TextMeasurer` (App: echte Schriften, Tests: Schätzung).
 - **Gitarre** wird eine Oktave höher geschrieben als sie klingt (`Track.transposeSemitones = 12`, Violinschlüssel mit kleiner 8). `Note.pitch` ist klingend, `Note.written` geschrieben (Schreibweise aus der Datei; fehlt sie, verschiebt `Note.shownFor(Track.transposeSemitones)` die klingende – im Notensatz immer `shownFor` verwenden, nie `pitch` oder `shown`). Anschlagszeichen (auf/ab) stehen pro Zeile auf einer gemeinsamen Linie (`_strokeLine`).
+- **Transponierende Instrumente:** `Track.instrumentKey` (Halbtöne über dem Klang zusätzlich zu `transposeSemitones`: B 2, Es 9, F 7; Tenorsax mit 8er-Violinschlüssel und `transposeSemitones = 12` hat 2). Gezeigt nur in der Ansicht „transponiert“ (`LayoutOptions.transposed`, `einstellungen.json`: `transponiert`): Engraver `_shown`/`_keyOf` (Tonart mit `KeySignature.transposed`, Töne mit `Pitch.transposedBy`, das die Stufe mitnimmt: Des → Es), Akkordsymbole mit, 8er-Violinschlüssel wird zum normalen. Eingaben rechnet der Editor über `viewShift` zurück; gespeichert wird immer klingend.
+- **Swing:** `MasterBar.swing` (Achtel lang–kurz 2 : 1). `PlayBar.secondsAt`/`positionAt` verschieben die Stellen; der Notensatz schreibt „Swing“ bzw. „Gerade“ dort, wo es wechselt. Editor `setSwing` (Auswahl, sonst ab dem Cursor bis zum Schluss).
 - **Zeilen:** Die Takte pro Zeile aus der Datei (`SystemsLayout`) werden übernommen, solange sie passen; sonst wird gefüllt. Jede Zeile im Blocksatz.
 - **Tabulatur:** Saite 0 = tiefste. Schläge mit Rhythmus-Schrägstrichen zeigen in der Tab nichts. Gehaltene Noten nur am Zeilenanfang in Klammern.
 - **Schlagzeug** (`Track.percussion`, neutraler Schlüssel): Lage und Kopf pro Instrument aus `_drumPosition` (Bassdrum unten, Snare Mitte, Toms dazwischen, Hi-Hat/Becken als Kreuz über der obersten Linie), Hälse nach oben, keine Tonart und keine Vorzeichen.
@@ -103,6 +105,7 @@ tool/         make_icon.py (Symbol), make_glyphs.py (Notenzeichen aus Bravura),
 ## Dateien (keine Bibliothek, Wunsch des Besitzers)
 - Stücke sind Dateien, die man speichert, wo man will; Scrivi verwaltet keine eigene Sammlung. Die Startseite zeigt *Zuletzt geöffnet*.
 - Gerätespezifisch in `<ApplicationSupport>`: `zuletzt.json` (Format `scrivi-recent` v1: Pfad, Titel, Interpret, Takte, Grösse, Änderungszeit, zuletzt geöffnet, Entwurf), `Entwürfe/` (nie gespeicherte Stücke, laufend gesichert; Entwürfe fallen nie still aus der Liste) und `Vorschau/` (Name mit Pfad-Kennung, Grösse, Änderungszeit und `Thumbnails.style`; diese Zahl erhöhen, wenn sich der Notensatz sichtbar ändert).
+- **Beispiele** auf der Startseite: `assets/examples/*.scrivi` (selbst komponiert bzw. gemeinfrei: Sonntagmorgen, Ode an die Freude, Wüstenwind). Öffnen legt einen Entwurf an, das Beispiel bleibt unverändert. Keine geschützten Lieder als Beispiele.
 - Andere Formate werden nie überschrieben. Beim ersten Start übernimmt `RecentFiles` die Stücke der früheren Bibliothek (`Bibliothek/Stücke/`) in die Liste; die Dateien bleiben dort.
 - Windows: Der Installer verknüpft `.scrivi` mit Scrivi (`[Registry]` in `scrivi.iss`); die Datei kommt als Startargument (`main(args)`) an.
 
@@ -110,7 +113,7 @@ tool/         make_icon.py (Symbol), make_glyphs.py (Notenzeichen aus Bravura),
 1. **Kein Konto, keine Daten sammeln, keine Werbung, funktioniert ohne Internet.** Internet nur für Updates und (später) den eigenen Dropbox-Abgleich.
 2. **Nie Daten verlieren:** Dateien erst in eine Zwischendatei schreiben, dann umbenennen. Alte Formate bleiben lesbar.
 3. **Stücke sind Dateien** (`.scrivi`), gespeichert, wo der Besitzer will (Wunsch des Besitzers; anders als Volti keine Bibliothek). Startseite mit *Zuletzt geöffnet* und *Neues Stück*.
-4. **Gerätespezifisch** (nie abgeglichen): `<ApplicationSupport>/einstellungen.json` (Darstellung, Sprache, Notenansicht, Endlos-Ansicht, Werkzeugspalte, Griffbrett, Spuren, Eigenschaften), `zuletzt.json`, `Entwürfe/`, `fehler.log`, `update.log`.
+4. **Gerätespezifisch** (nie abgeglichen): `<ApplicationSupport>/einstellungen.json` (Darstellung, Sprache, Notenansicht, Endlos-Ansicht, transponiert, Werkzeugspalte, Griffbrett, Spuren, Eigenschaften), `zuletzt.json`, `Entwürfe/`, `fehler.log`, `update.log`.
 5. **Bedienbar mit Stift, Finger, Maus und Tastatur.** Langes Drücken = Rechtsklick.
 6. **Flüssig auf dem Surface:** messen statt raten; fertige Teile als Bild zwischenspeichern, keine Schatten und Durchsichtigkeit auf grossen Flächen (Erfahrung aus Volti).
 

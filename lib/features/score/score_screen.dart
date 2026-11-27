@@ -94,6 +94,12 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
   }
 
   bool get _endless => _settings?.endless.value ?? false;
+  bool get _transposed => _settings?.transposed.value ?? false;
+
+  void _setTransposed(bool v) {
+    _settings?.setTransposed(v);
+    _engrave();
+  }
 
   void _setEndless(bool v) {
     _settings?.setEndless(v);
@@ -134,7 +140,10 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
         showNotation: _view != ScoreView.tab,
         germanNoteNames: !L10n.isEnglish,
         endless: _endless,
+        transposed: _transposed,
       );
+      // Eingaben in der Ansicht „transponiert“ zurückrechnen
+      _editor?.viewShift = _transposed ? score.tracks[_track].instrumentKey : 0;
       final layout = core.Engraver(
         score,
         trackIndex: _track,
@@ -530,6 +539,28 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
     if (!t.staff.isStringed) return;
     final r = await askTuning(context, t.staff);
     if (r != null) apply((e) => e.setTuning(r.tuning, capo: r.capo, keepFrets: r.keepFrets));
+  }
+
+  @override
+  Future<void> editInstrumentKey(int track) async {
+    final t = editor.score.tracks[track];
+    final octave = t.bars.isNotEmpty && t.bars.first.clef == core.Clef.treble8vb ? t.transposeSemitones : 0;
+    final v = await askInstrumentKey(context, t.instrumentKey, octaveInClef: octave);
+    if (v == null) return;
+    apply((e) => e.setTrackInfo(track, instrumentKey: v));
+    if (v != 0 && !_transposed && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            tr(
+              'Gespeichert. Sichtbar wird es unter Ansicht → Transponiert.',
+              'Saved. It shows under View → Transposed.',
+            ),
+          ),
+          action: SnackBarAction(label: tr('Einschalten', 'Turn on'), onPressed: () => _setTransposed(true)),
+        ),
+      );
+    }
   }
 
   @override
@@ -1160,13 +1191,21 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
                 PopupMenuButton<Object>(
                   tooltip: tr('Ansicht', 'View'),
                   icon: Icon(_endless ? Icons.view_column_outlined : Icons.view_agenda_outlined, size: 20),
-                  onSelected: (v) => v is ScoreView ? _setView(v) : _setEndless(v == 'endless'),
+                  onSelected: (v) => v is ScoreView
+                      ? _setView(v)
+                      : (v == 'transposed' ? _setTransposed(!_transposed) : _setEndless(v == 'endless')),
                   itemBuilder: (context) => [
                     CheckedPopupMenuItem(value: 'pages', checked: !_endless, child: Text(tr('Seiten', 'Pages'))),
                     CheckedPopupMenuItem(
                       value: 'endless',
                       checked: _endless,
                       child: Text(tr('Endlos (eine lange Zeile)', 'Endless (one long line)')),
+                    ),
+                    const PopupMenuDivider(),
+                    CheckedPopupMenuItem(
+                      value: 'transposed',
+                      checked: _transposed,
+                      child: Text(tr('Transponiert (wie die Musiker lesen)', 'Transposed (as the players read)')),
                     ),
                     if (_stringed) ...[
                       const PopupMenuDivider(),

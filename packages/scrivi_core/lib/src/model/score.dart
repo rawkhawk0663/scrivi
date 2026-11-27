@@ -110,6 +110,13 @@ class KeySignature {
   final int fifths;
   final bool minor;
 
+  /// Tonart um [semitones] Halbtöne verschoben (Vorzeichen zwischen −6 und +5).
+  KeySignature transposed(int semitones) {
+    if (semitones % 12 == 0) return this;
+    final f = ((fifths + 7 * semitones + 6) % 12 + 12) % 12 - 6;
+    return KeySignature(f, minor: minor);
+  }
+
   /// Vorzeichen, das die Tonart einem Stammton gibt (0 = keins).
   int alterFor(int step) {
     // Reihenfolge der Kreuze: F C G D A E B, der b: B E A D G C F
@@ -164,6 +171,7 @@ class MasterBar {
     this.doubleBar = false,
     this.freeTime = false,
     Set<Direction>? directions,
+    this.swing = false,
   }) : endings = endings ?? {},
        directions = directions ?? {};
 
@@ -181,6 +189,9 @@ class MasterBar {
   final bool freeTime;
   final Set<Direction> directions;
 
+  /// Achtel werden geswingt gespielt (lang–kurz, wie Triolen-Viertel und -Achtel).
+  final bool swing;
+
   bool get hasRepeatEnd => repeatEnd > 0;
 
   MasterBar copyWith({
@@ -193,6 +204,7 @@ class MasterBar {
     bool clearSection = false,
     bool? doubleBar,
     Set<Direction>? directions,
+    bool? swing,
   }) => MasterBar(
     time: time ?? this.time,
     key: key ?? this.key,
@@ -203,6 +215,7 @@ class MasterBar {
     doubleBar: doubleBar ?? this.doubleBar,
     freeTime: freeTime,
     directions: directions ?? {...this.directions},
+    swing: swing ?? this.swing,
   );
 }
 
@@ -217,6 +230,7 @@ class Track {
     this.layoutHint,
     this.transposeSemitones = 0,
     this.program = -1,
+    this.instrumentKey = 0,
   }) : chords = chords ?? {};
 
   final String name;
@@ -235,6 +249,12 @@ class Track {
 
   /// Klangfarbe als General-MIDI-Nummer (0..127), −1 = unbekannt.
   final int program;
+
+  /// Transponierendes Instrument: so viele Halbtöne wird es in der Ansicht
+  /// „transponiert“ höher geschrieben als es klingt, zusätzlich zu
+  /// [transposeSemitones] (Trompete und Klarinette in B: 2, Altsaxofon in Es: 9,
+  /// Horn in F: 7). 0 = in C.
+  final int instrumentKey;
 
   /// Schlagzeug (neutraler Schlüssel).
   bool get percussion => bars.isNotEmpty && bars.first.clef == Clef.neutral;

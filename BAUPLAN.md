@@ -350,6 +350,8 @@ Plan in fünf Schritten:
    6/8) mit Griffen aus der Griffbibliothek oder selbst gesucht (andere Stimmungen, Kapo);
    Liedtext als ganzen Text einfügen (Silben mit -, _ hält); Formteil wiederholen (alle Spuren,
    nach dem Cursor oder am Ende).
+   Dazu (27. November 2026): transponierende Instrumente (Spur „Notiert in“, Ansicht
+   „transponiert“), Swing ab einem Takt, drei Beispielstücke auf der Startseite.
 4. Stift-Gesten, waagrechte Band-Ansicht.
 5. Mikrofon-Eingabe (einstimmig).
 

@@ -475,4 +475,67 @@ void main() {
       expect(e.score.masterBars, hasLength(4));
     });
   });
+
+  group('Transponierende Instrumente und Swing', () {
+    Score trumpet() {
+      final s = ScoreEditor.newScore(bars: 2, kind: NewPieceKind.leadSheet);
+      final e = ScoreEditor(s)..setTrackInfo(0, name: 'Trompete', program: 56, instrumentKey: 2);
+      return e.score;
+    }
+
+    test('Töne mit der passenden Stufe transponieren', () {
+      expect(const Pitch(1, -1, 5).transposedBy(2), const Pitch(2, -1, 5)); // Des → Es
+      expect(const Pitch(3, 1, 4).transposedBy(2), const Pitch(4, 1, 4)); // Fis → Gis
+      expect(const Pitch(6, 0, 4).transposedBy(2), const Pitch(0, 1, 5)); // H → Cis
+      expect(const Pitch(0, 0, 4).transposedBy(9), const Pitch(5, 0, 4)); // C → A (Altsax)
+    });
+
+    test('Tonart verschieben', () {
+      expect(const KeySignature(-1).transposed(2).fifths, 1); // d-Moll → e-Moll
+      expect(const KeySignature(0).transposed(9).fifths, 3); // Altsax in Es: A-Dur
+      expect(const KeySignature(-1).transposed(7).fifths, 0); // Horn in F
+      expect(const KeySignature(2).transposed(14).fifths, 4);
+    });
+
+    test('Ansicht transponiert: Trompete in B zwei Halbtöne höher, Tonart mit', () {
+      final e = ScoreEditor(trumpet());
+      e.inputStep(0); // C (klingend, Ansicht klingend)
+      expect(e.currentBeat!.notes.single.pitch.midi % 12, 0);
+      Iterable<GlyphItem> glyphs(bool t) => Engraver(
+        e.score,
+        options: LayoutOptions(transposed: t),
+      ).layout().pages.expand((p) => p.items).whereType<GlyphItem>();
+      double headY(bool t) => glyphs(t).firstWhere((g) => g.name.startsWith('notehead')).y;
+      // Transponiert eine Stufe höher (D statt C), mit zwei Kreuzen vorne
+      expect(headY(false) - headY(true), closeTo(0.5, 0.02)); // eine Stufe (Zeilenlage kann minimal abweichen)
+      expect(glyphs(true).where((g) => g.name == 'accidentalSharp'), hasLength(2));
+      expect(glyphs(false).where((g) => g.name == 'accidentalSharp'), isEmpty);
+    });
+
+    test('Eingabe in der Ansicht transponiert wird zurückgerechnet', () {
+      final e = ScoreEditor(trumpet())..viewShift = 2;
+      e.inputStep(1); // geschriebenes D → klingt C
+      expect(e.currentBeat!.notes.single.pitch.midi % 12, 0);
+      final back = ScriviFormat.decode(ScriviFormat.encode(e.score));
+      expect(back.tracks.single.instrumentKey, 2);
+    });
+
+    test('Swing: Achtel lang–kurz, ab dem Cursor, gespeichert', () {
+      final e = ScoreEditor(ScoreEditor.newScore(bars: 2));
+      e.cursor = const EditCursor(bar: 1);
+      e.setSwing(true);
+      expect(e.score.masterBars[0].swing, isFalse);
+      expect(e.score.masterBars[1].swing, isTrue);
+      final plan = PlaybackPlan.build(e.score);
+      final straight = plan.bars[0], swung = plan.bars[1];
+      final q = straight.secondsAt(0.25);
+      expect(straight.secondsAt(0.125), closeTo(q / 2, 1e-9));
+      expect(swung.secondsAt(0.125), closeTo(q * 2 / 3, 1e-9));
+      expect(swung.secondsAt(0.25), closeTo(q, 1e-9));
+      expect(swung.positionAt(q * 2 / 3), closeTo(0.125, 1e-9));
+      expect(ScriviFormat.decode(ScriviFormat.encode(e.score)).masterBars[1].swing, isTrue);
+      final texts = Engraver(e.score).layout().pages.expand((p) => p.items).whereType<TextItem>().map((t) => t.text);
+      expect(texts, contains('Swing'));
+    });
+  });
 }

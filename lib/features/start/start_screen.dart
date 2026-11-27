@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:scrivi_core/scrivi_core.dart' as core;
 
@@ -74,6 +75,17 @@ class _StartScreenState extends State<StartScreen> {
   }
 
   void _preset(core.NewPieceKind kind) => _new(core.ScoreEditor.newScore(kind: kind));
+
+  /// Beispielstück öffnen: als neuer Entwurf, damit das Beispiel selbst unverändert bleibt.
+  Future<void> _example(String asset) async {
+    try {
+      final data = await rootBundle.load('assets/examples/$asset');
+      final score = core.GpReader.read(data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes));
+      await _new(score);
+    } catch (e, st) {
+      ErrorLog.record(e, st, where: 'Beispiel öffnen: $asset');
+    }
+  }
 
   Future<void> _custom() async {
     final s = await askNewPiece(context);
@@ -219,6 +231,41 @@ class _StartScreenState extends State<StartScreen> {
             ),
           ],
         ),
+        const SizedBox(height: 28),
+        Text(tr('Beispiele', 'Examples'), style: theme.textTheme.titleMedium),
+        const SizedBox(height: 4),
+        Text(
+          tr(
+            'Zum Ausprobieren und Weiterschreiben. Das Beispiel öffnet sich als Entwurf.',
+            'To try out and build on. The example opens as a draft.',
+          ),
+          style: TextStyle(color: c.muted, fontSize: 13),
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            _PresetCard(
+              icon: Icons.wb_sunny_outlined,
+              title: 'Sonntagmorgen',
+              subtitle: tr('Gitarren-Band · 5 Spuren', 'Guitar band · 5 tracks'),
+              onTap: () => _example('sonntagmorgen.scrivi'),
+            ),
+            _PresetCard(
+              icon: Icons.celebration_outlined,
+              title: tr('Ode an die Freude', 'Ode to Joy'),
+              subtitle: tr('Orchester · Beethoven', 'Orchestra · Beethoven'),
+              onTap: () => _example('ode_an_die_freude.scrivi'),
+            ),
+            _PresetCard(
+              icon: Icons.air_rounded,
+              title: 'Wüstenwind',
+              subtitle: tr('Latin-Jazz mit Swing', 'Latin jazz with swing'),
+              onTap: () => _example('wuestenwind.scrivi'),
+            ),
+          ],
+        ),
         const SizedBox(height: 32),
         Row(
           children: [
@@ -358,7 +405,12 @@ class _PresetCard extends StatelessWidget {
                       : Icon(icon, size: 32, color: scheme.primary),
                 ),
                 const Spacer(),
-                Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+                Text(
+                  title,
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 Text(
                   subtitle,
                   style: TextStyle(color: c.muted, fontSize: 12.5),

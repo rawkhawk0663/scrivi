@@ -41,6 +41,8 @@ flutter:
     # Klangsammlung (gebaut mit tool/make_sounds.py) und ihre Lizenzen
     - assets/sounds/scrivi.sf2
     - assets/sounds/LIZENZEN.txt
+    # Beispielstücke auf der Startseite
+    - assets/examples/
   fonts:
     # Schriften der Oberfläche (feste Schnitte, OFL)
     - family: Plex

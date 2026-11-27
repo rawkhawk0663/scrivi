@@ -4,7 +4,7 @@ import '../model/score.dart';
 
 /// Ein gespielter Takt in der Abspiel-Reihenfolge.
 class PlayBar {
-  PlayBar(this.bar, this.start, this.length, this.segments);
+  PlayBar(this.bar, this.start, this.length, this.segments, {this.swing = false});
 
   /// Nummer des Takts in der Partitur (0 = erster).
   final int bar;
@@ -18,13 +18,37 @@ class PlayBar {
   /// Tempo im Takt: ab Stelle (ganze Noten) so viele Sekunden pro ganze Note.
   final List<(double at, double secondsPerWhole)> segments;
 
+  /// Achtel geswingt: die erste Achtel jedes Viertels lang (2/3), die zweite kurz (1/3).
+  final bool swing;
+
+  /// Notierte Stelle → gespielte Stelle (ganze Noten), bei Swing verschoben.
+  double _swung(double pos) {
+    if (!swing) return pos;
+    final q = pos * 4;
+    final k = q.floorToDouble();
+    final f = q - k;
+    final g = f <= 0.5 ? f * 4 / 3 : 2 / 3 + (f - 0.5) * 2 / 3;
+    return (k + g) / 4;
+  }
+
+  /// Gespielte Stelle → notierte Stelle (Umkehrung von [_swung]).
+  double _straight(double pos) {
+    if (!swing) return pos;
+    final q = pos * 4;
+    final k = q.floorToDouble();
+    final g = q - k;
+    final f = g <= 2 / 3 ? g * 3 / 4 : 0.5 + (g - 2 / 3) * 1.5;
+    return (k + f) / 4;
+  }
+
   /// Dauer in Sekunden.
   double get duration => secondsAt(length);
 
   double get end => start + duration;
 
   /// Sekunden vom Taktanfang bis zur Stelle [pos] (ganze Noten).
-  double secondsAt(double pos) {
+  double secondsAt(double notated) {
+    final pos = _swung(notated);
     var t = 0.0;
     for (var i = 0; i < segments.length; i++) {
       final (a, spw) = segments[i];
@@ -43,7 +67,7 @@ class PlayBar {
       final b = i + 1 < segments.length ? segments[i + 1].$1 : length;
       final dt = (b - a) * spw;
       if (seconds <= t + dt || i == segments.length - 1) {
-        return math.min(length, a + (seconds - t) / spw);
+        return _straight(math.min(length, a + (seconds - t) / spw));
       }
       t += dt;
     }
@@ -140,7 +164,7 @@ class PlaybackPlan {
       final mb = score.masterBars[b];
       final len = mb.time.length.toDouble();
       final segs = _segments(score, b, len, tempoFactor);
-      final pb = PlayBar(b, t, len, segs);
+      final pb = PlayBar(b, t, len, segs, swing: mb.swing && mb.time.beatType == 4);
       bars.add(pb);
       t = pb.end;
     }

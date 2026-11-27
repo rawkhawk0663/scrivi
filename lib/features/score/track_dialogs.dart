@@ -333,6 +333,12 @@ String keyName(core.KeySignature k) {
   const de = ['Ces', 'Ges', 'Des', 'As', 'Es', 'B', 'F', 'C', 'G', 'D', 'A', 'E', 'H', 'Fis', 'Cis'];
   const en = ['C♭', 'G♭', 'D♭', 'A♭', 'E♭', 'B♭', 'F', 'C', 'G', 'D', 'A', 'E', 'B', 'F♯', 'C♯'];
   final i = (k.fifths + 7).clamp(0, 14);
+  if (k.minor) {
+    // Moll: die parallele Molltonart (kleine Terz unter Dur)
+    const deM = ['as', 'es', 'b', 'f', 'c', 'g', 'd', 'a', 'e', 'h', 'fis', 'cis', 'gis', 'dis', 'ais'];
+    const enM = ['A♭', 'E♭', 'B♭', 'F', 'C', 'G', 'D', 'A', 'E', 'B', 'F♯', 'C♯', 'G♯', 'D♯', 'A♯'];
+    return L10n.isEnglish ? '${enM[i]} minor' : '${deM[i]}-Moll';
+  }
   return L10n.isEnglish ? '${en[i]} major' : '${de[i]}-Dur';
 }
 
@@ -351,4 +357,66 @@ String pitchName(int step, int alter) {
   final base = letters[step];
   final first = (step == 2 || step == 5) ? '${base}s' : '${base}es';
   return alter == -1 ? first : '${first}es';
+}
+
+/// Wie ein Instrument notiert wird: Halbtöne über dem Klang (Ansicht „transponiert“).
+List<(int, String)> instrumentKeys() => [
+  (0, tr('In C (klingend)', 'In C (concert)')),
+  (2, tr('In B (Trompete, Klarinette, Sopransax)', 'In B♭ (trumpet, clarinet, soprano sax)')),
+  (14, tr('In B, eine Oktave tiefer (Tenorsax, Bassklarinette)', 'In B♭, an octave lower (tenor sax, bass clarinet)')),
+  (9, tr('In Es (Altsax, Es-Klarinette)', 'In E♭ (alto sax, E♭ clarinet)')),
+  (21, tr('In Es, eine Oktave tiefer (Baritonsax)', 'In E♭, an octave lower (baritone sax)')),
+  (7, tr('In F (Horn, Englischhorn)', 'In F (horn, cor anglais)')),
+  (3, tr('In A (A-Klarinette)', 'In A (A clarinet)')),
+  (5, tr('In G (Altflöte)', 'In G (alto flute)')),
+];
+
+/// Kurzer Name: „in B“, „in Es“ …
+String instrumentKeyName(int k) {
+  if (k == 0) return tr('in C', 'in C');
+  final names = {2: 'B', 14: 'B', 9: 'Es', 21: 'Es', 7: 'F', 3: 'A', 5: 'G', 10: 'D', -2: 'D'};
+  final en = {2: 'B♭', 14: 'B♭', 9: 'E♭', 21: 'E♭', 7: 'F', 3: 'A', 5: 'G', 10: 'D', -2: 'D'};
+  final n = L10n.isEnglish ? en[k] : names[k];
+  return n == null ? '$k' : tr('in $n', 'in $n');
+}
+
+/// Notierung eines Instruments wählen. [octaveInClef]: Die Spur ist schon
+/// eine Oktave höher geschrieben (z. B. Tenorsax im Violinschlüssel mit 8).
+Future<int?> askInstrumentKey(BuildContext context, int current, {int octaveInClef = 0}) {
+  // Ist die Oktave schon im Schlüssel, zählen die „Oktave tiefer“-Stimmungen ohne sie
+  int toKey(int k) => octaveInClef > 0 && k >= octaveInClef ? k - octaveInClef : k;
+  // Häkchen nur bei einer Zeile (mit Oktave im Schlüssel die Oktav-Variante)
+  final matches = [
+    for (final (k, _) in instrumentKeys())
+      if (toKey(k) == current) k,
+  ];
+  final checked = matches.isEmpty ? null : (octaveInClef > 0 ? matches.last : matches.first);
+  return showDialog<int>(
+    context: context,
+    builder: (context) => SimpleDialog(
+      title: Text(tr('Notiert in', 'Written in')),
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+          child: Text(
+            tr(
+              'So erscheint die Spur in der Ansicht „transponiert“. Klingend bleibt alles gleich.',
+              'This is how the track appears in the “transposed” view. The sound stays the same.',
+            ),
+            style: TextStyle(fontSize: 12.5, color: context.scrivi.muted),
+          ),
+        ),
+        for (final (k, name) in instrumentKeys())
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(context, toKey(k)),
+            child: Row(
+              children: [
+                Expanded(child: Text(name)),
+                if (k == checked) const Icon(Icons.check_rounded, size: 18),
+              ],
+            ),
+          ),
+      ],
+    ),
+  );
 }

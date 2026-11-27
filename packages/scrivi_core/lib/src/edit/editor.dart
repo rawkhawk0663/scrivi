@@ -361,8 +361,21 @@ class ScoreEditor {
 
   // ───────────────────────── Tonhöhen ─────────────────────────
 
-  /// Klingende Tonhöhe aus der geschriebenen.
+  /// Ansicht „transponiert“: so viele Halbtöne zeigt die App die Spur
+  /// zusätzlich höher (Instrument in B: 2). Eingaben werden zurückgerechnet.
+  int viewShift = 0;
+
+  /// Tonart, wie sie in der Ansicht erscheint.
+  KeySignature _viewKey(int bar) => _score.masterBars[bar].key.transposed(viewShift);
+
+  /// Klingende Tonhöhe aus der geschriebenen (wie sie in der Ansicht steht).
   Pitch _concert(Pitch written) {
+    if (viewShift != 0) {
+      return written.transposedBy(
+        -_track.transposeSemitones - viewShift,
+        fifths: _score.masterBars[cursor.bar].key.fifths,
+      );
+    }
     final t = _track.transposeSemitones;
     if (t % 12 == 0) return written.octaves(-t ~/ 12);
     return Pitch.fromMidi(written.midi - t, fifths: _score.masterBars[cursor.bar].key.fifths);
@@ -469,10 +482,13 @@ class ScoreEditor {
   void inputStep(int step, {bool addToChord = false}) {
     if (_track.percussion) return;
     _begin();
-    final key = _score.masterBars[cursor.bar].key;
+    final key = _viewKey(cursor.bar);
     final alter = key.alterFor(step);
     final prev = _previousNote();
-    final ref = prev?.shownFor(_track.transposeSemitones) ?? _middleOfStaff();
+    final shown = prev?.shownFor(_track.transposeSemitones);
+    final ref = shown == null
+        ? _middleOfStaff()
+        : (viewShift == 0 ? shown : shown.transposedBy(viewShift, fifths: key.fifths));
     // Oktave so wählen, dass der Abstand zum vorigen Ton höchstens eine Quarte ist
     var best = Pitch(step, alter, ref.octave);
     for (final o in [ref.octave - 1, ref.octave, ref.octave + 1]) {
@@ -489,7 +505,7 @@ class ScoreEditor {
     if (_track.percussion) return;
     _begin();
     final step = diatonic % 7;
-    final alter = _score.masterBars[cursor.bar].key.alterFor(step);
+    final alter = _viewKey(cursor.bar).alterFor(step);
     _inputWritten(Pitch(step, alter, diatonic ~/ 7), addToChord);
     _done();
   }
@@ -862,7 +878,7 @@ class ScoreEditor {
   void _insertBarsRaw(int at, int count) {
     final ref = _score.masterBars[(at - 1).clamp(0, _score.masterBars.length - 1)];
     for (var k = 0; k < count; k++) {
-      _score.masterBars.insert(at, MasterBar(time: ref.time, key: ref.key));
+      _score.masterBars.insert(at, MasterBar(time: ref.time, key: ref.key, swing: ref.swing));
       for (final t in _score.tracks) {
         final clef = t.bars.isEmpty ? Clef.treble : t.bars[(at - 1).clamp(0, t.bars.length - 1)].clef;
         t.bars.insert(at, Bar(clef: clef, voices: [Voice(_rests(ref.time.length))]));
@@ -891,6 +907,7 @@ class ScoreEditor {
         chords: t.chords,
         transposeSemitones: t.transposeSemitones,
         program: t.program,
+        instrumentKey: t.instrumentKey,
       );
     }
   }
@@ -1057,6 +1074,18 @@ class ScoreEditor {
     _begin();
     final mb = _score.masterBars[cursor.bar];
     _score.masterBars[cursor.bar] = mb.copyWith(endings: endings);
+    _done();
+  }
+
+  /// Swing ein oder aus: für die ausgewählten Takte, sonst ab dem Takt am Cursor bis zum Schluss.
+  void setSwing(bool on) {
+    _begin();
+    final s = selection;
+    final from = s?.$1.bar ?? cursor.bar;
+    final to = s?.$2.bar ?? _score.masterBars.length - 1;
+    for (var b = from; b <= to; b++) {
+      _score.masterBars[b] = _score.masterBars[b].copyWith(swing: on);
+    }
     _done();
   }
 
@@ -1579,7 +1608,7 @@ class ScoreEditor {
 
   // ───────────────────────── Spuren ─────────────────────────
 
-  static Track _copyTrack(Track t, {String? name, StaffDef? staff, int? program}) => Track(
+  static Track _copyTrack(Track t, {String? name, StaffDef? staff, int? program, int? instrumentKey}) => Track(
     name: name ?? t.name,
     shortName: t.shortName,
     staff: staff ?? t.staff,
@@ -1588,13 +1617,19 @@ class ScoreEditor {
     layoutHint: t.layoutHint,
     transposeSemitones: t.transposeSemitones,
     program: program ?? t.program,
+    instrumentKey: instrumentKey ?? t.instrumentKey,
   );
 
   /// Name und Klangfarbe (General-MIDI-Nummer) der Spur [index].
-  void setTrackInfo(int index, {String? name, int? program}) {
+  void setTrackInfo(int index, {String? name, int? program, int? instrumentKey}) {
     if (index < 0 || index >= _score.tracks.length) return;
     _begin();
-    _score.tracks[index] = _copyTrack(_score.tracks[index], name: name?.trim(), program: program);
+    _score.tracks[index] = _copyTrack(
+      _score.tracks[index],
+      name: name?.trim(),
+      program: program,
+      instrumentKey: instrumentKey,
+    );
     _done();
   }
 
