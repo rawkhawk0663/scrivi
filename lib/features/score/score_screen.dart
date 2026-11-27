@@ -130,6 +130,7 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
       unawaited(_recent?.touch(widget.path, score));
       _score = score;
       _player = ScorePlayer(score)..onMixChanged = _onMix;
+      _scheduleWarmUp(const Duration(seconds: 1));
       _editor = core.ScoreEditor(score, track: _track);
       _engrave();
     } catch (e, st) {
@@ -316,9 +317,20 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
     }
     _score = e.score;
     _engrave();
-    unawaited(_player?.updateScore(e.score));
+    unawaited(_player?.updateScore(e.score).then((_) => _scheduleWarmUp()));
     _saveTimer?.cancel();
     _saveTimer = Timer(const Duration(milliseconds: 800), _flushSave);
+  }
+
+  Timer? _warmTimer;
+
+  /// Klang im Hintergrund vorbereiten, wenn eine Weile nichts geändert wurde:
+  /// dann startet das Abspielen sofort.
+  void _scheduleWarmUp([Duration after = const Duration(milliseconds: 1500)]) {
+    _warmTimer?.cancel();
+    _warmTimer = Timer(after, () {
+      if (mounted) _player?.warmUp();
+    });
   }
 
   /// Mischpult geändert: ins Stück übernehmen und sichern (ohne neu zu setzen).
@@ -1046,6 +1058,7 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
 
   @override
   void dispose() {
+    _warmTimer?.cancel();
     _micSub?.cancel();
     _mic?.dispose();
     _heard.dispose();

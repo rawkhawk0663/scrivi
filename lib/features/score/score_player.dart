@@ -64,7 +64,28 @@ class ScorePlayer extends ChangeNotifier {
   bool _playing = false;
 
   /// Klang wird gerade gerechnet.
-  bool get preparing => _preparing;
+  bool get preparing => _preparing && !_quiet;
+
+  /// Im Hintergrund vorbereiten, ohne Anzeige (bis jemand auf Abspielen drückt).
+  bool _quiet = false;
+
+  /// Fertig gerechnete Tonspuren (WAV) nach ihrem Inhalt: nach einer Änderung
+  /// wird nur neu gerechnet, was sich geändert hat.
+  final _wavCache = <int, Uint8List>{};
+
+  /// Schon vor dem Abspielen alles rechnen (nach dem Öffnen und nach Änderungen).
+  void warmUp() {
+    if (_disposed || _playing || _tracks != null || _preparingFuture != null) return;
+    _quiet = true;
+    unawaited(
+      _prepare()
+          .catchError((Object e, StackTrace st) => ErrorLog.record(e, st, where: 'Abspielen vorbereiten'))
+          .whenComplete(() {
+            _quiet = false;
+          }),
+    );
+  }
+
   bool _preparing = false;
 
   String? error;
@@ -135,6 +156,11 @@ class ScorePlayer extends ChangeNotifier {
   Future<void> play() async {
     if (_playing) return;
     try {
+      if (_quiet) {
+        // Läuft schon im Hintergrund: jetzt sichtbar warten
+        _quiet = false;
+        _notify();
+      }
       await _prepare();
       if (_disposed || _tracks == null) return;
       if (position.value >= _plan.duration - 0.05) position.value = 0;
@@ -367,9 +393,14 @@ class ScorePlayer extends ChangeNotifier {
   List<SoundHandle> get _allMusicHandles => [..._handles, ?_clickHandle];
 
   /// Tonspuren rechnen (im Hintergrund) und laden.
-  Future<void> _prepare() {
-    if (_tracks != null) return Future.value();
-    return _preparingFuture ??= _doPrepare().whenComplete(() => _preparingFuture = null);
+  /// Bis die Tonspuren zum aktuellen Stand geladen sind (eine Änderung
+  /// mittendrin rechnet danach weiter).
+  Future<void> _prepare() async {
+    while (_tracks == null && !_disposed) {
+      final before = _unloads;
+      await (_preparingFuture ??= _doPrepare().whenComplete(() => _preparingFuture = null));
+      if (_tracks == null && before == _unloads) return; // nichts geändert und doch nichts da: aufgeben
+    }
   }
 
   Future<void> _doPrepare() async {
@@ -381,16 +412,37 @@ class ScorePlayer extends ChangeNotifier {
       final soloud = await AudioEngine.use(this);
       final s = _score, tempo = _tempo;
       final sounds = await Sounds.bytes();
-      // Mehrere Spuren gleichzeitig rechnen (je ein Isolate pro Gruppe)
-      final groups = _groups(_plan, Platform.isAndroid || Platform.isIOS ? 2 : 3);
-      final parts = await Future.wait([for (final g in groups) Isolate.run(() => _render(s, tempo, sounds, g))]);
-      final byIndex = <int, Uint8List>{};
-      for (var k = 0; k < groups.length; k++) {
-        for (var j = 0; j < groups[k].length; j++) {
-          byIndex[groups[k][j]] = parts[k][j];
+      // Was schon gerechnet ist, bleibt; nur geänderte Spuren neu
+      final plan = _plan;
+      final len = plan.duration + 2.5;
+      final keys = [for (final t in plan.tracks) _trackKey(t, len, sounds != null)];
+      final clickKey = _clickKey(plan, len);
+      final missing = [
+        for (var i = 0; i < keys.length; i++)
+          if (!_wavCache.containsKey(keys[i])) i,
+      ];
+      final needClicks = !_wavCache.containsKey(clickKey);
+      if (missing.isNotEmpty || needClicks) {
+        // Mehrere Spuren gleichzeitig rechnen (je ein Isolate pro Gruppe)
+        var groups = _groups(plan, Platform.isAndroid || Platform.isIOS ? 2 : 3, only: missing);
+        if (groups.isEmpty) groups = [<int>[]];
+        final parts = await Future.wait([
+          for (var k = 0; k < groups.length; k++)
+            () {
+              final g = groups[k], clicks = k == 0 && needClicks;
+              return Isolate.run(() => _render(s, tempo, sounds, g, clicks: clicks));
+            }(),
+        ]);
+        for (var k = 0; k < groups.length; k++) {
+          for (var j = 0; j < groups[k].length; j++) {
+            _wavCache[keys[groups[k][j]]] = parts[k][j];
+          }
         }
+        if (needClicks) _wavCache[clickKey] = parts.first.last;
       }
-      final wavs = [for (var i = 0; i < _plan.tracks.length; i++) byIndex[i]!, parts.first.last];
+      if (gen != _generation || _disposed) return;
+      _wavCache.removeWhere((k, _) => k != clickKey && !keys.contains(k));
+      final wavs = [for (final k in keys) _wavCache[k]!, _wavCache[clickKey]!];
       if (gen != _generation || _disposed) return;
       final tracks = <AudioSource>[];
       for (var i = 0; i < wavs.length - 1; i++) {
@@ -414,9 +466,9 @@ class ScorePlayer extends ChangeNotifier {
   }
 
   /// Spuren auf [n] Gruppen verteilen, etwa gleich viele Töne pro Gruppe.
-  static List<List<int>> _groups(core.PlaybackPlan plan, int n) {
-    final order = [for (var i = 0; i < plan.tracks.length; i++) i]
-      ..sort((a, b) => plan.tracks[b].notes.length.compareTo(plan.tracks[a].notes.length));
+  static List<List<int>> _groups(core.PlaybackPlan plan, int n, {required List<int> only}) {
+    if (only.isEmpty) return [];
+    final order = [...only]..sort((a, b) => plan.tracks[b].notes.length.compareTo(plan.tracks[a].notes.length));
     final groups = List.generate(math.max(1, math.min(n, order.length)), (_) => <int>[]);
     final load = List.filled(groups.length, 0);
     for (final i in order) {
@@ -430,8 +482,34 @@ class ScorePlayer extends ChangeNotifier {
     return groups;
   }
 
-  /// Läuft in einem eigenen Isolate: die Spuren [indices] als WAV, dahinter das Metronom.
-  static List<Uint8List> _render(core.Score score, double tempo, Uint8List? sounds, List<int> indices) {
+  /// Kennung einer Tonspur nach allem, was ihren Klang bestimmt.
+  static int _trackKey(core.PlayTrack t, double len, bool sampled) {
+    final tr = t.track;
+    var h = Object.hash(tr.program, tr.percussion, Object.hashAll(tr.staff.tuning), len, sampled, t.notes.length);
+    for (final n in t.notes) {
+      h = Object.hash(h, n.start, n.duration, n.midi, n.velocity, n.string, n.slideTo, n.vibrato, n.palmMuted);
+      h = Object.hash(
+        h,
+        n.dead,
+        n.harmonic,
+        n.legato,
+        Object.hashAll([for (final (a, b) in n.bend) Object.hash(a, b)]),
+      );
+    }
+    return h;
+  }
+
+  static int _clickKey(core.PlaybackPlan plan, double len) =>
+      Object.hash(len, 'klick', Object.hashAll([for (final c in plan.clicks) Object.hash(c.time, c.accent)]));
+
+  /// Läuft in einem eigenen Isolate: die Spuren [indices] als WAV, mit [clicks] dahinter das Metronom.
+  static List<Uint8List> _render(
+    core.Score score,
+    double tempo,
+    Uint8List? sounds,
+    List<int> indices, {
+    bool clicks = true,
+  }) {
     final plan = core.PlaybackPlan.build(score, tempoFactor: tempo);
     final len = plan.duration + 2.5;
     core.SoundFont? sf;
@@ -440,7 +518,7 @@ class ScorePlayer extends ChangeNotifier {
     } catch (_) {}
     return [
       for (final i in indices) core.Synth.wav(core.Synth.renderTrack(plan.tracks[i], len, sounds: sf)),
-      core.Synth.wav(core.Synth.renderClicks(plan.clicks, len)),
+      if (clicks) core.Synth.wav(core.Synth.renderClicks(plan.clicks, len)),
     ];
   }
 
@@ -541,7 +619,11 @@ class ScorePlayer extends ChangeNotifier {
     _countHandle = null;
   }
 
+  /// Zählt, wie oft die Tonspuren verworfen wurden (Stück oder Tempo geändert).
+  int _unloads = 0;
+
   Future<void> _unload() async {
+    _unloads++;
     _generation++;
     _stopVoices();
     final all = [...?_tracks, ?_clicks, ?_countSource];
