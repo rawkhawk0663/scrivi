@@ -344,7 +344,12 @@ Plan in fünf Schritten:
    Links-Rechts, Stück), Endlos-Ansicht (alle Takte in einer langen Zeile, waagrecht), Spuren
    hinzufügen, umbenennen, löschen, Klang wählen, Stimmung und Kapo ändern (Töne oder Griffe
    bleiben). Noch offen: Reiter für mehrere Stücke.
-3. Schnell-Eingaben: Akkordzeile tippen, Schlagmuster, Liedtext einfügen, Formteile wiederverwenden.
+3. **Schnell-Eingaben** ✅ – Akkordzeile tippen („G | Em | C D | Am7“, % wiederholt, - hält), dazu
+   gleich ein Begleitmuster; Begleitmuster für einen Bereich (Anschlag: Ganze, Viertel, Achtel,
+   Pop/Folk, Rock, Bass und Schlag, Offbeat; Zupfen: auf und ab, Wechselbass, Arpeggio; 3/4 und
+   6/8) mit Griffen aus der Griffbibliothek oder selbst gesucht (andere Stimmungen, Kapo);
+   Liedtext als ganzen Text einfügen (Silben mit -, _ hält); Formteil wiederholen (alle Spuren,
+   nach dem Cursor oder am Ende).
 4. Stift-Gesten, waagrechte Band-Ansicht.
 5. Mikrofon-Eingabe (einstimmig).
 

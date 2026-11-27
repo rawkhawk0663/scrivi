@@ -4,7 +4,9 @@ import 'dart:math' as math;
 import '../io/scrivi_format.dart';
 import '../model/fraction.dart';
 import '../model/pitch.dart';
+import '../model/chord_library.dart';
 import '../model/score.dart';
+import 'patterns.dart';
 
 /// Stelle, an der geschrieben wird: Takt, Schlag (in Stimme 1) und Saite.
 class EditCursor {
@@ -1250,6 +1252,329 @@ class ScoreEditor {
       }
     }
     last.clear();
+  }
+
+  // ───────────────────────── Schnell-Eingaben ─────────────────────────
+
+  /// Nummer des Akkords [name] in der Spur (neu angelegt, wenn nötig).
+  int _chordId(String name) {
+    final chords = _track.chords;
+    final id = chords.entries.where((e) => e.value.name == name).map((e) => e.key).firstOrNull;
+    if (id != null) return id;
+    final next = chords.isEmpty ? 0 : chords.keys.reduce(math.max) + 1;
+    chords[next] = ChordDef(name: name);
+    return next;
+  }
+
+  /// Index des Schlags, der in [bar] genau bei [onset] beginnt. Liegt dort
+  /// mitten in einer Pause, wird sie geteilt; mitten in einem Ton gilt dieser.
+  int _beatStartingAt(int bar, Fraction onset) {
+    final beats = beatsOf(bar);
+    var t = Fraction.zero;
+    for (var i = 0; i < beats.length; i++) {
+      final b = beats[i];
+      if (b.grace != GraceType.none) continue;
+      final e = t + b.duration.length;
+      if (t == onset) return i;
+      if (onset > t && onset < e) {
+        if (!b.isRest) return i;
+        final before = _restsAt(t, onset - t);
+        // Akkord, Text usw. der geteilten Pause bleiben am ersten Teil
+        if (before.isNotEmpty) before[0] = b.copyWith(duration: before[0].duration);
+        final first = _replace(bar, t, e, [...before, ..._restsAt(onset, e - onset)]);
+        return first + before.length;
+      }
+      t = e;
+    }
+    return math.max(0, beats.length - 1);
+  }
+
+  /// Akkordzeile zerlegen: Takte mit `|` getrennt, darin die Akkorde mit
+  /// Leerzeichen; `%` wiederholt den vorigen Takt, `-` oder `.` hält einen
+  /// Platz frei. Ohne `|` ist jeder Akkord ein Takt.
+  static List<List<String>> parseChordLine(String text) {
+    final t = text.trim();
+    if (t.isEmpty) return const [];
+    final bars = <List<String>>[];
+    final parts = t.contains('|') ? t.split(RegExp(r'[|\n]')) : t.split(RegExp(r'\s+'));
+    for (final part in parts) {
+      final words = part.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+      if (words.isEmpty) continue;
+      if (words.length == 1 && words.first == '%') {
+        bars.add(bars.isEmpty ? const ['-'] : [...bars.last]);
+      } else {
+        bars.add(words);
+      }
+    }
+    return bars;
+  }
+
+  /// Akkorde ab dem Takt am Cursor setzen, ein Eintrag von [parseChordLine]
+  /// pro Takt, die Akkorde eines Takts gleichmässig auf die Schläge verteilt.
+  /// Fehlen Takte, kommen leere dazu. Gibt den ersten und letzten Takt zurück.
+  (int, int)? setChordLine(String text) {
+    final bars = parseChordLine(text);
+    if (bars.isEmpty) return null;
+    _begin();
+    final from = cursor.bar;
+    final missing = from + bars.length - _score.masterBars.length;
+    if (missing > 0) _insertBarsRaw(_score.masterBars.length, missing);
+    for (var k = 0; k < bars.length; k++) {
+      final bar = from + k;
+      final beats = beatsOf(bar);
+      for (var i = 0; i < beats.length; i++) {
+        if (beats[i].chordId != null) beats[i] = beats[i].copyWith(clearChord: true);
+      }
+      final slots = bars[k];
+      final len = barLength(bar);
+      final unit = Fraction(1, _score.masterBars[bar].time.beatType);
+      for (var j = 0; j < slots.length; j++) {
+        final name = slots[j];
+        if (name == '-' || name == '.' || name == '%') continue;
+        // Gleichmässig verteilt, auf den Schlag abgerundet
+        final exact = len.scale(j, slots.length);
+        final onset = unit.scale((exact / unit).n ~/ (exact / unit).d);
+        final i = _beatStartingAt(bar, onset);
+        final b = beatsOf(bar)[i];
+        beatsOf(bar)[i] = b.copyWith(chordId: _chordId(name));
+      }
+    }
+    final to = from + bars.length - 1;
+    _done();
+    return (from, to);
+  }
+
+  /// Akkord, der bei [bar]/[onset] gilt (der letzte davor, auch aus früheren Takten).
+  String? chordAt(int bar, Fraction onset) {
+    for (var b = bar; b >= 0; b--) {
+      final beats = beatsOf(b);
+      var t = Fraction.zero;
+      String? last;
+      for (final beat in beats) {
+        if (beat.grace != GraceType.none) continue;
+        if (b == bar && t > onset) break;
+        final id = beat.chordId;
+        if (id != null) last = _track.chords[id]?.name ?? last;
+        t = t + beat.duration.length;
+      }
+      if (last != null) return last;
+    }
+    return null;
+  }
+
+  Note _fretNote(int bar, int string, int fret) {
+    final st = _track.staff;
+    final fifths = _score.masterBars[bar].key.fifths;
+    final concert = Pitch.fromMidi(st.tuning[string] + st.capo + fret, fifths: fifths);
+    final written = _writtenFor(concert, fifths);
+    return Note(pitch: concert, written: written == concert ? null : written, string: string, fret: fret);
+  }
+
+  /// Begleitung nach dem Muster [p] in die Takte [fromBar] bis [toBar]
+  /// schreiben (Stimme 1 der Spur am Cursor), mit den Griffen der Akkorde,
+  /// die dort stehen. Takte ohne Akkord bleiben, wie sie sind.
+  void applyPattern(StrumPattern p, int fromBar, int toBar) {
+    if (!stringed) return;
+    _begin();
+    final st = _track.staff;
+    final voicings = <String, List<int>?>{};
+    final steps = p.steps.split('');
+    for (var bar = fromBar; bar <= toBar && bar < _score.masterBars.length; bar++) {
+      final len = barLength(bar);
+      final step = len.scale(1, steps.length);
+      // Akkordwechsel in diesem Takt (Stelle → Name)
+      final changes = <(Fraction, String)>[];
+      var t = Fraction.zero;
+      for (final b in beatsOf(bar)) {
+        if (b.grace != GraceType.none) continue;
+        final id = b.chordId;
+        if (id != null && _track.chords[id] != null) changes.add((t, _track.chords[id]!.name));
+        t = t + b.duration.length;
+      }
+      if (chordAt(bar, len) == null) continue;
+      // Schritte zu Ereignissen zusammenfassen (− hält); bei einem
+      // Akkordwechsel mitten im Ereignis wird geteilt und neu angeschlagen.
+      final events = <(Fraction, Fraction, String)>[];
+      for (var k = 0; k < steps.length; k++) {
+        final c = steps[k];
+        if (c == '-' && events.isNotEmpty) {
+          final (s0, l, tok) = events.removeLast();
+          events.add((s0, l + step, tok));
+        } else {
+          events.add((step.scale(k), step, c == '-' ? '.' : c));
+        }
+      }
+      for (final (at, _) in changes) {
+        for (var e = 0; e < events.length; e++) {
+          final (s0, l, tok) = events[e];
+          if (at > s0 && at < s0 + l) {
+            events
+              ..removeAt(e)
+              ..insertAll(e, [(s0, at - s0, tok), (at, s0 + l - at, tok)]);
+            break;
+          }
+        }
+      }
+      final out = <Beat>[];
+      final usedChange = <int>{};
+      for (final (onset, length, tok) in events) {
+        final name = chordAt(bar, onset);
+        final frets = name == null
+            ? null
+            : voicings.putIfAbsent(name, () => ChordLibrary.voicing(name, st.tuning, capo: st.capo));
+        final played = <int>[
+          if (frets != null)
+            for (var s = 0; s < frets.length && s < st.stringCount; s++)
+              if (frets[s] >= 0) s,
+        ];
+        List<int> strings;
+        if (played.isEmpty) {
+          strings = const [];
+        } else {
+          strings = switch (tok) {
+            'D' => played,
+            'U' => played.sublist(math.max(1, played.length - 4)),
+            'B' => [played.first],
+            'A' => [played.length > 1 ? played[1] : played.first],
+            _ when int.tryParse(tok) != null => [
+              played[math.max(played.length > 1 ? 1 : 0, played.length - int.parse(tok))],
+            ],
+            _ => const [],
+          };
+        }
+        // Akkordsymbol an das Ereignis, in dem der Wechsel liegt
+        int? chordId;
+        for (var c = 0; c < changes.length; c++) {
+          final (at, nm) = changes[c];
+          if (!usedChange.contains(c) && at >= onset && at < onset + length) {
+            usedChange.add(c);
+            chordId = _chordId(nm);
+            break;
+          }
+        }
+        if (strings.isEmpty) {
+          final rests = _restsAt(onset, length);
+          if (chordId != null && rests.isNotEmpty) rests[0] = rests[0].copyWith(chordId: chordId);
+          out.addAll(rests);
+          continue;
+        }
+        final notes = [for (final s in strings) _fretNote(bar, s, frets![s])];
+        final parts = durationsFor(length);
+        for (var i = 0; i < parts.length; i++) {
+          final tied = [
+            for (final note in notes)
+              note.copyWith(tieDestination: i > 0, tieOrigin: i < parts.length - 1, letRing: p.picked),
+          ];
+          out.add(
+            Beat(
+              duration: parts[i],
+              notes: tied,
+              chordId: i == 0 ? chordId : null,
+              pickStroke: p.picked || i > 0 ? 0 : (tok == 'U' ? -1 : (tok == 'D' ? 1 : 0)),
+            ),
+          );
+        }
+      }
+      final beats = beatsOf(bar);
+      beats
+        ..clear()
+        ..addAll(out);
+    }
+    _done();
+  }
+
+  /// Liedtext in Silben: Wörter mit Leerzeichen, Silben mit `-` getrennt
+  /// („Son-nen-schein“); `_` lässt eine Note aus (Silbe wird gehalten).
+  static List<String> parseLyrics(String text) {
+    final out = <String>[];
+    for (final word in text.split(RegExp(r'\s+'))) {
+      if (word.isEmpty) continue;
+      if (word == '_') {
+        out.add('_');
+        continue;
+      }
+      final parts = word.split('-');
+      for (var i = 0; i < parts.length; i++) {
+        if (parts[i].isEmpty) continue;
+        out.add(i < parts.length - 1 ? '${parts[i]}-' : parts[i]);
+      }
+    }
+    return out;
+  }
+
+  /// Liedtext ab dem Cursor auf die Noten verteilen (eine Silbe pro Ton,
+  /// übergebundene Töne und Pausen werden übersprungen). Gibt die Anzahl
+  /// verteilter Silben zurück.
+  int setLyricsText(String text, {int line = 0}) {
+    final syl = parseLyrics(text);
+    if (syl.isEmpty) return 0;
+    _begin();
+    var k = 0;
+    var beat = cursor.beat;
+    for (var bar = cursor.bar; bar < _score.masterBars.length && k < syl.length; bar++) {
+      final beats = beatsOf(bar);
+      for (; beat < beats.length && k < syl.length; beat++) {
+        final b = beats[beat];
+        if (b.isRest || b.grace != GraceType.none || b.notes.every((n) => n.tieDestination)) continue;
+        final s = syl[k++];
+        if (s == '_') continue;
+        final lyrics = [...b.lyrics];
+        while (lyrics.length <= line) {
+          lyrics.add('');
+        }
+        lyrics[line] = s;
+        beats[beat] = b.copyWith(lyrics: lyrics);
+      }
+      beat = 0;
+    }
+    _done();
+    return k;
+  }
+
+  /// Formteile des Stücks: Name, erster und letzter Takt.
+  List<(String, int, int)> get sections {
+    final out = <(String, int, int)>[];
+    final mbs = _score.masterBars;
+    for (var i = 0; i < mbs.length; i++) {
+      final s = mbs[i].section;
+      if (s == null) continue;
+      if (out.isNotEmpty) {
+        final (n, a, _) = out.removeLast();
+        out.add((n, a, i - 1));
+      }
+      out.add((s.label.isEmpty ? '?' : s.label, i, mbs.length - 1));
+    }
+    return out;
+  }
+
+  /// Die Takte [from] bis [to] (alle Spuren, mit Tempo) kopieren und vor
+  /// dem Takt [at] einfügen. Der Cursor geht an den Anfang der Kopie.
+  void copyBars(int from, int to, int at) {
+    final n = _score.masterBars.length;
+    if (from < 0 || to >= n || from > to || at < 0 || at > n) return;
+    _begin();
+    // Tiefe Kopie über das Dateiformat
+    final copy = _restore(_snapshot());
+    final count = to - from + 1;
+    for (var k = 0; k < count; k++) {
+      _score.masterBars.insert(at + k, copy.masterBars[from + k]);
+      for (var ti = 0; ti < _score.tracks.length; ti++) {
+        _score.tracks[ti].bars.insert(at + k, copy.tracks[ti].bars[from + k]);
+      }
+    }
+    final old = [..._score.tempos];
+    _score.tempos
+      ..clear()
+      ..addAll([
+        for (final m in old) m.bar >= at && !(m.bar == 0 && at == 0) ? _tempoAt(m, m.bar + count) : m,
+        for (final m in old)
+          if (m.bar >= from && m.bar <= to) _tempoAt(m, at + m.bar - from),
+      ])
+      ..sort((a, b) => a.bar != b.bar ? a.bar.compareTo(b.bar) : a.position.compareTo(b.position));
+    _dropLayoutHints();
+    cursor = EditCursor(bar: at, string: cursor.string);
+    anchor = null;
+    _done();
   }
 
   // ───────────────────────── Spuren ─────────────────────────

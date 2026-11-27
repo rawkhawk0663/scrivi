@@ -31,6 +31,12 @@ abstract class ToolHost {
   Future<void> editTrackSound(int track);
   Future<void> editTuning();
   Future<void> addTrack();
+
+  /// Schnell-Eingaben: Akkordzeile, Begleitmuster, Liedtext einfügen, Formteil wiederholen.
+  Future<void> quickChords();
+  Future<void> quickPattern();
+  Future<void> quickLyrics();
+  Future<void> quickSection();
   Future<void> save();
   Future<void> saveAs();
   void copy();
@@ -43,6 +49,7 @@ abstract class ToolHost {
 enum ToolGroup {
   duration('Notenwert', 'Note value'),
   guitar('Gitarre', 'Guitar'),
+  quick('Schnell', 'Quick'),
   expression('Ausdruck', 'Expression'),
   bar('Takt', 'Bar'),
   text('Text', 'Text'),
@@ -478,6 +485,46 @@ final List<ToolDef> allTools = [
     keywords: const ['refrain', 'strophe', 'chorus', 'verse', 'teil'],
     active: (e) => e.score.masterBars[e.cursor.bar].section != null,
     run: (h) => h.editSection(),
+  ),
+
+  // ── Schnell-Eingaben ──
+  ToolDef(
+    id: 'quick-chords',
+    group: ToolGroup.quick,
+    look: const TextLook('G|C'),
+    de: 'Akkordzeile tippen …',
+    en: 'Type a chord line …',
+    keywords: const ['akkorde', 'chords', 'begleitung', 'harmonie', 'tippen'],
+    run: (h) => h.quickChords(),
+  ),
+  ToolDef(
+    id: 'quick-pattern',
+    group: ToolGroup.quick,
+    look: const TextLook('↓↑'),
+    de: 'Begleitmuster (Anschlag, Zupfen) …',
+    en: 'Strum or picking pattern …',
+    keywords: const ['schlagmuster', 'strum', 'rhythmus', 'zupfen', 'picking', 'begleitung'],
+    stringedOnly: true,
+    run: (h) => h.quickPattern(),
+  ),
+  ToolDef(
+    id: 'quick-lyrics',
+    group: ToolGroup.quick,
+    look: const IconLook(Icons.subject_rounded),
+    de: 'Liedtext einfügen …',
+    en: 'Paste lyrics …',
+    keywords: const ['text', 'lyrics', 'silben', 'gesang', 'einfügen'],
+    run: (h) => h.quickLyrics(),
+  ),
+  ToolDef(
+    id: 'quick-section',
+    group: ToolGroup.quick,
+    look: const TextLook('[A]+'),
+    de: 'Formteil wiederholen …',
+    en: 'Repeat a section …',
+    keywords: const ['refrain', 'strophe', 'kopieren', 'copy', 'chorus', 'verse'],
+    enabled: (e) => e.sections.isNotEmpty,
+    run: (h) => h.quickSection(),
   ),
 
   // ── Text ──

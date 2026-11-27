@@ -338,4 +338,141 @@ void main() {
       expect(e.score.tracks, hasLength(1));
     });
   });
+
+  group('Schnell-Eingaben', () {
+    ScoreEditor fresh([int bars = 4]) => ScoreEditor(ScoreEditor.newScore(bars: bars));
+    String? chordOf(ScoreEditor e, int bar, int beat) {
+      final id = e.beatsOf(bar)[beat].chordId;
+      return id == null ? null : e.score.tracks[e.track].chords[id]!.name;
+    }
+
+    test('Akkordzeile zerlegen', () {
+      expect(ScoreEditor.parseChordLine('G Em C D'), [
+        ['G'],
+        ['Em'],
+        ['C'],
+        ['D'],
+      ]);
+      expect(ScoreEditor.parseChordLine('| G | Em | C D | % |'), [
+        ['G'],
+        ['Em'],
+        ['C', 'D'],
+        ['C', 'D'],
+      ]);
+      expect(ScoreEditor.parseChordLine('G - - D | Am7'), [
+        ['G', '-', '-', 'D'],
+        ['Am7'],
+      ]);
+    });
+
+    test('Akkordzeile setzt Akkorde, teilt Pausen, hängt Takte an', () {
+      final e = fresh(2);
+      final r = e.setChordLine('G | Em | C D');
+      expect(r, (0, 2));
+      expect(e.score.masterBars, hasLength(3));
+      expect(chordOf(e, 0, 0), 'G');
+      expect(chordOf(e, 1, 0), 'Em');
+      expect(chordOf(e, 2, 0), 'C');
+      // D auf der zweiten Hälfte: die Ganze-Pause wurde geteilt
+      expect(_bar(e, 2), ['h:r', 'h:r']);
+      expect(chordOf(e, 2, 1), 'D');
+      expect(e.chordAt(2, Fraction(3, 4)), 'D');
+      expect(e.chordAt(3 - 1, Fraction.zero), 'C');
+    });
+
+    test('Begleitmuster: Pop-Anschlag mit Griffen', () {
+      final e = fresh(2);
+      e.setChordLine('G | C D');
+      e.applyPattern(StrumPattern.byId('pop')!, 0, 1);
+      final b0 = e.beatsOf(0);
+      expect(b0.map((b) => b.duration.value), [
+        NoteValue.quarter,
+        NoteValue.eighth,
+        NoteValue.quarter,
+        NoteValue.eighth,
+        NoteValue.eighth,
+        NoteValue.eighth,
+      ]);
+      expect(_sum(e, 0), Fraction(1));
+      // G-Griff 320003: abwärts alle sechs Saiten, aufwärts die hohen
+      expect(b0[0].notes.map((n) => '${n.string}/${n.fret}'), ['0/3', '1/2', '2/0', '3/0', '4/0', '5/3']);
+      expect(b0[0].pickStroke, 1);
+      expect(b0[2].pickStroke, -1);
+      expect(b0[2].notes, hasLength(4));
+      expect(chordOf(e, 0, 0), 'G');
+      // Takt 2: Wechsel zu D auf der Hälfte, das gehaltene Aufwärts wird geteilt
+      expect(_sum(e, 1), Fraction(1));
+      final b1 = e.beatsOf(1);
+      final d = b1.indexWhere((b) => b.chordId != null && e.score.tracks[0].chords[b.chordId]!.name == 'D');
+      expect(e.onsetOf(1, d), Fraction(1, 2));
+      expect(b1[d].notes.map((n) => n.string), [3, 4, 5]); // D-Griff xx0232, aufwärts ohne Bass
+      final plan = PlaybackPlan.build(e.score);
+      expect(plan.tracks.single.notes, isNotEmpty);
+    });
+
+    test('Zupfmuster mit Bass und Saiten von oben gezählt', () {
+      final e = fresh(1);
+      e.setChordLine('Am');
+      e.applyPattern(StrumPattern.byId('zupf')!, 0, 0);
+      final strings = [for (final b in e.beatsOf(0)) b.notes.single.string];
+      // Am x02210: Bass A-Saite, dann G, H, e, H, G, H, e
+      expect(strings, [1, 3, 4, 5, 4, 3, 4, 5]);
+      expect(e.beatsOf(0).first.notes.single.letRing, isTrue);
+    });
+
+    test('Griffe für andere Stimmungen und mit Kapo', () {
+      // Drop D: G mit dem Grundton auf der tiefen Saite (Bund 5)
+      final g = ChordLibrary.voicing('G', const [38, 45, 50, 55, 59, 64])!;
+      expect(g.first, 5);
+      // Mit Kapo 2: A klingt wie der G-Griff
+      final a = ChordLibrary.voicing('A', const [40, 45, 50, 55, 59, 64], capo: 2)!;
+      for (var s = 0; s < 6; s++) {
+        if (a[s] >= 0) expect((const [40, 45, 50, 55, 59, 64][s] + 2 + a[s]) % 12, isIn([9, 1, 4]));
+      }
+      expect(ChordLibrary.voicing('Bbdim7', const [40, 45, 50, 55, 59, 64]), isNotNull);
+    });
+
+    test('Liedtext verteilen, Pausen und Haltebögen auslassen', () {
+      expect(ScoreEditor.parseLyrics('Son-nen-schein ü-ber _ mir'), [
+        'Son-',
+        'nen-',
+        'schein',
+        'ü-',
+        'ber',
+        '_',
+        'mir',
+      ]);
+      final e = fresh(2);
+      e.cursor = e.cursor.copyWith(string: 5);
+      for (var i = 0; i < 6; i++) {
+        e.inputFret(i);
+        e.moveBeat(1);
+      }
+      e.cursor = const EditCursor();
+      final n = e.setLyricsText('Hal-lo Welt _ du');
+      expect(n, 5);
+      final lyr = [
+        for (final b in [...e.beatsOf(0), ...e.beatsOf(1)])
+          if (b.lyrics.isNotEmpty) b.lyrics.first,
+      ];
+      expect(lyr, ['Hal-', 'lo', 'Welt', 'du']);
+    });
+
+    test('Formteil kopieren: Takte, Akkorde und Name kommen mit', () {
+      final e = fresh(4);
+      e.setChordLine('G | D | Em | C');
+      e.cursor = const EditCursor(bar: 2);
+      e.setSection('Refrain');
+      expect(e.sections, [('Refrain', 2, 3)]);
+      e.copyBars(2, 3, 4);
+      expect(e.score.masterBars, hasLength(6));
+      expect(e.score.masterBars[4].section?.label, 'Refrain');
+      expect(chordOf(e, 4, 0), 'Em');
+      expect(chordOf(e, 5, 0), 'C');
+      expect(e.cursor.bar, 4);
+      expect(e.sections, [('Refrain', 2, 3), ('Refrain', 4, 5)]);
+      e.undo();
+      expect(e.score.masterBars, hasLength(4));
+    });
+  });
 }

@@ -21,6 +21,8 @@ class DeviceSettings {
     endless.value = data['endlos'] as bool? ?? false;
     final groups = data['werkzeuggruppen'];
     if (groups is List) openToolGroups.value = {for (final g in groups) '$g'};
+    // Neue Gruppe „Schnell“ einmal aufklappen, auch wenn schon Gruppen gemerkt sind
+    if (data['schnell_gezeigt'] != true) openToolGroups.value = {...openToolGroups.value, 'quick'};
   }
 
   final File? _file;
@@ -57,7 +59,7 @@ class DeviceSettings {
   }
 
   /// Offene Gruppen der Werkzeugspalte (Namen wie im Code, nie übersetzen).
-  final openToolGroups = ValueNotifier<Set<String>>({'duration', 'guitar'});
+  final openToolGroups = ValueNotifier<Set<String>>({'duration', 'guitar', 'quick'});
 
   Future<void> setShowTools(bool v) async {
     showTools.value = v;
@@ -74,6 +76,7 @@ class DeviceSettings {
   Future<void> setOpenToolGroups(Set<String> v) async {
     openToolGroups.value = v;
     _data['werkzeuggruppen'] = v.toList()..sort();
+    _data['schnell_gezeigt'] = true;
     await _save();
   }
 

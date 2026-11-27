@@ -4,6 +4,7 @@ library;
 export 'src/io/gp_reader.dart';
 export 'src/io/scrivi_format.dart';
 export 'src/edit/editor.dart';
+export 'src/edit/patterns.dart';
 export 'src/model/chord_library.dart';
 export 'src/model/fraction.dart';
 export 'src/model/pitch.dart';

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'score.dart';
 
 /// Eingebaute Griffbilder für Gitarre in Normalstimmung (E A D G H E).
@@ -95,7 +97,106 @@ class ChordLibrary {
     'add9': 'add9',
     '2': 'add9',
     '7sus4': '7sus4',
+    'dim': 'dim',
+    '°': 'dim',
+    'o': 'dim',
+    'dim7': 'dim7',
+    '°7': 'dim7',
+    'o7': 'dim7',
+    'm7b5': 'm7b5',
+    'ø': 'm7b5',
+    'ø7': 'm7b5',
+    'aug': 'aug',
+    '+': 'aug',
+    '6': '6',
+    'm6': 'm6',
+    '9': '9',
+    'm9': 'm9',
+    'maj9': 'maj9',
+    'madd9': 'madd9',
+    '7b9': '7b9',
+    '13': '13',
   };
+
+  /// Töne jeder Akkordart (Halbtöne über dem Grundton).
+  static const _intervals = {
+    '': [0, 4, 7],
+    'm': [0, 3, 7],
+    '7': [0, 4, 7, 10],
+    'm7': [0, 3, 7, 10],
+    'maj7': [0, 4, 7, 11],
+    'sus4': [0, 5, 7],
+    'sus2': [0, 2, 7],
+    '5': [0, 7],
+    'add9': [0, 4, 7, 2],
+    '7sus4': [0, 5, 7, 10],
+    'dim': [0, 3, 6],
+    'dim7': [0, 3, 6, 9],
+    'm7b5': [0, 3, 6, 10],
+    'aug': [0, 4, 8],
+    '6': [0, 4, 7, 9],
+    'm6': [0, 3, 7, 9],
+    '9': [0, 4, 7, 10, 2],
+    'm9': [0, 3, 7, 10, 2],
+    'maj9': [0, 4, 7, 11, 2],
+    'madd9': [0, 3, 7, 2],
+    '7b9': [0, 4, 7, 10, 1],
+    '13': [0, 4, 7, 10, 9],
+  };
+
+  /// Griff für [name] auf einem Saiteninstrument mit [tuning] (tiefste Saite
+  /// zuerst) und Kapo [capo]: Bund pro Saite ab dem Kapo, −1 = nicht gespielt.
+  /// Bei sechs Saiten in Normalstimmung ohne Kapo die bekannten Griffe, sonst
+  /// ein selbst gesuchter Griff in den ersten Bünden (Grundton bzw. Bassnote
+  /// auf einer der tiefen Saiten).
+  static List<int>? voicing(String name, List<int> tuning, {int capo = 0}) {
+    if (tuning.isEmpty) return null;
+    if (capo == 0) {
+      final known = lookup(name, tuning);
+      if (known != null) return known.frets;
+    }
+    final c = parse(name);
+    if (c == null) return null;
+    final tones = {
+      for (final i in _intervals[c.quality] ?? const [0, 4, 7]) (c.root + i) % 12,
+    };
+    final bassPc = c.bass ?? c.root;
+    if (c.bass != null) tones.add(c.bass!);
+    final n = tuning.length;
+    int pc(int s, int f) => (tuning[s] + capo + f) % 12;
+    // Bassnote: auf einer der drei (bei Bässen: allen) tiefsten Saiten, möglichst tief im Griffbrett
+    (int, int)? bass;
+    final bassStrings = n <= 4 ? n : 3;
+    for (var f = 0; f <= 5 && bass == null; f++) {
+      for (var s = 0; s < bassStrings; s++) {
+        if (pc(s, f) == bassPc) {
+          bass = (s, f);
+          break;
+        }
+      }
+    }
+    if (bass == null) return null;
+    final (bs, bf) = bass;
+    final frets = List.filled(n, -1);
+    frets[bs] = bf;
+    // Übrige Saiten: Akkordtöne nahe beim Bass (leere Saiten bevorzugt)
+    final lo = math.max(1, bf - 1), hi = math.max(4, bf + 3);
+    for (var s = bs + 1; s < n; s++) {
+      int? best;
+      if (tones.contains(pc(s, 0))) {
+        best = 0;
+      } else {
+        for (var f = lo; f <= hi; f++) {
+          if (tones.contains(pc(s, f))) {
+            best = f;
+            break;
+          }
+        }
+      }
+      if (best != null) frets[s] = best;
+    }
+    return frets;
+  }
 
   /// Offene Griffe: Bünde von der tiefen E-Saite an, x = nicht gespielt.
   static const _open = {

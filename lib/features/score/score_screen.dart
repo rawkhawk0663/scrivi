@@ -27,6 +27,7 @@ import 'edit_tools.dart';
 import 'fretboard.dart';
 import 'inspector.dart';
 import 'note_preview.dart';
+import 'quick_input.dart';
 import 'score_painter.dart';
 import 'score_player.dart';
 import 'tools.dart';
@@ -613,6 +614,93 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
     }
   }
 
+  // ───────────────────────── Schnell-Eingaben ─────────────────────────
+
+  List<core.StrumPattern> get _patterns =>
+      editor.stringed ? core.StrumPattern.forTime(_bar.time) : const <core.StrumPattern>[];
+
+  void _info(String text) {
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  }
+
+  @override
+  Future<void> quickChords() async {
+    final r = await askChordLine(context, fromBar: editor.cursor.bar, patterns: _patterns);
+    if (r == null) return;
+    (int, int)? range;
+    apply((e) => range = e.setChordLine(r.text));
+    final p = r.pattern, rg = range;
+    if (p != null && rg != null) apply((e) => e.applyPattern(p, rg.$1, rg.$2), sound: true);
+  }
+
+  @override
+  Future<void> quickPattern() async {
+    final e = editor;
+    if (!e.stringed) return;
+    final sel = e.selection;
+    var from = sel?.$1.bar ?? e.cursor.bar, to = sel?.$2.bar ?? e.cursor.bar;
+    if (sel == null) {
+      // Ohne Auswahl: bis zum Ende des Formteils am Cursor
+      for (final (_, a, b) in e.sections) {
+        if (from >= a && from <= b) to = b;
+      }
+      if (to == from && e.sections.isEmpty) to = e.score.masterBars.length - 1;
+    }
+    final r = await askPattern(context, patterns: _patterns, from: from, to: to, bars: e.score.masterBars.length);
+    if (r == null) return;
+    final missing = [
+      for (var b = r.$2; b <= r.$3; b++)
+        if (e.chordAt(b, e.barLength(b)) == null) b,
+    ];
+    apply((e) => e.applyPattern(r.$1, r.$2, r.$3), sound: true);
+    if (missing.isNotEmpty) {
+      _info(
+        tr(
+          'Takte ohne Akkord blieben, wie sie sind. Zuerst Akkorde setzen (Akkordzeile).',
+          'Bars without a chord were left as they are. Set chords first (chord line).',
+        ),
+      );
+    }
+  }
+
+  @override
+  Future<void> quickLyrics() async {
+    final r = await askLyricsText(context, fromBar: editor.cursor.bar);
+    if (r == null) return;
+    var n = 0;
+    apply((e) => n = e.setLyricsText(r.$1, line: r.$2));
+    final total = core.ScoreEditor.parseLyrics(r.$1).length;
+    _info(
+      n < total
+          ? tr(
+              '$n von $total Silben verteilt: Es hat nicht mehr Noten.',
+              '$n of $total syllables placed: there are no more notes.',
+            )
+          : tr('$n Silben verteilt.', '$n syllables placed.'),
+    );
+  }
+
+  @override
+  Future<void> quickSection() async {
+    final sections = editor.sections;
+    if (sections.isEmpty) {
+      _info(
+        tr(
+          'Noch keine Formteile. Zuerst einen setzen (Takt → Formteil).',
+          'No sections yet. Set one first (Bar → Section).',
+        ),
+      );
+      return;
+    }
+    final r = await askSectionCopy(
+      context,
+      sections: sections,
+      cursorBar: editor.cursor.bar,
+      bars: editor.score.masterBars.length,
+    );
+    if (r != null) apply((e) => e.copyBars(r.$1, r.$2, r.$3));
+  }
+
   @override
   void copy() {
     _clipboard = editor.copy();
@@ -824,7 +912,7 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
     final showFretboard = (s?.showFretboard.value ?? true) && e.stringed;
     final open = {
       for (final g in ToolGroup.values)
-        if ((s?.openToolGroups.value ?? const {'duration', 'guitar'}).contains(g.name)) g,
+        if ((s?.openToolGroups.value ?? const {'duration', 'guitar', 'quick'}).contains(g.name)) g,
     };
     final showTracks = s?.showTracks.value ?? true;
     final showInspector = s?.showInspector.value ?? true;
