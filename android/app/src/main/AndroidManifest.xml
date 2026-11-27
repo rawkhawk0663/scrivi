@@ -1,6 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- Internet: nur für „Nach Updates suchen“ (später auch der Dropbox-Abgleich). -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Mikrofon: Noten vorspielen (wird nur ausgewertet, nie aufgenommen oder gespeichert). -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <application
         android:label="Scrivi"
         android:name="${applicationName}"

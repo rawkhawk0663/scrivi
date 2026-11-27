@@ -16,6 +16,10 @@ dependencies:
   desktop_drop: ^0.8.4
   file_selector: ^1.1.0
   flutter_soloud: 5.2.3
+  # Mikrofon (Noten vorspielen), wie in Suona
+  flutter_recorder: ^2.0.6
+  # 12.x: die neueren Fassungen verlangen Android-SDK 37, das Flutter 3.47 noch nicht nutzt.
+  permission_handler: 12.0.1
   path: ^1.9.1
   path_provider: ^2.1.6
   url_launcher: ^6.3.3

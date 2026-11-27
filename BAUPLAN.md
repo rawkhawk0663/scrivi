@@ -358,7 +358,7 @@ Plan in fünf Schritten:
 Weitere Reihenfolge (vom Besitzer am 27. November 2026 bestätigt): 1. Drucken, PDF, MusicXML und
 MIDI ausgeben ✅; 2. Stift-Gesten ✅; 3. Band-Ansicht (alle Spuren als Partitur) ✅; 4. Klang verfeinern ✅
 (Mischpult in der Datei, Hall, Stereo, gedämpfte Noten und Flageoletts als Aufnahmen);
-5. Mikrofon-Eingabe; 6. Reiter für mehrere Stücke, schnellere Vorbereitung beim Abspielen.
+5. Mikrofon-Eingabe ✅; 6. Reiter für mehrere Stücke, schnellere Vorbereitung beim Abspielen.
 
 ### Ausgeben (27. November 2026)
 
@@ -394,6 +394,16 @@ Mischpult (Lautstärke, links/rechts, stumm, solo) wird mit dem Stück gespeiche
 ganze Stück (Mischpult und Eigenschaften, gespeichert); „Im Raum verteilen“ stellt die Spuren wie
 eine Band links und rechts auf. Gedämpfte Noten und Flageoletts klingen aus den aufgenommenen
 Gitarren statt gerechnet. Offen: echte Stereo-Aufnahmen (würden die Klangsammlung verdoppeln).
+
+### Vorspielen über das Mikrofon (27. November 2026)
+
+Werkzeug „Vorspielen“ (Taste M): Scrivi hört zu (einstimmig) und schreibt jeden erkannten Ton
+mit dem gewählten Notenwert an den Cursor, Saite und Bund nahe beim vorigen Ton, dann weiter.
+Tonerkennung wie in Suona (YIN); ein Ton zählt nach etwa 0,15 s klarem Klingen, derselbe Ton
+nochmals nach einer Pause oder einem neuen Anschlag. Beim Abspielen schreibt das Mikrofon nicht
+mit. Bass bis E1. Getestet mit den aufgenommenen Gitarren und Bässen der Klangsammlung.
+Offen: Rhythmus aus dem Spiel ableiten (heute bestimmt der gewählte Notenwert die Länge),
+Akkorde.
 
 ### Dateien statt Bibliothek (27. November 2026)
 

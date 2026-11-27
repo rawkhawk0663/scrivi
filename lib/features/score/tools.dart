@@ -15,6 +15,10 @@ abstract class ToolHost {
   bool get penNotes;
   set penNotes(bool v);
 
+  /// Mikrofon: vorgespielte Töne werden an den Cursor geschrieben.
+  bool get micOn;
+  Future<void> toggleMic();
+
   Future<void> editChord();
   Future<void> editText();
   Future<void> editLyrics();
@@ -272,6 +276,16 @@ final List<ToolDef> allTools = [
     keywords: const ['stift', 'pen', 'zeichnen', 'maus', 'finger', 'gesten', 'gestures'],
     active: (e) => false,
     run: (h) => h.penNotes = !h.penNotes,
+  ),
+  ToolDef(
+    id: 'mic',
+    group: ToolGroup.duration,
+    look: const IconLook(Icons.mic_none_rounded),
+    de: 'Vorspielen: Töne über das Mikrofon schreiben',
+    en: 'Play in: write notes through the microphone',
+    shortcut: 'M',
+    keywords: const ['mikrofon', 'microphone', 'vorspielen', 'spielen', 'hören', 'tonerkennung', 'listen'],
+    run: (h) => h.toggleMic(),
   ),
 
   // ── Gitarre ──
@@ -805,7 +819,11 @@ class ToolButton extends StatelessWidget {
     final c = context.scrivi;
     final e = host.editor;
     final enabled = tool.enabled?.call(e) ?? true;
-    final active = tool.id == 'pen' ? host.penNotes : (tool.active?.call(e) ?? false);
+    final active = switch (tool.id) {
+      'pen' => host.penNotes,
+      'mic' => host.micOn,
+      _ => tool.active?.call(e) ?? false,
+    };
     final fg = active ? scheme.onPrimary : (enabled ? Theme.of(context).colorScheme.onSurface : c.muted.withAlpha(110));
     Widget child = switch (tool.look) {
       GlyphLook g => Transform.translate(

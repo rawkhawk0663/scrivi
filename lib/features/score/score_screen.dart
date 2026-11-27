@@ -12,6 +12,7 @@ import 'package:scrivi_core/scrivi_core.dart' as core;
 import '../../app/device_settings.dart';
 import '../../app/error_log.dart';
 import '../../app/l10n.dart';
+import '../../app/mic_listener.dart';
 import '../../app/theme.dart';
 import '../../app/window_buttons.dart';
 
@@ -208,6 +209,70 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
   bool get penNotes => _penNotes;
   @override
   set penNotes(bool v) => setState(() => _penNotes = v);
+
+  // ───────────────────────── Mikrofon ─────────────────────────
+
+  MicListener? _mic;
+  StreamSubscription<core.PitchReading>? _micSub;
+  final _noteListener = core.NoteListener();
+
+  /// Gerade gehörter Ton (für die Anzeige oben).
+  final _heard = ValueNotifier<int?>(null);
+
+  @override
+  bool get micOn => _mic != null;
+
+  @override
+  Future<void> toggleMic() async {
+    if (_mic != null) return _stopMic();
+    final score = _score;
+    if (score == null) return;
+    // Tiefster Ton der Spur bestimmt, wie tief das Mikrofon hinhört (Bass: E1 = 41 Hz)
+    final t = score.tracks[_track];
+    final lowest = t.staff.isStringed ? t.staff.tuning.reduce(math.min) : 40;
+    final minHz = (440.0 * math.pow(2, (lowest - 69) / 12) * 0.9).clamp(35.0, 70.0);
+    final mic = MicListener(minFrequency: minHz);
+    setState(() => _mic = mic);
+    final err = await mic.start();
+    if (!mounted) return;
+    if (err != null) {
+      setState(() => _mic = null);
+      await mic.dispose();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            err == 'permission'
+                ? tr(
+                    'Scrivi darf das Mikrofon nicht benutzen (Einstellungen des Geräts).',
+                    'Scrivi may not use the microphone (device settings).',
+                  )
+                : tr('Das Mikrofon lässt sich nicht einschalten.', 'The microphone cannot be switched on.'),
+          ),
+        ),
+      );
+      return;
+    }
+    _noteListener.reset();
+    _micSub = mic.readings.listen(_onReading);
+  }
+
+  void _onReading(core.PitchReading r) {
+    final midi = _noteListener.add(r);
+    _heard.value = r.hasPitch && r.clarity > 0.85 ? r.midi : (r.level < 0.01 ? null : _heard.value);
+    // Beim Abspielen nicht mitschreiben: das Mikrofon hört sonst Scrivi selbst
+    if (midi == null || (_player?.playing ?? false)) return;
+    apply((e) => e.inputHeard(midi));
+  }
+
+  Future<void> _stopMic() async {
+    final mic = _mic;
+    await _micSub?.cancel();
+    _micSub = null;
+    _heard.value = null;
+    if (mounted) setState(() => _mic = null);
+    await mic?.dispose();
+  }
 
   @override
   void apply(void Function(core.ScoreEditor e) op, {bool sound = false}) {
@@ -895,6 +960,8 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
       apply((e) => e.setDuration(_longer(e)));
     } else if (ch == '.' || k == LogicalKeyboardKey.numpadDecimal) {
       apply((e) => e.toggleDot());
+    } else if (ch == 'M') {
+      toggleMic();
     } else if (ch == 'T') {
       apply((e) => e.toggleTriplet());
     } else if (ch == 'L') {
@@ -979,6 +1046,9 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
 
   @override
   void dispose() {
+    _micSub?.cancel();
+    _mic?.dispose();
+    _heard.dispose();
     _flushSave();
     _cursorTick.dispose();
     _player?.dispose();
@@ -1242,6 +1312,21 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
               if (e != null && p != null) Flexible(child: _display(context, e, p, compact)),
             ];
             final right = <Widget>[
+              if (_mic != null)
+                ValueListenableBuilder<int?>(
+                  valueListenable: _heard,
+                  builder: (context, m, _) => Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: ActionChip(
+                      avatar: Icon(Icons.mic_rounded, size: 18, color: Theme.of(context).colorScheme.error),
+                      label: Text(
+                        m == null ? tr('Ich höre zu …', 'Listening …') : '${stringNoteName(m)}${m ~/ 12 - 1}',
+                      ),
+                      tooltip: tr('Mikrofon ausschalten  (M)', 'Switch the microphone off  (M)'),
+                      onPressed: toggleMic,
+                    ),
+                  ),
+                ),
               if (p != null)
                 ListenableBuilder(
                   listenable: p,

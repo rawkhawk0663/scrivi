@@ -455,6 +455,22 @@ class ScoreEditor {
     cursor = cursor.copyWith(beat: i);
   }
 
+  /// Mikrofon: der gehörte (klingende) Ton [midi] mit dem gewählten Notenwert
+  /// an den Cursor, Saite und Bund bequem nahe beim vorigen Ton; danach zum
+  /// nächsten Schlag (am Ende kommt ein Takt dazu).
+  void inputHeard(int midi) {
+    if (_track.percussion || midi < 0 || midi > 127) return;
+    final fifths = _score.masterBars[cursor.bar].key.fifths;
+    _begin();
+    final concert = Pitch.fromMidi(midi, fifths: fifths < 0 ? -1 : 1);
+    final place = _place(midi, nearFret: _previousNote()?.fret);
+    _writeNotes([Note(pitch: concert, string: place?.$1, fret: place?.$2)]);
+    final placed = currentBeat?.notes.last.string;
+    if (placed != null) cursor = cursor.copyWith(string: placed);
+    _done();
+    moveBeat(1);
+  }
+
   /// Bundzahl auf der Saite des Cursors. Ist am Cursor schon ein Ton, kommt
   /// die Saite dazu (Akkord); sonst entsteht ein neuer Ton.
   void inputFret(int fret) {
