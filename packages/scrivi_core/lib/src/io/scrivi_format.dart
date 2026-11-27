@@ -145,8 +145,13 @@ class ScriviFormat {
     });
   }
 
+  /// Ein Takt als JSON (für tiefe Kopien im Editor).
+  static Map<String, dynamic> barToJson(Bar b) => _bar(b);
+  static Bar barFromJson(Map<String, dynamic> j) => _readBar(j);
+
   static Map<String, dynamic> _bar(Bar b) => _compact({
     'clef': b.clef == Clef.treble ? null : b.clef.name,
+    'simile': b.simile == 0 ? null : b.simile,
     'voices': [
       for (final v in b.voices) [for (final beat in v.beats) _beat(beat)],
     ],
@@ -170,6 +175,7 @@ class ScriviFormat {
       'stroke': b.pickStroke == 0 ? null : b.pickStroke,
       'letRingText': b.letRingText,
       'tremolo': b.tremolo == 0 ? null : b.tremolo,
+      'ottava': b.ottava == 0 ? null : b.ottava,
     });
   }
 
@@ -198,6 +204,7 @@ class ScriviFormat {
     'vibrato': n.vibrato,
     'harmonic': n.harmonic,
     'tapped': n.tapped,
+    'courtesy': n.courtesy,
   });
 
   // ───────────────────────── Lesen ─────────────────────────
@@ -326,6 +333,7 @@ class ScriviFormat {
 
   static Bar _readBar(Map<String, dynamic> b) => Bar(
     clef: _enum(Clef.values, b['clef'], Clef.treble),
+    simile: _int(b['simile']).clamp(0, 3),
     voices: [
       for (final v in _list(b['voices'])) Voice([for (final beat in _list(v).map(_map)) _readBeat(beat)]),
     ],
@@ -351,6 +359,7 @@ class ScriviFormat {
       pickStroke: _int(b['stroke']),
       letRingText: _bool(b['letRingText']),
       tremolo: _int(b['tremolo']),
+      ottava: _int(b['ottava']).clamp(-2, 2),
     );
   }
 
@@ -386,6 +395,7 @@ class ScriviFormat {
       vibrato: _bool(n['vibrato']),
       harmonic: _bool(n['harmonic']),
       tapped: _bool(n['tapped']),
+      courtesy: _bool(n['courtesy']),
     );
   }
 }

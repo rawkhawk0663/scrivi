@@ -27,6 +27,10 @@ abstract class ToolHost {
   Future<void> editTempo();
   Future<void> editSection();
   Future<void> editRepeatEnd();
+
+  /// Häuser (1., 2. …) und Sprungzeichen (D.C., D.S., Fine …) wählen.
+  Future<void> editEndings();
+  Future<void> editJumps();
   Future<void> editTitle();
   Future<void> editTranspose();
 
@@ -60,6 +64,7 @@ abstract class ToolHost {
 /// Gruppen der Werkzeugspalte (Reihenfolge = Anzeige).
 enum ToolGroup {
   duration('Notenwert', 'Note value'),
+  accidental('Vorzeichen', 'Accidentals'),
   guitar('Gitarre', 'Guitar'),
   quick('Schnell', 'Quick'),
   expression('Ausdruck', 'Expression'),
@@ -138,6 +143,15 @@ class ToolDef {
 }
 
 bool _hasNotes(core.ScoreEditor e) => !(e.currentBeat?.isRest ?? true);
+
+/// Steht am Cursor eine Note mit diesem Vorzeichen (geschrieben)?
+bool _accidentalIs(core.ScoreEditor e, int alter) {
+  final b = e.currentBeat;
+  if (b == null || b.isRest) return false;
+  final t = e.score.tracks[e.track];
+  return b.notes.every((n) => n.shownFor(t.transposeSemitones).alter == alter) && alter != 0;
+}
+
 bool _hasBeat(core.ScoreEditor e) => e.currentBeat != null;
 
 core.NoteValue _value(core.ScoreEditor e) => e.currentBeat?.duration.value ?? e.duration.value;
@@ -205,6 +219,16 @@ final List<ToolDef> allTools = [
     run: (h) => h.apply((e) => e.toggleDot()),
   ),
   ToolDef(
+    id: 'double-dot',
+    group: ToolGroup.duration,
+    look: const GlyphLook('\uECB7\uE1E7', size: 34, dy: 4),
+    de: 'Doppelpunkt',
+    en: 'Double dot',
+    keywords: const ['punktiert', 'dotted'],
+    active: (e) => (e.currentBeat?.duration.dots ?? e.duration.dots) == 2,
+    run: (h) => h.apply((e) => e.toggleDoubleDot()),
+  ),
+  ToolDef(
     id: 'triplet',
     group: ToolGroup.duration,
     look: const GlyphLook('\uE883', size: 20),
@@ -212,9 +236,52 @@ final List<ToolDef> allTools = [
     en: 'Triplet',
     shortcut: 'T',
     keywords: const ['tuplet', 'n-tole'],
-    active: (e) => e.currentBeat?.duration.tuplet != null,
+    active: (e) => e.currentBeat?.duration.tuplet?.actual == 3,
     enabled: _hasBeat,
     run: (h) => h.apply((e) => e.toggleTriplet()),
+  ),
+  ToolDef(
+    id: 'tuplet-5',
+    group: ToolGroup.duration,
+    look: const GlyphLook('\uE885', size: 20),
+    de: 'Quintole',
+    en: 'Quintuplet',
+    keywords: const ['tuplet', 'n-tole', 'tole'],
+    active: (e) => e.currentBeat?.duration.tuplet?.actual == 5,
+    enabled: _hasBeat,
+    run: (h) => h.apply((e) => e.toggleTuplet(5)),
+  ),
+  ToolDef(
+    id: 'tuplet-6',
+    group: ToolGroup.duration,
+    look: const GlyphLook('\uE886', size: 20),
+    de: 'Sextole',
+    en: 'Sextuplet',
+    keywords: const ['tuplet', 'n-tole', 'tole'],
+    active: (e) => e.currentBeat?.duration.tuplet?.actual == 6,
+    enabled: _hasBeat,
+    run: (h) => h.apply((e) => e.toggleTuplet(6)),
+  ),
+  ToolDef(
+    id: 'tuplet-7',
+    group: ToolGroup.duration,
+    look: const GlyphLook('\uE887', size: 20),
+    de: 'Septole',
+    en: 'Septuplet',
+    keywords: const ['tuplet', 'n-tole', 'tole'],
+    active: (e) => e.currentBeat?.duration.tuplet?.actual == 7,
+    enabled: _hasBeat,
+    run: (h) => h.apply((e) => e.toggleTuplet(7)),
+  ),
+  ToolDef(
+    id: 'grace',
+    group: ToolGroup.duration,
+    look: const GlyphLook('\uE560', size: 24, dy: 2),
+    de: 'Vorschlagsnote (die nächste Note) / entfernen',
+    en: 'Grace note (the next note) / remove',
+    keywords: const ['vorschlag', 'grace', 'acciaccatura', 'appoggiatura'],
+    active: (e) => e.graceNext || e.hasGraceBefore,
+    run: (h) => h.apply((e) => e.toggleGrace()),
   ),
   ToolDef(
     id: 'rest',
@@ -241,8 +308,8 @@ final List<ToolDef> allTools = [
   ),
   ToolDef(
     id: 'up',
-    group: ToolGroup.duration,
-    look: const GlyphLook('\uE262', size: 22, dy: 2),
+    group: ToolGroup.accidental,
+    look: const IconLook(Icons.north_rounded),
     de: 'Halbton höher',
     en: 'Semitone up',
     shortcut: 'Umschalt+↑',
@@ -252,14 +319,80 @@ final List<ToolDef> allTools = [
   ),
   ToolDef(
     id: 'down',
-    group: ToolGroup.duration,
-    look: const GlyphLook('\uE260', size: 22, dy: 2),
+    group: ToolGroup.accidental,
+    look: const IconLook(Icons.south_rounded),
     de: 'Halbton tiefer',
     en: 'Semitone down',
     shortcut: 'Umschalt+↓',
     keywords: const ['b', 'flat', 'transponieren'],
     enabled: _hasNotes,
     run: (h) => h.apply((e) => e.transposeSelection(-1), sound: true),
+  ),
+  ToolDef(
+    id: 'acc-sharp',
+    group: ToolGroup.accidental,
+    look: const GlyphLook('\uE262', size: 22, dy: 2),
+    de: 'Kreuz ♯',
+    en: 'Sharp ♯',
+    keywords: const ['vorzeichen', 'accidental', 'erhöhen'],
+    active: (e) => _accidentalIs(e, 1),
+    enabled: _hasNotes,
+    run: (h) => h.apply((e) => e.setAccidental(1), sound: true),
+  ),
+  ToolDef(
+    id: 'acc-flat',
+    group: ToolGroup.accidental,
+    look: const GlyphLook('\uE260', size: 22, dy: 2),
+    de: 'Be ♭',
+    en: 'Flat ♭',
+    keywords: const ['vorzeichen', 'accidental', 'erniedrigen'],
+    active: (e) => _accidentalIs(e, -1),
+    enabled: _hasNotes,
+    run: (h) => h.apply((e) => e.setAccidental(-1), sound: true),
+  ),
+  ToolDef(
+    id: 'acc-natural',
+    group: ToolGroup.accidental,
+    look: const GlyphLook('\uE261', size: 22, dy: 2),
+    de: 'Auflösungszeichen ♮',
+    en: 'Natural ♮',
+    keywords: const ['vorzeichen', 'accidental', 'auflösen'],
+    active: (e) => _accidentalIs(e, 0),
+    enabled: _hasNotes,
+    run: (h) => h.apply((e) => e.setAccidental(0), sound: true),
+  ),
+  ToolDef(
+    id: 'acc-dsharp',
+    group: ToolGroup.accidental,
+    look: const GlyphLook('\uE263', size: 22, dy: 2),
+    de: 'Doppelkreuz 𝄪',
+    en: 'Double sharp 𝄪',
+    keywords: const ['vorzeichen', 'accidental'],
+    active: (e) => _accidentalIs(e, 2),
+    enabled: _hasNotes,
+    run: (h) => h.apply((e) => e.setAccidental(2), sound: true),
+  ),
+  ToolDef(
+    id: 'acc-dflat',
+    group: ToolGroup.accidental,
+    look: const GlyphLook('\uE264', size: 22, dy: 2),
+    de: 'Doppel-Be 𝄫',
+    en: 'Double flat 𝄫',
+    keywords: const ['vorzeichen', 'accidental'],
+    active: (e) => _accidentalIs(e, -2),
+    enabled: _hasNotes,
+    run: (h) => h.apply((e) => e.setAccidental(-2), sound: true),
+  ),
+  ToolDef(
+    id: 'acc-courtesy',
+    group: ToolGroup.accidental,
+    look: const GlyphLook('\uE26A\uE261\uE26B', size: 20, dy: 2),
+    de: 'Vorzeichen zur Erinnerung (in Klammern)',
+    en: 'Courtesy accidental (in brackets)',
+    keywords: const ['vorzeichen', 'klammer', 'warnung', 'courtesy', 'cautionary'],
+    active: (e) => e.currentBeat?.notes.any((n) => n.courtesy) ?? false,
+    enabled: _hasNotes,
+    run: (h) => h.apply((e) => e.toggleCourtesy()),
   ),
   ToolDef(
     id: 'next',
@@ -370,12 +503,14 @@ final List<ToolDef> allTools = [
   ),
 
   // ── Ausdruck ──
+  _dynamic(core.Dynamic.ppp, '\uE52A'),
   _dynamic(core.Dynamic.pp, '\uE52B'),
   _dynamic(core.Dynamic.p, '\uE520'),
   _dynamic(core.Dynamic.mp, '\uE52C'),
   _dynamic(core.Dynamic.mf, '\uE52D'),
   _dynamic(core.Dynamic.f, '\uE522'),
   _dynamic(core.Dynamic.ff, '\uE52F'),
+  _dynamic(core.Dynamic.fff, '\uE530'),
   ToolDef(
     id: 'cresc',
     group: ToolGroup.expression,
@@ -412,6 +547,50 @@ final List<ToolDef> allTools = [
     active: (e) => e.currentBeat?.fermata ?? false,
     enabled: _hasBeat,
     run: (h) => h.apply((e) => e.toggleFermata()),
+  ),
+  ToolDef(
+    id: 'ottava-8va',
+    group: ToolGroup.expression,
+    look: const GlyphLook('\uE511', size: 18, dy: 2),
+    de: '8va (eine Oktave höher spielen)',
+    en: '8va (play an octave higher)',
+    keywords: const ['oktave', 'octave', 'ottava', '8va', '8vb', '15ma', '15mb'],
+    active: (e) => e.currentBeat?.ottava == 1,
+    enabled: _hasBeat,
+    run: (h) => h.apply((e) => e.setOttava(1)),
+  ),
+  ToolDef(
+    id: 'ottava-8vb',
+    group: ToolGroup.expression,
+    look: const GlyphLook('\uE51C', size: 18, dy: 2),
+    de: '8vb (eine Oktave tiefer spielen)',
+    en: '8vb (play an octave lower)',
+    keywords: const ['oktave', 'octave', 'ottava', '8va', '8vb', '15ma', '15mb'],
+    active: (e) => e.currentBeat?.ottava == -1,
+    enabled: _hasBeat,
+    run: (h) => h.apply((e) => e.setOttava(-1)),
+  ),
+  ToolDef(
+    id: 'ottava-15ma',
+    group: ToolGroup.expression,
+    look: const GlyphLook('\uE515', size: 18, dy: 2),
+    de: '15ma (zwei Oktaven höher)',
+    en: '15ma (two octaves higher)',
+    keywords: const ['oktave', 'octave', 'ottava', '8va', '8vb', '15ma', '15mb'],
+    active: (e) => e.currentBeat?.ottava == 2,
+    enabled: _hasBeat,
+    run: (h) => h.apply((e) => e.setOttava(2)),
+  ),
+  ToolDef(
+    id: 'ottava-15mb',
+    group: ToolGroup.expression,
+    look: const GlyphLook('\uE51D', size: 18, dy: 2),
+    de: '15mb (zwei Oktaven tiefer)',
+    en: '15mb (two octaves lower)',
+    keywords: const ['oktave', 'octave', 'ottava', '8va', '8vb', '15ma', '15mb'],
+    active: (e) => e.currentBeat?.ottava == -2,
+    enabled: _hasBeat,
+    run: (h) => h.apply((e) => e.setOttava(-2)),
   ),
 
   // ── Takt ──
@@ -488,6 +667,67 @@ final List<ToolDef> allTools = [
     keywords: const ['wiederholen', 'repeat'],
     active: (e) => e.score.masterBars[e.cursor.bar].hasRepeatEnd,
     run: (h) => h.editRepeatEnd(),
+  ),
+  ToolDef(
+    id: 'endings',
+    group: ToolGroup.bar,
+    look: const TextLook('1.'),
+    de: 'Häuser (1., 2. …) …',
+    en: 'Endings (1st, 2nd …) …',
+    keywords: const ['haus', 'volta', 'klammer', 'ending', 'ausgang'],
+    active: (e) => e.score.masterBars[e.cursor.bar].endings.isNotEmpty,
+    run: (h) => h.editEndings(),
+  ),
+  ToolDef(
+    id: 'segno',
+    group: ToolGroup.bar,
+    look: const GlyphLook('\uE047', size: 22, dy: 2),
+    de: 'Segno',
+    en: 'Segno',
+    keywords: const ['dal segno', 'zeichen', 'sprung'],
+    active: (e) => e.score.masterBars[e.cursor.bar].directions.contains(core.Direction.segno),
+    run: (h) => h.apply((e) => e.toggleDirection(core.Direction.segno)),
+  ),
+  ToolDef(
+    id: 'coda',
+    group: ToolGroup.bar,
+    look: const GlyphLook('\uE048', size: 22, dy: 2),
+    de: 'Coda',
+    en: 'Coda',
+    keywords: const ['schluss', 'sprung'],
+    active: (e) => e.score.masterBars[e.cursor.bar].directions.contains(core.Direction.coda),
+    run: (h) => h.apply((e) => e.toggleDirection(core.Direction.coda)),
+  ),
+  ToolDef(
+    id: 'jumps',
+    group: ToolGroup.bar,
+    look: const TextLook('D.C.', italic: true),
+    de: 'D.C., D.S., Fine, To Coda …',
+    en: 'D.C., D.S., Fine, To Coda …',
+    keywords: const ['da capo', 'dal segno', 'fine', 'sprung', 'jump', 'al coda'],
+    active: (e) =>
+        e.score.masterBars[e.cursor.bar].directions.any((d) => d != core.Direction.segno && d != core.Direction.coda),
+    run: (h) => h.editJumps(),
+  ),
+  ToolDef(
+    id: 'simile-1',
+    group: ToolGroup.bar,
+    look: const GlyphLook('\uE500', size: 22, dy: 2),
+    de: 'Wie der Takt davor (%)',
+    en: 'Same as the bar before (%)',
+    keywords: const ['wiederholen', 'prozent', 'simile', 'repeat bar'],
+    active: (e) => e.score.tracks[e.track].bars[e.cursor.bar].simile == 1,
+    run: (h) => h.apply((e) => e.setSimile(e.score.tracks[e.track].bars[e.cursor.bar].simile == 1 ? 0 : 1)),
+  ),
+  ToolDef(
+    id: 'simile-2',
+    group: ToolGroup.bar,
+    look: const GlyphLook('\uE501', size: 22, dy: 2),
+    de: 'Wie die zwei Takte davor',
+    en: 'Same as the two bars before',
+    keywords: const ['wiederholen', 'prozent', 'simile', 'repeat bars'],
+    active: (e) => e.score.tracks[e.track].bars[e.cursor.bar].simile >= 2,
+    run: (h) => h.apply((e) => e.setSimile(e.score.tracks[e.track].bars[e.cursor.bar].simile >= 2 ? 0 : 2)),
   ),
   ToolDef(
     id: 'double-bar',

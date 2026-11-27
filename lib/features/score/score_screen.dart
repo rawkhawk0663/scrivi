@@ -780,6 +780,20 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
   }
 
   @override
+  Future<void> editEndings() async {
+    final r = await askEndings(context, editor.score.masterBars[editor.cursor.bar].endings);
+    if (r != null) apply((e) => e.setEndings(r));
+  }
+
+  @override
+  Future<void> editJumps() async {
+    final now = editor.score.masterBars[editor.cursor.bar].directions;
+    final r = await askJumps(context, now);
+    if (r == null) return;
+    apply((e) => e.setDirections(r));
+  }
+
+  @override
   Future<void> editTranspose() async {
     final v = await askTranspose(context);
     if (v != null && v != 0) apply((e) => e.transposeAll(v));

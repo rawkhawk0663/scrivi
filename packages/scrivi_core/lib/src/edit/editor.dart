@@ -104,6 +104,7 @@ class ScoreEditor {
 
   void _done() {
     _normalize();
+    _keepSimiles();
     _clampCursor();
     revision++;
   }
@@ -417,7 +418,7 @@ class ScoreEditor {
   Note? _previousNote() {
     for (var bar = cursor.bar; bar >= 0; bar--) {
       final beats = beatsOf(bar);
-      final from = bar == cursor.bar ? cursor.beat - 1 : beats.length - 1;
+      final from = bar == cursor.bar ? math.min(cursor.beat, beats.length) - 1 : beats.length - 1;
       for (var i = from; i >= 0; i--) {
         final n = beats[i].notes;
         if (n.isNotEmpty) return n.last;
@@ -430,7 +431,7 @@ class ScoreEditor {
     final concert = _concert(written);
     final prev = _previousNote();
     final place = _place(concert.midi, preferString: string, nearFret: prev?.fret, taken: taken);
-    return Note(pitch: concert, written: written == concert ? null : written, string: place?.$1, fret: place?.$2);
+    return Note(pitch: concert, written: _stored(written, concert), string: place?.$1, fret: place?.$2);
   }
 
   Note _noteForFret(int string, int fret) {
@@ -447,9 +448,24 @@ class ScoreEditor {
   /// Am Cursor einen Schlag mit [notes] schreiben (Notenwert: [duration]).
   void _writeNotes(List<Note> notes) {
     final bar = cursor.bar;
+    if (graceNext) {
+      // Vorschlagsnote vor den Schlag am Cursor; der Schlag selbst bleibt
+      graceNext = false;
+      beatsOf(bar).insert(
+        cursor.beat,
+        Beat(duration: const NoteDuration(NoteValue.eighth), notes: notes, grace: GraceType.beforeBeat),
+      );
+      cursor = cursor.copyWith(beat: cursor.beat + 1);
+      return;
+    }
     final from = cursorOnset;
-    final d = _fit(duration, barLength(bar) - from);
     final old = currentBeat;
+    // In einer n-tole bleibt der Wert: die Note kommt in den freien Platz der Gruppe
+    if (old != null && old.duration.tuplet != null && old.grace == GraceType.none) {
+      beatsOf(bar)[cursor.beat] = old.copyWith(notes: notes);
+      return;
+    }
+    final d = _fit(duration, barLength(bar) - from);
     final beat = Beat(duration: d, notes: notes, chordId: old?.chordId, text: old?.text, lyrics: old?.lyrics);
     final i = _replace(bar, from, from + d.length, [beat]);
     cursor = cursor.copyWith(beat: i);
@@ -469,6 +485,236 @@ class ScoreEditor {
     if (placed != null) cursor = cursor.copyWith(string: placed);
     _done();
     moveBeat(1);
+  }
+
+  // ───────────────────────── Vorzeichen, Vorschläge ─────────────────────────
+
+  /// Die nächste eingegebene Note wird eine Vorschlagsnote vor dem Schlag am Cursor.
+  bool graceNext = false;
+
+  /// Hat der Schlag am Cursor Vorschlagsnoten vor sich?
+  bool get hasGraceBefore {
+    final beats = beatsOf(cursor.bar);
+    return cursor.beat > 0 && cursor.beat <= beats.length && beats[cursor.beat - 1].grace != GraceType.none;
+  }
+
+  /// Vorschlag: steht schon einer vor dem Schlag, wird er entfernt; sonst wird
+  /// die nächste Note ein Vorschlag.
+  void toggleGrace() {
+    if (hasGraceBefore) {
+      _begin();
+      final beats = beatsOf(cursor.bar);
+      var i = cursor.beat;
+      while (i > 0 && beats[i - 1].grace != GraceType.none) {
+        beats.removeAt(i - 1);
+        i--;
+      }
+      cursor = cursor.copyWith(beat: i);
+      graceNext = false;
+      _done();
+      return;
+    }
+    graceNext = !graceNext;
+  }
+
+  /// Töne, die ein Befehl am Cursor betrifft: auf einer Saite nur deren Ton, sonst alle.
+  bool Function(Note) _hitAt(Beat b) {
+    final onString = selection == null && stringed && b.notes.any((n) => n.string == cursor.string);
+    return (n) => !onString || n.string == cursor.string;
+  }
+
+  /// Vorzeichen setzen: −2 𝄫, −1 ♭, 0 ♮, 1 ♯, 2 𝄪 auf dem geschriebenen Stammton
+  /// (die Note bleibt auf ihrer Linie, ihr Klang ändert sich).
+  void setAccidental(int alter) {
+    final targets = _targets;
+    _begin();
+    var changed = false;
+    for (final (bar, i) in targets) {
+      final beats = beatsOf(bar);
+      final b = beats[i];
+      if (b.isRest || _track.percussion) continue;
+      final hit = _hitAt(b);
+      beats[i] = b.copyWith(
+        notes: [
+          for (final n in b.notes)
+            if (hit(n)) _withAccidental(n, alter, bar) else n,
+        ],
+      );
+      changed = true;
+    }
+    if (!changed) {
+      _undo.removeLast();
+      return;
+    }
+    _done();
+  }
+
+  /// Geschriebene Tonhöhe zum Speichern: immer in der klingenden Ansicht (ohne
+  /// Instrument-Transposition), nur wenn sie von der klingenden abweicht.
+  Pitch? _stored(Pitch viewWritten, Pitch concert) {
+    if (viewShift == 0) return viewWritten == concert ? null : viewWritten;
+    final t = _track.transposeSemitones;
+    if (t == 0) return null;
+    return t % 12 == 0 ? concert.octaves(t ~/ 12) : null;
+  }
+
+  Note _withAccidental(Note n, int alter, int bar) {
+    var shown = n.shownFor(_track.transposeSemitones);
+    if (viewShift != 0) shown = shown.transposedBy(viewShift, fifths: _score.masterBars[bar].key.fifths);
+    final written = Pitch(shown.step, alter, shown.octave);
+    final concert = _concert(written);
+    if (concert.midi == n.pitch.midi && shown == written) return n;
+    var string = n.string, fret = n.fret;
+    final st = _track.staff;
+    if (st.isStringed && string != null) {
+      final f = concert.midi - st.tuning[string] - st.capo;
+      if (f >= 0 && f <= st.fretCount) {
+        fret = f;
+      } else {
+        final place = _place(concert.midi, nearFret: n.fret);
+        string = place?.$1;
+        fret = place?.$2;
+      }
+    }
+    final w = _stored(written, concert);
+    return n.copyWith(pitch: concert, written: w, clearWritten: w == null, string: string, fret: fret);
+  }
+
+  /// Vorzeichen zur Erinnerung (in Klammern) ein/aus.
+  void toggleCourtesy() {
+    final targets = _targets;
+    _begin();
+    var changed = false;
+    for (final (bar, i) in targets) {
+      final beats = beatsOf(bar);
+      final b = beats[i];
+      if (b.isRest) continue;
+      final hit = _hitAt(b);
+      final on = !b.notes.where(hit).first.courtesy;
+      beats[i] = b.copyWith(notes: [for (final n in b.notes) hit(n) ? n.copyWith(courtesy: on) : n]);
+      changed = true;
+    }
+    if (!changed) {
+      _undo.removeLast();
+      return;
+    }
+    _done();
+  }
+
+  /// Oktavierung (8va = 1, 15ma = 2, 8vb = −1, 15mb = −2) für die Auswahl bzw.
+  /// den Schlag am Cursor; ist sie schon gesetzt, wird sie entfernt.
+  void setOttava(int o) {
+    final targets = _targets;
+    if (targets.isEmpty) return;
+    final all = targets.every((t) => beatsOf(t.$1)[t.$2].ottava == o);
+    _begin();
+    for (final (bar, i) in targets) {
+      final beats = beatsOf(bar);
+      beats[i] = beats[i].copyWith(ottava: all ? 0 : o);
+    }
+    _done();
+  }
+
+  /// Oktavierung am Cursor (für die Eingabe im Notensystem).
+  int get _ottavaHere => currentBeat?.ottava ?? 0;
+
+  // ───────────────────────── Form: Häuser, Sprünge, Wiederholungszeichen ─────────────────────────
+
+  /// Häuser (1., 2. …) für die ausgewählten Takte bzw. den Takt am Cursor.
+  void setEndings(Set<int> endings) {
+    final s = selection;
+    final from = s?.$1.bar ?? cursor.bar, to = s?.$2.bar ?? cursor.bar;
+    _begin();
+    for (var b = from; b <= to; b++) {
+      _score.masterBars[b] = _score.masterBars[b].copyWith(endings: {...endings});
+    }
+    _done();
+  }
+
+  /// Alle Sprungzeichen am Takt des Cursors auf einmal (ein Rückgängig-Schritt).
+  void setDirections(Set<Direction> directions) {
+    _begin();
+    _score.masterBars[cursor.bar] = _score.masterBars[cursor.bar].copyWith(directions: {...directions});
+    _done();
+  }
+
+  /// Sprungzeichen (Segno, Coda, D.C. …) am Takt des Cursors ein/aus.
+  void toggleDirection(Direction d) {
+    final mb = _score.masterBars[cursor.bar];
+    final set = {...mb.directions};
+    if (!set.remove(d)) set.add(d);
+    _begin();
+    _score.masterBars[cursor.bar] = mb.copyWith(directions: set);
+    _done();
+  }
+
+  /// Wiederholungszeichen im Takt am Cursor: 1 = wie der Takt davor, 2 = wie
+  /// die zwei Takte davor (belegt diesen und den nächsten Takt), 0 = aus.
+  /// Die Noten werden mitkopiert, damit das Abspielen stimmt.
+  void setSimile(int n) {
+    final t = _track;
+    final b = cursor.bar;
+    final count = n == 2 ? 2 : 1;
+    if (n != 0) {
+      if (b - count < 0 || b + count - 1 >= _score.masterBars.length) return;
+      for (var k = 0; k < count; k++) {
+        if (barLength(b + k) != barLength(b - count + k)) return;
+      }
+    }
+    _begin();
+    if (n == 0) {
+      final cur = t.bars[b].simile;
+      final start = cur == 3 ? b - 1 : b;
+      final len = cur == 2 || cur == 3 ? 2 : 1;
+      for (var k = 0; k < len && start + k < t.bars.length; k++) {
+        t.bars[start + k] = _withSimile(t.bars[start + k], 0);
+      }
+    } else {
+      for (var k = 0; k < count; k++) {
+        final src = ScriviFormat.barFromJson(ScriviFormat.barToJson(t.bars[b - count + k]));
+        t.bars[b + k] = Bar(clef: t.bars[b + k].clef, voices: src.voices, simile: n == 1 ? 1 : (k == 0 ? 2 : 3));
+      }
+    }
+    _simileEdit = false;
+    _done();
+  }
+
+  static Bar _withSimile(Bar b, int s) => Bar(clef: b.clef, voices: b.voices, simile: s);
+
+  /// Nach jeder Änderung: Wiederholungszeichen folgen ihrer Vorlage. Wurde im
+  /// Takt mit dem Zeichen selbst etwas geändert, gilt das Zeichen nicht mehr.
+  bool _simileEdit = true;
+
+  void _keepSimiles() {
+    final editHere = _simileEdit;
+    _simileEdit = true;
+    for (final t in _score.tracks) {
+      for (var b = 0; b < t.bars.length; b++) {
+        final s = t.bars[b].simile;
+        if (s == 0 || s == 3) continue;
+        final len = s == 2 ? 2 : 1;
+        if (b - len < 0 || b + len - 1 >= t.bars.length) {
+          t.bars[b] = _withSimile(t.bars[b], 0);
+          continue;
+        }
+        var same = true;
+        for (var k = 0; k < len; k++) {
+          final a = jsonEncode(ScriviFormat.barToJson(_withSimile(t.bars[b + k], 0)));
+          final src = jsonEncode(ScriviFormat.barToJson(_withSimile(t.bars[b - len + k], 0)));
+          if (a != src) same = false;
+        }
+        if (same) continue;
+        final touched = editHere && identical(t, _track) && cursor.bar >= b && cursor.bar < b + len;
+        for (var k = 0; k < len; k++) {
+          if (touched) {
+            t.bars[b + k] = _withSimile(t.bars[b + k], 0);
+          } else {
+            final src = ScriviFormat.barFromJson(ScriviFormat.barToJson(t.bars[b - len + k]));
+            t.bars[b + k] = Bar(clef: t.bars[b + k].clef, voices: src.voices, simile: t.bars[b + k].simile);
+          }
+        }
+      }
+    }
   }
 
   /// Bundzahl auf der Saite des Cursors. Ist am Cursor schon ein Ton, kommt
@@ -520,9 +766,11 @@ class ScoreEditor {
   void inputDiatonic(int diatonic, {bool addToChord = false}) {
     if (_track.percussion) return;
     _begin();
-    final step = diatonic % 7;
+    // Unter einer 8va-Linie steht die Note tiefer, als sie gemeint ist
+    final d = diatonic + 7 * _ottavaHere;
+    final step = d % 7;
     final alter = _viewKey(cursor.bar).alterFor(step);
-    _inputWritten(Pitch(step, alter, diatonic ~/ 7), addToChord);
+    _inputWritten(Pitch(step, alter, d ~/ 7), addToChord);
     _done();
   }
 
@@ -542,7 +790,7 @@ class ScoreEditor {
   int _viewDiatonic(Note n, int bar) {
     var p = n.shownFor(_track.transposeSemitones);
     if (viewShift != 0) p = p.transposedBy(viewShift, fifths: _score.masterBars[bar].key.fifths);
-    return p.diatonic;
+    return p.diatonic - 7 * _ottavaHere;
   }
 
   void _inputWritten(Pitch best, bool addToChord) {
@@ -593,6 +841,14 @@ class ScoreEditor {
   }
 
   /// Punkt ein/aus (Eingabe und Schlag unter dem Cursor).
+  /// Doppelpunkt (der Wert wird um drei Viertel länger).
+  void toggleDoubleDot() {
+    final b = currentBeat;
+    final dots = (b?.duration.dots ?? duration.dots) == 2 ? 0 : 2;
+    duration = NoteDuration(duration.value, dots: dots);
+    if (b != null) _changeCurrentDuration(NoteDuration(b.duration.value, dots: dots));
+  }
+
   void toggleDot() {
     final b = currentBeat;
     final dots = (b?.duration.dots ?? duration.dots) > 0 ? 0 : 1;
@@ -620,31 +876,37 @@ class ScoreEditor {
   }
 
   /// Triole ein/aus: Aus einem Schlag werden drei Triolen-Werte im Raum von zwei.
-  void toggleTriplet() {
+  void toggleTriplet() => toggleTuplet(3);
+
+  /// n-tole ab dem Schlag am Cursor (3 → Triole, 5 → Quintole …): [actual]
+  /// Noten in der Zeit von 2, 4 bzw. 8 normalen. Steht schon eine n-tole da,
+  /// wird sie wieder aufgelöst.
+  void toggleTuplet(int actual) {
     final b = currentBeat;
-    if (b == null) return;
+    if (b == null || actual < 2) return;
     final bar = cursor.bar;
     final beats = beatsOf(bar);
     _begin();
     if (b.duration.tuplet == null) {
+      final normal = actual <= 3 ? 2 : (actual < 8 ? 4 : 8);
       final v = b.duration.value;
       final from = cursorOnset;
-      final span = v.length.scale(2);
+      final span = v.length.scale(normal);
       if (from + span > barLength(bar)) {
         _undo.removeLast();
         return;
       }
-      const t = Tuplet(3, 2);
+      final t = Tuplet(actual, normal);
       final i = _replace(bar, from, from + span, [
         b.copyWith(duration: NoteDuration(v, tuplet: t)),
-        Beat(duration: NoteDuration(v, tuplet: t)),
-        Beat(duration: NoteDuration(v, tuplet: t)),
+        for (var k = 1; k < actual; k++) Beat(duration: NoteDuration(v, tuplet: t)),
       ]);
       cursor = cursor.copyWith(beat: i);
     } else {
-      // Ganze Triolen-Gruppe finden und durch normale Werte ersetzen
+      // Ganze Gruppe finden und durch normale Werte ersetzen
       final v = b.duration.value;
-      final group = v.length.scale(2);
+      final normal = b.duration.tuplet!.normal;
+      final group = v.length.scale(normal);
       var start = cursor.beat;
       var t = cursorOnset;
       // Gruppe beginnt dort, wo die Zeit ab Taktanfang ein Vielfaches der Gruppenlänge ist
@@ -658,7 +920,7 @@ class ScoreEditor {
       final first = beats[start];
       final i = _replace(bar, t, t + group, [
         Beat(duration: NoteDuration(v), notes: first.notes, chordId: first.chordId, text: first.text),
-        Beat(duration: NoteDuration(v)),
+        for (var k = 1; k < normal; k++) Beat(duration: NoteDuration(v)),
       ]);
       cursor = cursor.copyWith(beat: i);
     }
@@ -1102,14 +1364,6 @@ class ScoreEditor {
     _begin();
     final mb = _score.masterBars[cursor.bar];
     _score.masterBars[cursor.bar] = mb.copyWith(doubleBar: !mb.doubleBar);
-    _done();
-  }
-
-  /// Häuser (1., 2. …) für den Takt am Cursor; leer = keine.
-  void setEndings(Set<int> endings) {
-    _begin();
-    final mb = _score.masterBars[cursor.bar];
-    _score.masterBars[cursor.bar] = mb.copyWith(endings: endings);
     _done();
   }
 

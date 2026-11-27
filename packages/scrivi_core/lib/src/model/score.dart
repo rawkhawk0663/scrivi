@@ -389,8 +389,13 @@ class ChordBarre {
 enum Clef { treble, treble8vb, bass, alto, tenor, neutral }
 
 class Bar {
-  Bar({required this.clef, required this.voices});
+  Bar({required this.clef, required this.voices, this.simile = 0});
   final Clef clef;
+
+  /// Wiederholungszeichen statt der Noten: 0 keines, 1 „wie der Takt davor“,
+  /// 2 „wie die zwei Takte davor“ (erster der beiden), 3 zweiter Takt davon.
+  /// Die Noten stehen trotzdem im Takt (zum Abspielen), gezeigt wird das Zeichen.
+  final int simile;
 
   /// Stimmen (meist nur eine). Leere Stimmen fehlen.
   final List<Voice> voices;
@@ -473,6 +478,7 @@ class Beat {
     this.pickStroke = 0,
     this.letRingText = false,
     this.tremolo = 0,
+    this.ottava = 0,
   }) : notes = notes ?? [],
        lyrics = lyrics ?? [];
 
@@ -502,6 +508,10 @@ class Beat {
   /// Tremolo-Picking: Anzahl Striche am Hals (1 = Achtel, 2 = Sechzehntel, 3 = Zweiunddreissigstel).
   final int tremolo;
 
+  /// Oktavierung: 1 = 8va, 2 = 15ma (eine bzw. zwei Oktaven tiefer geschrieben),
+  /// −1 = 8vb, −2 = 15mb. Die Töne bleiben klingend gespeichert.
+  final int ottava;
+
   bool get isRest => notes.isEmpty;
 
   /// Kopie mit Änderungen. Für null-fähige Felder: [clearChord], [clearText], [clearDynamic].
@@ -522,6 +532,7 @@ class Beat {
     int? pickStroke,
     bool? letRingText,
     int? tremolo,
+    int? ottava,
   }) => Beat(
     duration: duration ?? this.duration,
     notes: notes ?? [...this.notes],
@@ -536,6 +547,7 @@ class Beat {
     pickStroke: pickStroke ?? this.pickStroke,
     letRingText: letRingText ?? this.letRingText,
     tremolo: tremolo ?? this.tremolo,
+    ottava: ottava ?? this.ottava,
   );
 }
 
@@ -560,7 +572,11 @@ class Note {
     this.vibrato = false,
     this.harmonic = false,
     this.tapped = false,
+    this.courtesy = false,
   });
+
+  /// Vorzeichen zur Erinnerung zeigen, in Klammern (auch wenn es nicht nötig wäre).
+  final bool courtesy;
 
   /// Klingende Tonhöhe.
   final Pitch pitch;
@@ -630,6 +646,7 @@ class Note {
     bool? vibrato,
     bool? harmonic,
     bool? tapped,
+    bool? courtesy,
   }) => Note(
     pitch: pitch ?? this.pitch,
     written: clearWritten ? null : (written ?? this.written),
@@ -649,6 +666,7 @@ class Note {
     vibrato: vibrato ?? this.vibrato,
     harmonic: harmonic ?? this.harmonic,
     tapped: tapped ?? this.tapped,
+    courtesy: courtesy ?? this.courtesy,
   );
 }
 

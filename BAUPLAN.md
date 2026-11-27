@@ -405,6 +405,16 @@ mit. Bass bis E1. Getestet mit den aufgenommenen Gitarren und Bässen der Klangs
 Offen: Rhythmus aus dem Spiel ableiten (heute bestimmt der gewählte Notenwert die Länge),
 Akkorde.
 
+### Fehlende Zeichen, Paket 1 (27. November 2026)
+
+Vorzeichen ♯ ♭ ♮ 𝄪 𝄫 und zur Erinnerung in Klammern, Doppelpunkt, Quintolen/Sextolen/Septolen
+(Eingabe in die freien Plätze behält die Gruppe), Vorschlagsnoten schreiben, ppp und fff, 8va/8vb/
+15ma/15mb, Häuser, Segno/Coda/D.C./D.S./Fine/To Coda als Werkzeuge, Wiederholungszeichen für einen
+oder zwei Takte. Neue Werkzeuggruppe „Vorzeichen“. Offen: Paket 2 (Gitarre: Slides in/out,
+künstliche Flageoletts, weites Vibrato, Whammy, Fade, Swell, Tap/Slap/Pop, Triller, Arpeggio,
+Rasgueado), Paket 3 (Fingersätze, Saitennummern, Pedal); Oktavierung und Wiederholungszeichen
+noch nicht in MusicXML und Guitar-Pro-Dateien.
+
 ### Reiter und schneller Start (27. November 2026)
 
 Mehrere Stücke gleichzeitig offen: Reiterleiste unter der oberen Leiste (ab zwei Stücken),

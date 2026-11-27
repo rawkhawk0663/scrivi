@@ -44,7 +44,9 @@ GLYPHS = [
     'flag8thUp', 'flag8thDown', 'flag16thUp', 'flag16thDown', 'flag32ndUp', 'flag32ndDown',
     'flag64thUp', 'flag64thDown', 'flag128thUp', 'flag128thDown',
     # Punkte, Wiederholungen, Form
-    'augmentationDot', 'repeatDot', 'segno', 'coda', 'repeat1Bar',
+    'augmentationDot', 'repeatDot', 'segno', 'coda', 'repeat1Bar', 'repeat2Bars',
+    # Oktavierung
+    'ottavaAlta', 'ottavaBassaVb', 'quindicesimaAlta', 'quindicesimaBassaMb',
     # Dynamik
     'dynamicPiano', 'dynamicMezzo', 'dynamicForte', 'dynamicPPPP', 'dynamicPPP', 'dynamicPP', 'dynamicMP',
     'dynamicMF', 'dynamicFF', 'dynamicFFF', 'dynamicFFFF', 'dynamicSforzando1', 'dynamicFortePiano',

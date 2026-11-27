@@ -113,6 +113,9 @@ class _Head {
   String? accidental;
   double accX = 0;
 
+  /// Vorzeichen zur Erinnerung: in Klammern.
+  bool courtesy = false;
+
   double get width => Glyphs.get(glyph).right;
 }
 
@@ -196,6 +199,9 @@ class _Meas {
   final beams = <_BeamGroup>[];
   bool keyChange = false;
   bool timeChange = false;
+
+  /// Wiederholungszeichen statt Noten (siehe [Bar.simile]).
+  int simile = 0;
   double padL = 1.1;
   double padR = 0.5;
   double x = 0;
@@ -260,8 +266,10 @@ class Engraver {
     final seqs = <int, List<_Ev>>{};
     for (var i = 0; i < score.masterBars.length; i++) {
       final mb = score.masterBars[i];
-      final bar = i < _track.bars.length ? _track.bars[i] : Bar(clef: Clef.treble, voices: []);
-      final m = _Meas(i, mb, bar);
+      final full = i < _track.bars.length ? _track.bars[i] : Bar(clef: Clef.treble, voices: []);
+      // Wiederholungszeichen: die Noten bleiben fürs Abspielen, gezeigt wird das Zeichen
+      final bar = full.simile != 0 ? Bar(clef: full.clef, voices: []) : full;
+      final m = _Meas(i, mb, bar)..simile = full.simile;
       // Ohne Notenzeile gibt es keine Tonart.
       m.keyChange = !_tabOnly && prevKey != null && prevKey != _keyOf(mb);
       m.timeChange = prevTime != null && prevTime != mb.time;
@@ -360,7 +368,7 @@ class Engraver {
           e.heads.sort((a, b) => a.y.compareTo(b.y));
         } else {
           for (final n in e.beat.notes) {
-            e.heads.add(_Head(n, (top - _shown(n, m.index).diatonic) / 2, _headGlyph(e.beat, n)));
+            e.heads.add(_Head(n, (top - _shown(n, m.index).diatonic + 7 * e.beat.ottava) / 2, _headGlyph(e.beat, n)));
           }
           e.heads.sort((a, b) => a.y.compareTo(b.y));
         }
@@ -376,12 +384,13 @@ class Engraver {
           final n = h.note;
           if (n == null || _drums) continue;
           final p = _shown(n, m.index);
-          final current = state[p.diatonic] ?? _keyOf(m.mb).alterFor(p.step);
+          final key = p.diatonic - 7 * e.beat.ottava;
+          final current = state[key] ?? _keyOf(m.mb).alterFor(p.step);
           if (n.tieDestination) {
-            state[p.diatonic] = p.alter;
+            state[key] = p.alter;
             continue;
           }
-          if (p.alter != current) {
+          if (p.alter != current || n.courtesy) {
             h.accidental = switch (p.alter) {
               -2 => 'accidentalDoubleFlat',
               -1 => 'accidentalFlat',
@@ -389,7 +398,8 @@ class Engraver {
               2 => 'accidentalDoubleSharp',
               _ => 'accidentalNatural',
             };
-            state[p.diatonic] = p.alter;
+            h.courtesy = n.courtesy;
+            state[key] = p.alter;
           }
         }
       }
@@ -462,7 +472,7 @@ class Engraver {
             columns.add([h]);
             _setAccX(h, minDx, columns.length - 1);
           }
-          maxW = math.max(maxW, -h.accX);
+          maxW = math.max(maxW, -h.accX + (h.courtesy ? _parenL + 0.05 : 0));
         }
       }
       final graces = c.evs.fold(0, (m, e) => e.graces.length > m ? e.graces.length : m);
@@ -471,9 +481,13 @@ class Engraver {
     }
   }
 
+  static final double _parenL = Glyphs.get('accidentalParensLeft').right;
+  static final double _parenR = Glyphs.get('accidentalParensRight').right;
+
   void _setAccX(_Head h, double minDx, int column) {
     final w = Glyphs.get(h.accidental!).right;
-    h.accX = minDx - 0.22 - w - column * 1.05;
+    final extra = h.courtesy ? _parenR + 0.05 : 0.0;
+    h.accX = minDx - 0.22 - extra - w - column * (1.05 + (h.courtesy ? _parenL + _parenR : 0));
   }
 
   /// Balkengruppen: zusammen, was in denselben Schlag (bzw. dieselbe Takthälfte) fällt.
@@ -1493,10 +1507,33 @@ class _SystemBuilder {
     final end = m.x + m.w;
     final isLast = m.index == e.score.masterBars.length - 1;
     _barline(end, 0, 4, m, isLast);
-    if (m.empty || (m.voices.isNotEmpty && m.voices.every((v) => v.isEmpty))) {
+    if (m.simile != 0) {
+      _simileMark(m, j, 2.0);
+    } else if (m.empty || (m.voices.isNotEmpty && m.voices.every((v) => v.isEmpty))) {
       final mid = ((j == 0 ? _contentStart : m.x) + end) / 2;
       glyph('restWhole', mid - Glyphs.get('restWhole').right / 2, 1);
     }
+  }
+
+  /// Wiederholungszeichen (Prozent) mitten im Takt; das für zwei Takte steht
+  /// auf dem Taktstrich dazwischen.
+  void _simileMark(_Meas m, int j, double cy) {
+    final start = j == 0 ? _contentStart : m.x;
+    final end = m.x + m.w;
+    final String name;
+    final double cx;
+    if (m.simile == 1) {
+      name = 'repeat1Bar';
+      cx = (start + end) / 2;
+    } else if (m.simile == 2) {
+      name = 'repeat2Bars';
+      final next = j + 1 < s.measures.length ? s.measures[j + 1] : null;
+      cx = next != null && next.simile == 3 ? end : (start + end) / 2;
+    } else {
+      return;
+    }
+    final g = Glyphs.get(name);
+    glyph(name, cx - g.right / 2, cy + (g.top + g.bottom) / 2);
   }
 
   void _repeatStart(double x, double y0, double y1) {
@@ -1719,7 +1756,13 @@ class _SystemBuilder {
     }
     for (final h in ev.heads) {
       glyph(h.glyph, x + h.dx, h.y);
-      if (h.accidental != null) glyph(h.accidental!, x + h.accX, h.y);
+      if (h.accidental != null) {
+        glyph(h.accidental!, x + h.accX, h.y);
+        if (h.courtesy) {
+          glyph('accidentalParensLeft', x + h.accX - Engraver._parenL - 0.05, h.y);
+          glyph('accidentalParensRight', x + h.accX + Glyphs.get(h.accidental!).right + 0.05, h.y);
+        }
+      }
       if (h.note?.ghost ?? false) {
         glyph('accidentalParensLeft', x + h.dx - 0.55, h.y);
         glyph('accidentalParensRight', x + h.dx + h.width + 0.1, h.y);
@@ -1839,7 +1882,7 @@ class _SystemBuilder {
     for (var k = 0; k < ev.graces.length; k++) {
       final g = ev.graces[k];
       final x = start + k * _graceStep;
-      final ys = [for (final n in g.notes) (top - e._shown(n, ev.bar).diatonic) / 2]..sort();
+      final ys = [for (final n in g.notes) (top - e._shown(n, ev.bar).diatonic + 7 * ev.beat.ottava) / 2]..sort();
       if (ys.isEmpty) continue;
       // Hilfslinien
       for (final y in ys) {
@@ -1852,7 +1895,7 @@ class _SystemBuilder {
       }
       for (var i = 0; i < g.notes.length; i++) {
         final n = g.notes[i];
-        final y = (top - e._shown(n, ev.bar).diatonic) / 2;
+        final y = (top - e._shown(n, ev.bar).diatonic + 7 * ev.beat.ottava) / 2;
         glyph(n.dead ? 'noteheadXBlack' : 'noteheadBlack', x, y, scale: _graceScale);
       }
       // Hals nach oben mit Fähnchen und Querstrich
@@ -1997,6 +2040,15 @@ class _SystemBuilder {
 
   void _above(double notesTop) {
     var rowTop = math.min(notesTop, -1.0);
+    // 8va und 15ma gleich über den Noten
+    final up = _ottavaRuns(above: true);
+    if (up.isNotEmpty) {
+      final y = math.min(rowTop - 0.8, -2.2);
+      for (final (x1, x2, o) in up) {
+        _ottavaLine(x1, x2, y, o);
+      }
+      rowTop = math.min(top, y - 2.0);
+    }
     // Häuser
     final hasVolta = e._topStaff && s.measures.any((m) => m.mb.endings.isNotEmpty);
     if (hasVolta) {
@@ -2079,6 +2131,55 @@ class _SystemBuilder {
     }
   }
 
+  /// Strecken mit derselben Oktavierung (Anfang, Ende, Art) in dieser Zeile.
+  List<(double, double, int)> _ottavaRuns({required bool above}) {
+    final out = <(double, double, int)>[];
+    _Ev? first, last;
+    var cur = 0;
+    void close() {
+      if (first != null && last != null && cur != 0) {
+        out.add((first!.x - 0.4, last!.x + last!.headW + 0.6, cur));
+      }
+      first = null;
+      last = null;
+    }
+
+    for (final ev in events) {
+      if (ev.voice != 0) continue;
+      final o = ev.beat.ottava;
+      final wanted = above ? o > 0 : o < 0;
+      if (!wanted || o != cur) close();
+      if (wanted) {
+        cur = o;
+        first ??= ev;
+        last = ev;
+      } else {
+        cur = 0;
+      }
+    }
+    close();
+    return out;
+  }
+
+  /// „8va“ bzw. „15ma“ (oben) oder „8vb“/„15mb“ (unten) mit gestrichelter Linie und Haken am Ende.
+  void _ottavaLine(double x1, double x2, double y, int o) {
+    final name = switch (o) {
+      2 => 'quindicesimaAlta',
+      -1 => 'ottavaBassaVb',
+      -2 => 'quindicesimaBassaMb',
+      _ => 'ottavaAlta',
+    };
+    final g = Glyphs.get(name);
+    const scale = 0.8;
+    glyph(name, x1, y, scale: scale);
+    final lx = x1 + g.right * scale + 0.3;
+    final ly = y - 0.6;
+    // Auch über einer einzelnen Note eine kurze Linie mit Haken
+    final end = math.max(x2, lx + 1.2);
+    line(lx, ly, end, ly, 0.12, dash: (0.5, 0.35));
+    line(end, ly, end, o > 0 ? ly + 1.0 : ly - 1.0, 0.12);
+  }
+
   void _voltas(double y) {
     final ms = s.measures;
     var k = 0;
@@ -2157,6 +2258,15 @@ class _SystemBuilder {
     final voice0 = events.where((ev) => ev.voice == 0).toList();
     final hasDyn = voice0.any((ev) => ev.showDynamic) || voice0.any((ev) => ev.beat.hairpin != Hairpin.none);
     var rowBottom = math.max(notesBottom, 4.0);
+    // 8vb und 15mb gleich unter den Noten
+    final down = _ottavaRuns(above: false);
+    if (down.isNotEmpty) {
+      final y = math.max(rowBottom + 2.4, 6.4);
+      for (final (x1, x2, o) in down) {
+        _ottavaLine(x1, x2, y, o);
+      }
+      rowBottom = y + 0.6;
+    }
     if (hasDyn) {
       final y = rowBottom + 2.0;
       for (final ev in voice0.where((ev) => ev.showDynamic)) {
@@ -2256,6 +2366,9 @@ class _SystemBuilder {
     _tabBottom = y + (n - 1) * sp;
     for (var k = 0; k < n; k++) {
       line(s.x0, _tabTop + k * sp, s.x1, _tabTop + k * sp, _staffLineT);
+    }
+    for (var j = 0; j < s.measures.length; j++) {
+      if (s.measures[j].simile != 0) _simileMark(s.measures[j], j, (_tabTop + _tabBottom) / 2);
     }
     // TAB-Schlüssel, auf die Höhe der Tabulatur gestreckt
     final clef = e._tabClef;

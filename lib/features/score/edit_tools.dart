@@ -175,6 +175,105 @@ List<String> sectionSuggestions() => L10n.isEnglish
     ? ['Intro', 'Verse', 'Pre-Chorus', 'Chorus', 'Bridge', 'Solo', 'Interlude', 'Outro']
     : ['Intro', 'Strophe', 'Pre-Chorus', 'Refrain', 'Bridge', 'Solo', 'Zwischenspiel', 'Schluss'];
 
+/// Häuser wählen (1., 2. …); leer = keine.
+Future<Set<int>?> askEndings(BuildContext context, Set<int> current) {
+  final chosen = {...current};
+  return showDialog<Set<int>>(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setState) => AlertDialog(
+        title: Text(tr('Häuser', 'Endings')),
+        content: SizedBox(
+          width: 360,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                tr(
+                  'Bei welchem Durchgang wird dieser Takt gespielt? Mehrere Takte vorher auswählen, um das Haus über alle zu ziehen.',
+                  'On which pass is this bar played? Select several bars first to span the ending over all of them.',
+                ),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                children: [
+                  for (var n = 1; n <= 6; n++)
+                    FilterChip(
+                      label: Text('$n.'),
+                      selected: chosen.contains(n),
+                      onSelected: (on) => setState(() => on ? chosen.add(n) : chosen.remove(n)),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, <int>{}), child: Text(tr('Keine', 'None'))),
+          TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('Abbrechen', 'Cancel'))),
+          FilledButton(onPressed: () => Navigator.pop(context, chosen), child: Text(tr('Übernehmen', 'Apply'))),
+        ],
+      ),
+    ),
+  );
+}
+
+/// Sprungzeichen am Takt wählen (D.C., D.S., Fine, To Coda …).
+Future<Set<core.Direction>?> askJumps(BuildContext context, Set<core.Direction> current) {
+  final chosen = {...current};
+  String label(core.Direction d) => switch (d) {
+    core.Direction.segno => 'Segno',
+    core.Direction.segnoSegno => 'Segno Segno',
+    core.Direction.coda => 'Coda',
+    core.Direction.doubleCoda => 'Double Coda',
+    core.Direction.fine => 'Fine',
+    core.Direction.daCapo => tr('D.C. (Da Capo: von vorne)', 'D.C. (Da Capo: from the beginning)'),
+    core.Direction.daCapoAlFine => tr('D.C. al Fine (von vorne bis Fine)', 'D.C. al Fine (from the beginning to Fine)'),
+    core.Direction.daCapoAlCoda => tr(
+      'D.C. al Coda (von vorne, dann zur Coda)',
+      'D.C. al Coda (from the beginning, then to the coda)',
+    ),
+    core.Direction.dalSegno => tr('D.S. (Dal Segno: ab dem Segno)', 'D.S. (Dal Segno: from the sign)'),
+    core.Direction.dalSegnoAlFine => tr('D.S. al Fine (ab dem Segno bis Fine)', 'D.S. al Fine (from the sign to Fine)'),
+    core.Direction.dalSegnoAlCoda => tr(
+      'D.S. al Coda (ab dem Segno, dann zur Coda)',
+      'D.S. al Coda (from the sign, then to the coda)',
+    ),
+    core.Direction.toCoda => tr('To Coda (hier zur Coda springen)', 'To Coda (jump to the coda here)'),
+  };
+  return showDialog<Set<core.Direction>>(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setState) => AlertDialog(
+        title: Text(tr('Sprungzeichen', 'Jumps')),
+        content: SizedBox(
+          width: 420,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final d in core.Direction.values)
+                  CheckboxListTile(
+                    dense: true,
+                    value: chosen.contains(d),
+                    title: Text(label(d)),
+                    onChanged: (on) => setState(() => on == true ? chosen.add(d) : chosen.remove(d)),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('Abbrechen', 'Cancel'))),
+          FilledButton(onPressed: () => Navigator.pop(context, chosen), child: Text(tr('Übernehmen', 'Apply'))),
+        ],
+      ),
+    ),
+  );
+}
+
 /// Angaben zum Stück: alles, was oben auf dem Blatt steht, dazu eine private Bemerkung.
 Future<core.ScoreInfo?> askScoreInfo(BuildContext context, core.ScoreInfo info) {
   final fields = <String, TextEditingController>{

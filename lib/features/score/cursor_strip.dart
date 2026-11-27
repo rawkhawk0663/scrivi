@@ -18,12 +18,19 @@ class CursorStrip extends StatefulWidget {
   final bool above;
 
   static const width = 500.0;
-  static const height = 104.0;
+  static const height = 120.0;
 
   /// Zuletzt gewählter Reiter (gilt für alle Stücke, solange Scrivi läuft).
   static ToolGroup group = ToolGroup.duration;
 
-  static const groups = [ToolGroup.duration, ToolGroup.expression, ToolGroup.guitar, ToolGroup.bar, ToolGroup.text];
+  static const groups = [
+    ToolGroup.duration,
+    ToolGroup.accidental,
+    ToolGroup.expression,
+    ToolGroup.guitar,
+    ToolGroup.bar,
+    ToolGroup.text,
+  ];
 
   @override
   State<CursorStrip> createState() => _CursorStripState();
