@@ -510,6 +510,25 @@ class ScoreEditor {
     _done();
   }
 
+  /// Stift: Note an der Stelle [diatonic] (geschriebener Stammton seit C0, wie
+  /// in der Ansicht). Auf einer Pause wird sie geschrieben, auf einem Schlag mit
+  /// Noten kommt sie zum Akkord dazu; steht dort schon eine Note, bleibt alles,
+  /// wie es ist (nur der Cursor). Gibt zurück, ob sich etwas geändert hat.
+  bool penNote(int diatonic) {
+    final b = currentBeat;
+    if (_track.percussion || b == null) return false;
+    if (!b.isRest && b.notes.any((n) => _viewDiatonic(n, cursor.bar) == diatonic)) return false;
+    inputDiatonic(diatonic, addToChord: !b.isRest);
+    return true;
+  }
+
+  /// Geschriebene Lage einer Note in der Ansicht (Stammton seit C0).
+  int _viewDiatonic(Note n, int bar) {
+    var p = n.shownFor(_track.transposeSemitones);
+    if (viewShift != 0) p = p.transposedBy(viewShift, fifths: _score.masterBars[bar].key.fifths);
+    return p.diatonic;
+  }
+
   void _inputWritten(Pitch best, bool addToChord) {
     final b = currentBeat;
     if (addToChord && b != null && !b.isRest) {

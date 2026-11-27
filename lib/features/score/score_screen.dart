@@ -28,6 +28,7 @@ import 'export_dialog.dart';
 import 'fretboard.dart';
 import 'inspector.dart';
 import 'note_preview.dart';
+import 'pen_gestures.dart';
 import 'quick_input.dart';
 import 'score_painter.dart';
 import 'score_player.dart';
@@ -890,13 +891,50 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
     return core.NoteValue.values[(v.index - 1).clamp(1, core.NoteValue.values.length - 2)];
   }
 
-  /// Angetippt: Cursor dorthin, mit „Stift setzt Noten“ auch eine Note.
+  /// Angetippt: Cursor dorthin; schreiben Maus und Finger wie der Stift, auch eine Note.
   void _onEditTap(_PageHit hit) {
-    final pen = _penNotes && hit.diatonic != null && hit.string == null;
-    apply((e) {
-      e.setCursor(hit.bar, hit.position, string: hit.string, select: HardwareKeyboard.instance.isShiftPressed);
-      if (pen) e.inputDiatonic(hit.diatonic!);
-    }, sound: pen);
+    if (_penNotes && hit.diatonic != null && hit.string == null) return _onPen(PenStroke.tap, hit, null);
+    apply(
+      (e) => e.setCursor(hit.bar, hit.position, string: hit.string, select: HardwareKeyboard.instance.isShiftPressed),
+    );
+  }
+
+  /// Stift: antippen setzt eine Note (auf einer Note: Akkordton dazu), waagrechter
+  /// Strich wählt aus, Durchkritzeln oder Radierer löscht, Strich nach oben/unten
+  /// verschiebt um einen Halbton.
+  void _onPen(PenStroke kind, _PageHit from, _PageHit? to) {
+    final b = to ?? from;
+    final (x, y) = from.bar < b.bar || (from.bar == b.bar && from.position <= b.position) ? (from, b) : (b, from);
+    void range(core.ScoreEditor e) {
+      e.setCursor(x.bar, x.position, string: x.string);
+      e.setCursor(y.bar, y.position, string: y.string, select: true);
+    }
+
+    switch (kind) {
+      case PenStroke.tap:
+        final d = from.diatonic;
+        apply((e) {
+          e.setCursor(from.bar, from.position, string: from.string);
+          if (d != null) e.penNote(d);
+        }, sound: d != null);
+      case PenStroke.line:
+        apply(range);
+      case PenStroke.scribble:
+        apply((e) {
+          range(e);
+          // Einzelner Ton in der Tabulatur: nur die Saite, sonst der ganze Schlag
+          if (to == null && from.string != null) e.anchor = null;
+          e.toRest();
+          e.anchor = null;
+        });
+      case PenStroke.flickUp || PenStroke.flickDown:
+        apply((e) {
+          e.setCursor(from.bar, from.position, string: from.string);
+          e.transposeSelection(kind == PenStroke.flickUp ? 1 : -1);
+        }, sound: true);
+      case PenStroke.none:
+        break;
+    }
   }
 
   /// Griffbrett angetippt: Ton auf den Cursor (weitere Saiten = Akkord).
@@ -1002,6 +1040,8 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
                   cursorTick: _cursorTick,
                   onEditTap: _onEditTap,
                   onEditKey: _onEditKey,
+                  onPen: _onPen,
+                  penWrites: _penNotes,
                 ),
               ),
               if (showFretboard) ...[
@@ -1403,6 +1443,8 @@ class _PagesViewer extends StatefulWidget {
     this.cursorTick,
     this.onEditTap,
     this.onEditKey,
+    this.onPen,
+    this.penWrites = false,
     this.endless = false,
   });
   final List<core.PageDisplay> pages;
@@ -1417,6 +1459,12 @@ class _PagesViewer extends StatefulWidget {
   final ValueNotifier<int>? cursorTick;
   final ValueChanged<_PageHit>? onEditTap;
   final bool Function(KeyEvent)? onEditKey;
+
+  /// Strich mit dem Stift (Radierer = Durchkritzeln); [to] beim Bereich.
+  final void Function(PenStroke kind, _PageHit from, _PageHit? to)? onPen;
+
+  /// Die Maus schreibt wie der Stift (statt die Seiten zu verschieben).
+  final bool penWrites;
 
   @override
   State<_PagesViewer> createState() => _PagesViewerState();
@@ -1470,6 +1518,7 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
     widget.player?.position.removeListener(_follow);
     _fling.dispose();
     _focus.dispose();
+    _inkTick.dispose();
     super.dispose();
   }
 
@@ -1508,6 +1557,84 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
         return;
       }
     }
+  }
+
+  // ───────────────────────── Stift ─────────────────────────
+
+  int? _penPointer;
+  bool _eraser = false;
+  final _ink = <Offset>[];
+  final _inkTick = ValueNotifier(0);
+
+  bool _isPen(PointerDownEvent e) {
+    if (widget.editor == null || widget.onPen == null) return false;
+    return switch (e.kind) {
+      PointerDeviceKind.stylus || PointerDeviceKind.invertedStylus => true,
+      PointerDeviceKind.mouse => widget.penWrites && e.buttons & kPrimaryMouseButton != 0,
+      _ => false,
+    };
+  }
+
+  void _onPointerDown(PointerDownEvent e) {
+    if (_penPointer != null || !_isPen(e)) return;
+    _fling.stop();
+    _focus.requestFocus();
+    _penPointer = e.pointer;
+    _eraser = e.kind == PointerDeviceKind.invertedStylus || e.buttons & kSecondaryStylusButton != 0;
+    _ink
+      ..clear()
+      ..add(e.localPosition);
+    _inkTick.value++;
+  }
+
+  void _onPointerMove(PointerMoveEvent e) {
+    if (e.pointer != _penPointer) return;
+    if (e.buttons & kSecondaryStylusButton != 0) _eraser = true;
+    _ink.add(e.localPosition);
+    _inkTick.value++;
+  }
+
+  void _onPointerUp(PointerUpEvent e) {
+    if (e.pointer != _penPointer) return;
+    _penPointer = null;
+    final pts = List.of(_ink);
+    _ink.clear();
+    _inkTick.value++;
+    var kind = classifyStroke(pts);
+    if (_eraser) kind = kind == PenStroke.tap ? PenStroke.tap : PenStroke.scribble;
+    final onPen = widget.onPen;
+    if (kind == PenStroke.none || onPen == null || pts.isEmpty) return;
+    if (kind == PenStroke.scribble) {
+      // Von ganz links bis ganz rechts
+      var l = pts.first, r = pts.first;
+      for (final p in pts) {
+        if (p.dx < l.dx) l = p;
+        if (p.dx > r.dx) r = p;
+      }
+      final a = _hitAt(l, snap: 1), b = _hitAt(r, snap: -1);
+      if (a != null) onPen(kind, a, b);
+      return;
+    }
+    if (kind == PenStroke.line) {
+      final (l, r) = pts.first.dx <= pts.last.dx ? (pts.first, pts.last) : (pts.last, pts.first);
+      final a = _hitAt(l, snap: 1);
+      if (a != null) onPen(kind, a, _hitAt(r, snap: -1));
+      return;
+    }
+    final a = _hitAt(pts.first);
+    if (a == null) return;
+    if (_eraser) {
+      onPen(PenStroke.scribble, a, null);
+    } else {
+      onPen(kind, a, null);
+    }
+  }
+
+  void _onPointerCancel(PointerCancelEvent e) {
+    if (e.pointer != _penPointer) return;
+    _penPointer = null;
+    _ink.clear();
+    _inkTick.value++;
   }
 
   /// Angetippter Takt: Fensterpunkt → Seite → Zeile → Takt.
@@ -1601,8 +1728,10 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
     if (_offset == before) _fling.stop();
   }
 
-  /// Fensterpunkt → Takt, Stelle, Saite bzw. Stammton.
-  _PageHit? _hitAt(Offset local) {
+  /// Fensterpunkt → Takt, Stelle, Saite bzw. Stammton. [snap] für Bereiche:
+  /// 1 = der erste Schlag ab dieser Stelle (linkes Ende), -1 = der letzte bis
+  /// hierher (rechtes Ende), 0 = der nächste.
+  _PageHit? _hitAt(Offset local, {int snap = 0}) {
     final p = (local - _offset) / _scale;
     for (var i = 0; i < widget.pages.length && i < _pageTops.length; i++) {
       final page = widget.pages[i];
@@ -1621,17 +1750,29 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
       if (best == null || bestDist > 4) return null;
       for (final b in best.bars) {
         if (x < b.x0 - 1 || x > b.x1) continue;
-        // Nächster Schlag nach x
+        // Nächster Schlag nach x (bei Bereichen nur Schläge innerhalb)
         var pos = 0.0, d = double.infinity;
         for (final (onset, bx) in b.beats) {
+          if (snap > 0 && bx < x - 1.2 || snap < 0 && bx > x + 1.2) continue;
           if ((bx - x).abs() < d) {
             d = (bx - x).abs();
             pos = onset;
           }
         }
+        var bar = b.bar;
+        if (d == double.infinity) {
+          // Kein Schlag auf dieser Seite der Stelle: ab dem nächsten bzw. bis zum vorigen Takt
+          if (snap > 0 && bar + 1 < widget.editor!.score.masterBars.length) {
+            bar++;
+            pos = 0;
+          } else if (snap < 0 && bar > 0) {
+            bar--;
+            pos = 1e6;
+          }
+        }
         final tabTop = best.tabTop;
         final inTab = tabTop != null && y > tabTop - best.tabSpacing && y < tabTop + best.strings * best.tabSpacing;
-        return _PageHit(b.bar, pos, inTab ? best.stringAt(y) : null, inTab ? null : best.diatonicAt(y));
+        return _PageHit(bar, pos, inTab ? best.stringAt(y) : null, inTab ? null : best.diatonicAt(y));
       }
     }
     return null;
@@ -1731,8 +1872,21 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
           onKeyEvent: _onKey,
           child: Listener(
             onPointerSignal: _onSignal,
+            onPointerDown: _onPointerDown,
+            onPointerMove: _onPointerMove,
+            onPointerUp: _onPointerUp,
+            onPointerCancel: _onPointerCancel,
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
+              // Der Stift (und beim Schreiben mit der Maus auch sie) zeichnet Gesten statt zu verschieben
+              supportedDevices: widget.onPen == null
+                  ? null
+                  : {
+                      PointerDeviceKind.touch,
+                      PointerDeviceKind.trackpad,
+                      PointerDeviceKind.unknown,
+                      if (!widget.penWrites) PointerDeviceKind.mouse,
+                    },
               onScaleStart: _onScaleStart,
               onScaleUpdate: _onScaleUpdate,
               onScaleEnd: _onScaleEnd,
@@ -1778,10 +1932,47 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
             ),
           ),
         );
-        return viewer;
+        return Stack(
+          children: [
+            Positioned.fill(child: viewer),
+            Positioned.fill(
+              child: IgnorePointer(
+                child: CustomPaint(painter: _InkPainter(_ink, _inkTick, () => _eraser, Theme.of(context).colorScheme)),
+              ),
+            ),
+          ],
+        );
       },
     );
   }
+}
+
+/// Spur des Stifts, solange er zeichnet (Radierer rot).
+class _InkPainter extends CustomPainter {
+  _InkPainter(this.points, this.tick, this.eraser, this.scheme) : super(repaint: tick);
+  final List<Offset> points;
+  final ValueNotifier<int> tick;
+  final bool Function() eraser;
+  final ColorScheme scheme;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (points.length < 2) return;
+    final paint = Paint()
+      ..color = (eraser() ? scheme.error : scheme.primary).withValues(alpha: 0.75)
+      ..strokeWidth = 3
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..style = PaintingStyle.stroke;
+    final path = Path()..moveTo(points.first.dx, points.first.dy);
+    for (final p in points.skip(1)) {
+      path.lineTo(p.dx, p.dy);
+    }
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(_InkPainter old) => true;
 }
 
 /// Mitlaufende Markierung: ein farbiger Balken über die ganze Zeile.

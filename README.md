@@ -11,7 +11,7 @@ Scrivi ist ein Notenschreibprogramm für Musikerinnen und Musiker, gemacht für 
 
 Scrivi gibt es auf **Deutsch und Englisch**. Es braucht **kein Konto**, sammelt **keine Daten** und funktioniert **ohne Internet**.
 
-> **Scrivi ist noch am Anfang.** Heute öffnet es Guitar-Pro-Dateien aller Versionen, MusicXML und MIDI, zeigt sie sauber als Noten mit Tabulatur, spielt sie ab, und du kannst darin schreiben. Als Nächstes: Stift-Gesten und eine Partitur-Ansicht mit allen Spuren. Den ganzen Plan findest du im [Bauplan](BAUPLAN.md).
+> **Scrivi ist noch am Anfang.** Heute öffnet es Guitar-Pro-Dateien aller Versionen, MusicXML und MIDI, zeigt sie sauber als Noten mit Tabulatur, spielt sie ab, und du kannst darin schreiben. Als Nächstes: eine Partitur-Ansicht mit allen Spuren. Den ganzen Plan findest du im [Bauplan](BAUPLAN.md).
 
 ## Was Scrivi heute kann
 
@@ -37,6 +37,7 @@ Scrivi gibt es auf **Deutsch und Englisch**. Es braucht **kein Konto**, sammelt 
 - **Tastatur beim Schreiben:** Bundzahl tippen (zwei Ziffern schnell nacheinander für 10–24), ↑/↓ wechselt die Saite, ←/→ geht von Note zu Note (am Ende kommt ein neuer Takt dazu), A–G bzw. H setzt eine Note (mit Umschalt zum Akkord dazu), + / − kürzer/länger, Punkt, T Triole, L Haltebogen, K Akkord, Y Liedtext, Entf Pause, Umschalt + ↑/↓ Halbton, Strg + Z/Y, Strg + C/X/V.
 - **Speichern:** Stücke sind `.scrivi`-Dateien, die du speicherst, wo du willst (*Speichern* bzw. Strg+S). Danach sichert Scrivi jede Änderung von selbst in diese Datei. Ein neues Stück ist bis zum ersten Speichern ein Entwurf, der ebenfalls laufend gesichert wird und unter *Zuletzt geöffnet* bleibt; es geht also nichts verloren. Andere Formate (Guitar Pro, MusicXML, MIDI) überschreibt Scrivi nie: Änderungen daran werden als neue `.scrivi`-Datei gespeichert.
 
+- **Schreiben mit dem Stift:** Der Stift schreibt, der Finger blättert. *Antippen* im Notensystem setzt eine Note (auf einer vorhandenen Note kommt ein Akkordton dazu), ein *waagrechter Strich* wählt Noten und Takte aus, *Durchkritzeln* löscht, was darunter liegt, ein kurzer *Strich nach oben oder unten* auf einer Note macht sie einen Halbton höher oder tiefer. Das *Radierer-Ende* des Stifts oder die *Stift-Taste* löscht. Mit dem Werkzeug *Maus und Finger schreiben wie der Stift* (Bleistift in der Werkzeugspalte) gehen die Gesten auch mit der Maus.
 - **Exportieren und Drucken:** *Exportieren …* (Strg+E) speichert das Stück als **PDF** (diese Spur oder alle Spuren, so wie du sie siehst, gestochen scharf), als **MusicXML** für andere Notenprogramme (mit Saite und Bund, Akkorden, Liedtext, Wiederholungen) oder als **MIDI** (so, wie es klingt). *Drucken …* (Strg+P) öffnet das PDF im PDF-Programm deines Computers, von dort druckst du es; auf Android liegt das PDF danach im Ordner *Dokumente/Scrivi*.
 
 Noch nicht: mehrere Instrumente gleichzeitig in einer Partitur-Ansicht. Das kommt in den nächsten Etappen.

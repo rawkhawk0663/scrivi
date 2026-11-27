@@ -11,7 +11,7 @@ abstract class ToolHost {
   /// Eine Änderung ausführen; danach wird neu gesetzt, gespeichert und der Ton gespielt.
   void apply(void Function(core.ScoreEditor e) op, {bool sound = false});
 
-  /// Stift setzt Noten im Notensystem (statt nur den Cursor zu bewegen).
+  /// Maus und Finger schreiben wie der Stift (Noten setzen, Gesten); sonst nur der Stift.
   bool get penNotes;
   set penNotes(bool v);
 
@@ -267,9 +267,9 @@ final List<ToolDef> allTools = [
     id: 'pen',
     group: ToolGroup.duration,
     look: const IconLook(Icons.edit_outlined),
-    de: 'Stift setzt Noten ins Notensystem',
-    en: 'Pen places notes on the staff',
-    keywords: const ['stift', 'pen', 'zeichnen'],
+    de: 'Maus und Finger schreiben wie der Stift',
+    en: 'Mouse and finger write like the pen',
+    keywords: const ['stift', 'pen', 'zeichnen', 'maus', 'finger', 'gesten', 'gestures'],
     active: (e) => false,
     run: (h) => h.penNotes = !h.penNotes,
   ),

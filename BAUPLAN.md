@@ -356,7 +356,7 @@ Plan in fünf Schritten:
 5. Mikrofon-Eingabe (einstimmig).
 
 Weitere Reihenfolge (vom Besitzer am 27. November 2026 bestätigt): 1. Drucken, PDF, MusicXML und
-MIDI ausgeben ✅; 2. Stift-Gesten; 3. Band-Ansicht (alle Spuren als Partitur); 4. Klang verfeinern
+MIDI ausgeben ✅; 2. Stift-Gesten ✅; 3. Band-Ansicht (alle Spuren als Partitur); 4. Klang verfeinern
 (Mischpult in der Datei, Hall, Stereo, gedämpfte Noten und Flageoletts als Aufnahmen);
 5. Mikrofon-Eingabe; 6. Reiter für mehrere Stücke, schnellere Vorbereitung beim Abspielen.
 
@@ -370,6 +370,14 @@ Scrivi liest die eigene Ausgabe verlustfrei wieder ein (Tests mit den Beispielst
 (Typ 1) so, wie es klingt: Wiederholungen ausgeschrieben, Tempo, Taktart, Tonart, Klang pro Spur,
 Bendings. *Drucken …* (Strg+P) öffnet das PDF im PDF-Programm des Systems; auf Android landet es
 in `Dokumente/Scrivi`. Noch offen: PNG/SVG, Tonspur (WAV), „An Volti senden“.
+
+### Stift-Gesten (27. November 2026)
+
+Der Stift schreibt, der Finger blättert und zoomt. Antippen setzt eine Note (auf einer Note:
+Akkordton dazu; an derselben Stelle ändert sich nichts), waagrechter Strich wählt aus,
+Durchkritzeln löscht die Noten darunter, kurzer Strich nach oben/unten = Halbton höher/tiefer,
+Radierer-Ende oder Stift-Taste löscht. Die Spur des Stifts erscheint beim Zeichnen (Radierer rot).
+Das Werkzeug „Maus und Finger schreiben wie der Stift“ gibt der Maus dieselben Gesten.
 
 ### Dateien statt Bibliothek (27. November 2026)
 

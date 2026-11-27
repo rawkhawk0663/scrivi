@@ -11,7 +11,7 @@ Scrivi is a music notation app for musicians, made for the **Surface with pen** 
 
 Scrivi is available in **German and English**. It needs **no account**, collects **no data** and works **offline**.
 
-> **Scrivi is still at the beginning.** Today it opens Guitar Pro files of all versions, MusicXML and MIDI, shows them neatly as notation with tablature, plays them back, and you can write in them. Next: pen gestures and a full-score view with all tracks. The whole plan is in the [plan](BAUPLAN.md) (German).
+> **Scrivi is still at the beginning.** Today it opens Guitar Pro files of all versions, MusicXML and MIDI, shows them neatly as notation with tablature, plays them back, and you can write in them. Next: a full-score view with all tracks. The whole plan is in the [plan](BAUPLAN.md) (German).
 
 ## What Scrivi can do today
 
@@ -37,6 +37,7 @@ Scrivi is available in **German and English**. It needs **no account**, collects
 - **Keyboard while writing:** type a fret number (two digits quickly for 10–24), ↑/↓ changes the string, ←/→ moves from note to note (a new bar is added at the end), A–G or H places a note (with Shift added to the chord), + / − shorter/longer, full stop for a dot, T triplet, L tie, K chord, Y lyrics, Del rest, Shift + ↑/↓ semitone, Ctrl + Z/Y, Ctrl + C/X/V.
 - **Saving:** pieces are `.scrivi` files that you save wherever you like (*Save* or Ctrl+S). After that Scrivi keeps every change in that file by itself. A new piece is a draft until its first save; the draft is saved continuously too and stays under *Recently opened*, so nothing is lost. Scrivi never overwrites other formats (Guitar Pro, MusicXML, MIDI): changes to them are saved as a new `.scrivi` file.
 
+- **Writing with the pen:** the pen writes, the finger scrolls. *Tap* on the staff to place a note (on an existing note it adds a chord tone), a *horizontal stroke* selects notes and bars, *scribbling* deletes whatever is underneath, a short *stroke up or down* on a note moves it a semitone higher or lower. The pen's *eraser end* or its *barrel button* deletes. With the tool *Mouse and finger write like the pen* (pencil in the tool column) the gestures work with the mouse too.
 - **Export and print:** *Export …* (Ctrl+E) saves the piece as a **PDF** (this track or all tracks, as you see them, razor-sharp), as **MusicXML** for other notation programs (with string and fret, chords, lyrics, repeats) or as **MIDI** (the way it sounds). *Print …* (Ctrl+P) opens the PDF in your computer's PDF viewer, where you print it; on Android the PDF ends up in the folder *Documents/Scrivi*.
 
 Not yet: several instruments at once in a full-score view. These come in the next stages.

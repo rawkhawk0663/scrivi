@@ -520,6 +520,18 @@ void main() {
       expect(back.tracks.single.instrumentKey, 2);
     });
 
+    test('Stift: Note setzen, Akkordton dazu, gleiche Stelle ändert nichts', () {
+      final e = ScoreEditor(ScoreEditor.newScore(kind: NewPieceKind.guitarNotation, bars: 1));
+      const g4 = 4 * 7 + 4, h4 = 4 * 7 + 6;
+      expect(e.penNote(g4), isTrue);
+      expect(e.currentBeat!.notes.single.pitch.toString(), 'G3'); // Gitarre klingt eine Oktave tiefer
+      final rev = e.revision;
+      expect(e.penNote(g4), isFalse);
+      expect(e.revision, rev);
+      expect(e.penNote(h4), isTrue);
+      expect(e.currentBeat!.notes.map((n) => n.pitch.midi).toList()..sort(), [55, 59]);
+    });
+
     test('Swing: Achtel lang–kurz, ab dem Cursor, gespeichert', () {
       final e = ScoreEditor(ScoreEditor.newScore(bars: 2));
       e.cursor = const EditCursor(bar: 1);

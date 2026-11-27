@@ -48,7 +48,8 @@ lib/
               track_lanes (Spur-Bahnen unten), inspector (Eigenschaften rechts),
               track_dialogs (Klang, Stimmung/Kapo, Namen von Tönen und Tonarten),
               tools (Werkzeugspalte, Suche), fretboard (Griffbrett), note_preview (Ton beim Eingeben),
-              edit_tools (Dialoge zum Schreiben), export_dialog (Exportieren, Drucken)
+              edit_tools (Dialoge zum Schreiben), export_dialog (Exportieren, Drucken),
+              pen_gestures (Striche des Stifts erkennen)
     settings/ Einstellungen, Über Scrivi, Updates
   widgets/    gemeinsame Bausteine (ScriviMark, SectionCard, EmptyState …)
 tool/         make_icon.py (Symbol), make_glyphs.py (Notenzeichen aus Bravura),
@@ -81,6 +82,7 @@ tool/         make_icon.py (Symbol), make_glyphs.py (Notenzeichen aus Bravura),
 - **Aussehen wie ein Tonstudio-Programm** (Wunsch des Besitzers): unten `TrackLanes` über die ganze Breite (Lineal mit Taktnummern, Formteilen und Schleife; pro Spur Kopf mit Stumm/Solo/Lautstärke und Takte als Kästchen mit Notenstrichen aus `_Summary`, neu gerechnet pro `editor.revision`; Abspiel-Linie als eigener Maler), rechts `Inspector`. Beide ein/aus in der oberen Leiste (`spuren`, `eigenschaften`). Spurfarben: `trackColor`.
 - **Spuren im Kern:** `setTrackInfo` (Name, Klang), `setTuning` (Töne bleiben und Bünde wandern, oder mit `keepFrets` bleiben die Griffe), `addTrack`, `removeTrack` (die letzte bleibt). Beim Löschen behält `ScorePlayer.trackRemoved` die Mischpult-Werte der übrigen Spuren.
 - **Schnell-Eingaben** (Werkzeuggruppe „Schnell“, Dialoge in `quick_input.dart`): `setChordLine` (Text aus `parseChordLine`; Akkorde gleichmässig auf die Schläge, Pausen werden dafür geteilt: `_beatStartingAt`), `applyPattern` (`StrumPattern` in `edit/patterns.dart`: D/U Anschlag, B/A Bass/Wechselbass, 1–4 Saiten von oben, - halten, . Pause; Griffe aus `ChordLibrary.voicing`, das bei anderer Stimmung oder Kapo selbst sucht; bei Akkordwechsel mitten im Schritt wird geteilt), `setLyricsText` (`parseLyrics`: Silben mit -, `_` lässt eine Note aus), `copyBars` (tiefe Kopie über das Dateiformat, Tempi mit). Die Gruppe „Schnell“ wird einmal aufgeklappt (`schnell_gezeigt` in `einstellungen.json`).
+- **Stift-Gesten:** `_PagesViewer` nimmt Stift (`stylus`, `invertedStylus`) und – mit dem Werkzeug „Maus und Finger schreiben wie der Stift“ (`penNotes`) – die Maus selbst entgegen (`Listener`; der `GestureDetector` hört über `supportedDevices` nur noch Finger und Touchpad), zeichnet die Spur (`_InkPainter`) und erkennt den Strich mit `classifyStroke` (`pen_gestures.dart`, getestet in `test/pen_test.dart`): Tippen → `ScoreEditor.penNote` (Pause: Note; Note: Akkordton; gleiche Stelle: nichts), waagrecht → Auswahl, Kritzeln/Radierer/Stift-Taste → `toRest` über den Bereich, Strich hoch/runter → `transposeSelection(±1)`. Bereiche nehmen nur Schläge innerhalb des Strichs (`_hitAt(snap:)`).
 - **Ton beim Eingeben:** `NotePreview` rechnet den Ton mit `Synth` (gemerkt pro Tonhöhe und Klangfarbe) und spielt ihn über die gemeinsame Audio-Technik.
 - Neue Icons: Der lokale Linux-Bau kann ein altes, gekürztes Icon-Schriftbild behalten (`build/flutter_assets`); bei fehlenden Icons `build/` löschen. Auf GitHub wird immer frisch gebaut.
 
