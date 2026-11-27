@@ -42,16 +42,46 @@ import 'transport_bar.dart';
 /// Griffbrett unten, oben Anzeige und Abspielen. Es gibt keinen eigenen
 /// Bearbeiten-Modus: Der Cursor ist immer da.
 class ScoreScreen extends StatefulWidget {
-  const ScoreScreen({super.key, required this.path});
+  const ScoreScreen({
+    super.key,
+    required this.path,
+    this.active = true,
+    this.onClose,
+    this.onTitle,
+    this.tabBar,
+    this.onOpenPiece,
+    this.onNextTab,
+  });
 
   /// Die Datei (auch ein Entwurf im Ordner „Entwürfe“ von Scrivi).
   final String path;
+
+  /// Reiter: Dieses Stück ist gerade zu sehen (sonst angehalten, Mikrofon aus).
+  final bool active;
+
+  /// Reiter: Stück geschlossen (sonst geht es zurück zur Startseite).
+  final VoidCallback? onClose;
+
+  /// Reiter: Titel für die Reiterleiste.
+  final ValueChanged<String>? onTitle;
+
+  /// Reiterleiste unter der oberen Leiste (nur bei mehreren offenen Stücken).
+  final Widget? tabBar;
+
+  /// Weiteres Stück in einem neuen Reiter öffnen; nächster Reiter (+1/−1).
+  final VoidCallback? onOpenPiece;
+  final ValueChanged<int>? onNextTab;
 
   @override
   State<ScoreScreen> createState() => _ScoreScreenState();
 }
 
-class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
+/// Ein offenes Stück in einem Reiter: lässt sich von aussen schliessen.
+abstract interface class ScoreTab {
+  Future<void> leave();
+}
+
+class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab {
   core.Score? _score;
 
   /// Datei, in die gespeichert wird. Bei Entwürfen und bei Dateien anderer
@@ -156,6 +186,7 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
         _pages = layout.pages;
         _pictures = pictures;
       });
+      _reportTitle();
       // Alte Bilder erst nach dem nächsten Bild freigeben.
       WidgetsBinding.instance.addPostFrameCallback((_) {
         for (final p in old ?? const <ui.Picture>[]) {
@@ -181,6 +212,9 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
     if (score == null) return null;
     return ScoreExport(score: score, track: _track, options: _layoutOptions, sourcePath: _path, fullScore: _fullScore);
   }
+
+  @override
+  Future<void> openPiece() async => widget.onOpenPiece?.call();
 
   /// Exportieren als PDF, MusicXML oder MIDI.
   @override
@@ -428,6 +462,7 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
       await ScoreFiles.writeScrivi(target, score);
       final old = _path;
       _path = target;
+      _reportTitle();
       _savedRevision = _editor?.revision ?? _savedRevision;
       await recent?.touch(target, score);
       if (wasDraft) await recent?.remove(old);
@@ -486,7 +521,46 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
       if (choice == null) return;
       if (choice == 'save') await saveAs();
     }
-    if (mounted) Navigator.of(context).pop();
+    if (!mounted) return;
+    final close = widget.onClose;
+    if (close != null) {
+      await _player?.pause();
+      close();
+    } else {
+      Navigator.of(context).pop();
+    }
+  }
+
+  /// Reiter wird geschlossen (Kreuz oder Strg+W): wie Zurück.
+  @override
+  Future<void> leave() => _leave();
+
+  String? _reportedTitle;
+
+  /// Titel für den Reiter melden, wenn er sich geändert hat.
+  void _reportTitle() {
+    final cb = widget.onTitle;
+    if (cb == null) return;
+    final score = _editor?.score ?? _score;
+    final title = score != null && score.info.title.trim().isNotEmpty
+        ? score.info.title.trim()
+        : p.basenameWithoutExtension(_path);
+    if (title == _reportedTitle) return;
+    _reportedTitle = title;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) cb(title);
+    });
+  }
+
+  @override
+  void didUpdateWidget(ScoreScreen old) {
+    super.didUpdateWidget(old);
+    if (old.active && !widget.active) {
+      // In einen anderen Reiter gewechselt: nichts spielt oder hört im Verborgenen weiter
+      unawaited(_player?.pause());
+      if (_mic != null) unawaited(_stopMic());
+      _flushSave();
+    }
   }
 
   /// Titel und Speicherstand oben links.
@@ -912,6 +986,12 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
         apply((e) => e.selectAll());
       } else if (k == LogicalKeyboardKey.keyS) {
         shift ? saveAs() : save();
+      } else if (k == LogicalKeyboardKey.keyO && widget.onOpenPiece != null) {
+        widget.onOpenPiece!();
+      } else if (k == LogicalKeyboardKey.keyW && widget.onClose != null) {
+        _leave();
+      } else if (k == LogicalKeyboardKey.tab && widget.onNextTab != null) {
+        widget.onNextTab!(shift ? -1 : 1);
       } else if (k == LogicalKeyboardKey.keyE) {
         exportPiece();
       } else if (k == LogicalKeyboardKey.keyP) {
@@ -1080,7 +1160,7 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) _leave();
+        if (!didPop && widget.active) _leave();
       },
       child: Scaffold(
         backgroundColor: ScriviColors.pageSurround,
@@ -1088,6 +1168,7 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
           child: Column(
             children: [
               _topBar(context),
+              ?widget.tabBar,
               Expanded(child: _body()),
             ],
           ),

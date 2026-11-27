@@ -358,7 +358,7 @@ Plan in fünf Schritten:
 Weitere Reihenfolge (vom Besitzer am 27. November 2026 bestätigt): 1. Drucken, PDF, MusicXML und
 MIDI ausgeben ✅; 2. Stift-Gesten ✅; 3. Band-Ansicht (alle Spuren als Partitur) ✅; 4. Klang verfeinern ✅
 (Mischpult in der Datei, Hall, Stereo, gedämpfte Noten und Flageoletts als Aufnahmen);
-5. Mikrofon-Eingabe ✅; 6. Reiter für mehrere Stücke, schnellere Vorbereitung beim Abspielen.
+5. Mikrofon-Eingabe ✅; 6. Reiter für mehrere Stücke, schnellere Vorbereitung beim Abspielen ✅.
 
 ### Ausgeben (27. November 2026)
 
@@ -404,6 +404,15 @@ nochmals nach einer Pause oder einem neuen Anschlag. Beim Abspielen schreibt das
 mit. Bass bis E1. Getestet mit den aufgenommenen Gitarren und Bässen der Klangsammlung.
 Offen: Rhythmus aus dem Spiel ableiten (heute bestimmt der gewählte Notenwert die Länge),
 Akkorde.
+
+### Reiter und schneller Start (27. November 2026)
+
+Mehrere Stücke gleichzeitig offen: Reiterleiste unter der oberen Leiste (ab zwei Stücken),
+„Weiteres Stück öffnen“ (Strg+O) zeigt die Startseite zur Auswahl, Strg+Tab wechselt, Strg+W bzw.
+das Kreuz schliesst (bei Entwürfen mit Rückfrage). Ein verborgenes Stück spielt nicht und hört
+nicht zu. Abspielen: Der Klang wird nach dem Öffnen und nach Änderungen still im Hintergrund
+gerechnet, und nur geänderte Spuren werden neu gerechnet (gemessen bei elf Spuren: nach einer
+Änderung 1 von 11, Start in 3 ms statt mehrerer Sekunden).
 
 ### Dateien statt Bibliothek (27. November 2026)
 

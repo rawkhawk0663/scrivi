@@ -45,6 +45,9 @@ abstract class ToolHost {
   Future<void> save();
   Future<void> saveAs();
 
+  /// Weiteres Stück in einem neuen Reiter öffnen.
+  Future<void> openPiece();
+
   /// Ausgeben als PDF, MusicXML oder MIDI; Drucken.
   Future<void> exportPiece();
   Future<void> printPiece();
@@ -613,6 +616,16 @@ final List<ToolDef> allTools = [
     shortcut: 'Strg+Umschalt+S',
     keywords: const ['sichern', 'datei', 'file', 'kopie'],
     run: (h) => h.saveAs(),
+  ),
+  ToolDef(
+    id: 'open-another',
+    group: ToolGroup.piece,
+    look: const IconLook(Icons.tab_outlined),
+    de: 'Weiteres Stück öffnen (neuer Reiter) …',
+    en: 'Open another piece (new tab) …',
+    shortcut: 'Strg+O',
+    keywords: const ['reiter', 'tab', 'öffnen', 'open', 'stück', 'datei', 'mehrere'],
+    run: (h) => h.openPiece(),
   ),
   ToolDef(
     id: 'export',

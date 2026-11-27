@@ -16,15 +16,18 @@ import '../../core/files/score_files.dart';
 import '../../widgets/glyph_tile.dart';
 import '../../widgets/visuals.dart';
 import '../score/edit_tools.dart';
-import '../score/score_screen.dart';
+import '../score/score_tabs.dart';
 import '../settings/settings_screen.dart';
 
 /// Startseite: neues Stück (Vorlagen), Datei öffnen, zuletzt geöffnete Stücke.
 class StartScreen extends StatefulWidget {
-  const StartScreen({super.key, this.initialFile});
+  const StartScreen({super.key, this.initialFile, this.pick = false});
 
   /// Beim Start mitgegebene Datei (Doppelklick auf eine .scrivi-Datei).
   final String? initialFile;
+
+  /// Nur auswählen (für einen neuen Reiter): gibt den Pfad zurück, statt das Stück zu öffnen.
+  final bool pick;
 
   @override
   State<StartScreen> createState() => _StartScreenState();
@@ -54,7 +57,11 @@ class _StartScreenState extends State<StartScreen> {
       );
       return;
     }
-    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => ScoreScreen(path: path)));
+    if (widget.pick) {
+      Navigator.of(context).pop(path);
+      return;
+    }
+    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => ScoreTabs(path: path)));
   }
 
   Future<void> _openDialog() async {
@@ -170,6 +177,14 @@ class _StartScreenState extends State<StartScreen> {
         padding: EdgeInsets.only(left: 20, right: hasWindowButtons ? windowButtonsWidth : 12),
         child: Row(
           children: [
+            if (widget.pick) ...[
+              IconButton(
+                tooltip: tr('Zurück zum Stück', 'Back to the piece'),
+                icon: const Icon(Icons.arrow_back_rounded),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+              const SizedBox(width: 4),
+            ],
             const ScriviMark(size: 34),
             const SizedBox(width: 12),
             Text('Scrivi', style: theme.textTheme.titleLarge),
