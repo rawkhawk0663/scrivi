@@ -13,6 +13,7 @@ import '../../app/theme.dart';
 import '../../app/window_buttons.dart';
 import '../../core/files/recent_files.dart';
 import '../../core/files/score_files.dart';
+import '../../widgets/glyph_tile.dart';
 import '../../widgets/visuals.dart';
 import '../score/edit_tools.dart';
 import '../score/score_screen.dart';
@@ -190,17 +191,27 @@ class _StartScreenState extends State<StartScreen> {
       ),
     );
 
-    final presets = <(String, String, String, VoidCallback)>[
+    final presets = <(GlyphTile, String, String, VoidCallback)>[
       (
-        '',
+        const GlyphTile(glyphs: ['gClef8vb', '6stringTabClef']),
         tr('Gitarre', 'Guitar'),
         tr('Noten und Tabulatur', 'Notation and tab'),
         () => _preset(core.NewPieceKind.guitarTab),
       ),
-      ('', tr('Gitarre', 'Guitar'), tr('nur Noten', 'notation only'), () => _preset(core.NewPieceKind.guitarNotation)),
-      ('', tr('Bass', 'Bass'), tr('Noten und Tabulatur', 'Notation and tab'), () => _preset(core.NewPieceKind.bass)),
       (
-        '',
+        const GlyphTile(glyphs: ['gClef8vb']),
+        tr('Gitarre', 'Guitar'),
+        tr('nur Noten', 'notation only'),
+        () => _preset(core.NewPieceKind.guitarNotation),
+      ),
+      (
+        const GlyphTile(glyphs: ['fClef', '4stringTabClef']),
+        tr('Bass', 'Bass'),
+        tr('Noten und Tabulatur', 'Notation and tab'),
+        () => _preset(core.NewPieceKind.bass),
+      ),
+      (
+        const GlyphTile(eighthNote: true, label: 'Am'),
         tr('Leadsheet', 'Lead sheet'),
         tr('Melodie mit Akkorden', 'Melody with chords'),
         () => _preset(core.NewPieceKind.leadSheet),
@@ -221,10 +232,10 @@ class _StartScreenState extends State<StartScreen> {
           spacing: 12,
           runSpacing: 12,
           children: [
-            for (final (glyph, title, sub, onTap) in presets)
-              _PresetCard(glyph: glyph, title: title, subtitle: sub, onTap: onTap),
+            for (final (tile, title, sub, onTap) in presets)
+              _PresetCard(tile: tile, title: title, subtitle: sub, onTap: onTap),
             _PresetCard(
-              icon: Icons.tune_rounded,
+              tile: const GlyphTile(icon: Icons.tune_rounded),
               title: tr('Eigene', 'Custom'),
               subtitle: tr('Taktart, Tonart, Tempo …', 'Time, key, tempo …'),
               onTap: _custom,
@@ -247,19 +258,19 @@ class _StartScreenState extends State<StartScreen> {
           runSpacing: 12,
           children: [
             _PresetCard(
-              icon: Icons.wb_sunny_outlined,
+              tile: const GlyphTile(icon: Icons.wb_sunny_outlined),
               title: 'Sonntagmorgen',
               subtitle: tr('Gitarren-Band · 5 Spuren', 'Guitar band · 5 tracks'),
               onTap: () => _example('sonntagmorgen.scrivi'),
             ),
             _PresetCard(
-              icon: Icons.celebration_outlined,
+              tile: const GlyphTile(icon: Icons.celebration_outlined),
               title: tr('Ode an die Freude', 'Ode to Joy'),
               subtitle: tr('Orchester · Beethoven', 'Orchestra · Beethoven'),
               onTap: () => _example('ode_an_die_freude.scrivi'),
             ),
             _PresetCard(
-              icon: Icons.air_rounded,
+              tile: const GlyphTile(icon: Icons.air_rounded),
               title: 'Wüstenwind',
               subtitle: tr('Latin-Jazz mit Swing', 'Latin jazz with swing'),
               onTap: () => _example('wuestenwind.scrivi'),
@@ -370,9 +381,8 @@ class _StartScreenState extends State<StartScreen> {
 }
 
 class _PresetCard extends StatelessWidget {
-  const _PresetCard({this.glyph, this.icon, required this.title, required this.subtitle, required this.onTap});
-  final String? glyph;
-  final IconData? icon;
+  const _PresetCard({required this.tile, required this.title, required this.subtitle, required this.onTap});
+  final GlyphTile tile;
   final String title;
   final String subtitle;
   final VoidCallback onTap;
@@ -380,7 +390,6 @@ class _PresetCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.scrivi;
-    final scheme = Theme.of(context).colorScheme;
     return SizedBox(
       width: 190,
       height: 132,
@@ -395,15 +404,7 @@ class _PresetCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SizedBox(
-                  height: 52,
-                  child: glyph != null
-                      ? Text(
-                          glyph!,
-                          style: TextStyle(fontFamily: 'Bravura', fontSize: 40, height: 1.1, color: scheme.primary),
-                        )
-                      : Icon(icon, size: 32, color: scheme.primary),
-                ),
+                tile,
                 const Spacer(),
                 Text(
                   title,
