@@ -223,7 +223,16 @@ class TransportBar extends StatelessWidget {
             shrinkWrap: true,
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
             children: [
-              Text(tr('Mischpult', 'Mixer'), style: Theme.of(context).textTheme.titleMedium),
+              Row(
+                children: [
+                  Expanded(child: Text(tr('Mischpult', 'Mixer'), style: Theme.of(context).textTheme.titleMedium)),
+                  TextButton.icon(
+                    icon: const Icon(Icons.surround_sound_outlined, size: 18),
+                    label: Text(tr('Im Raum verteilen', 'Spread in stereo')),
+                    onPressed: () => spreadStereo(player),
+                  ),
+                ],
+              ),
               const SizedBox(height: 8),
               for (var i = 0; i < player.score.tracks.length; i++)
                 Row(
@@ -245,6 +254,16 @@ class TransportBar extends StatelessWidget {
                     _toggle(context, 'S', tr('Solo', 'Solo'), player.solo[i], () => player.toggleSolo(i)),
                   ],
                 ),
+              const Divider(height: 24),
+              Row(
+                children: [
+                  SizedBox(width: 160, child: Text(tr('Hall', 'Reverb'))),
+                  Expanded(
+                    child: Slider(value: player.reverb, onChanged: player.setReverb),
+                  ),
+                  SizedBox(width: 78, child: Text(reverbText(player.reverb), textAlign: TextAlign.right)),
+                ],
+              ),
             ],
           ),
         ),
@@ -275,5 +294,31 @@ class TransportBar extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// Hall in Worten: aus, wenig, mittel, viel.
+String reverbText(double v) {
+  if (v < 0.01) return tr('aus', 'off');
+  if (v < 0.3) return tr('wenig', 'a little');
+  if (v < 0.65) return tr('mittel', 'medium');
+  return tr('viel', 'a lot');
+}
+
+/// Stereo wie eine Band auf der Bühne: Bass, Schlagzeug und die erste Melodie
+/// in der Mitte, die übrigen Spuren abwechselnd links und rechts.
+void spreadStereo(ScorePlayer player) {
+  const places = [-0.45, 0.45, -0.75, 0.75, -0.25, 0.25, -0.6, 0.6];
+  var k = 0;
+  final tracks = player.score.tracks;
+  for (var i = 0; i < tracks.length; i++) {
+    final t = tracks[i];
+    final low = t.percussion || (t.program >= 32 && t.program <= 39) || t.name.toLowerCase().contains('bass');
+    if (low || tracks.length == 1) {
+      player.setPan(i, 0);
+    } else {
+      player.setPan(i, places[k % places.length]);
+      k++;
+    }
   }
 }

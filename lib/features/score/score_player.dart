@@ -21,10 +21,11 @@ import '../../app/screen_awake.dart';
 /// Ein anderes Tempo rechnet die Tonspuren neu (die Tonhöhe bleibt).
 class ScorePlayer extends ChangeNotifier {
   ScorePlayer(this._score)
-    : volume = List.filled(_score.tracks.length, 1.0, growable: true),
-      muted = List.filled(_score.tracks.length, false, growable: true),
-      solo = List.filled(_score.tracks.length, false, growable: true),
-      pan = List.filled(_score.tracks.length, 0.0, growable: true) {
+    : volume = [for (final t in _score.tracks) t.mix.volume],
+      muted = [for (final t in _score.tracks) t.mix.muted],
+      solo = [for (final t in _score.tracks) t.mix.solo],
+      pan = [for (final t in _score.tracks) t.mix.pan],
+      _reverb = _score.reverb {
     _plan = core.PlaybackPlan.build(_score);
   }
 
@@ -36,10 +37,11 @@ class ScorePlayer extends ChangeNotifier {
     if (_playing) await pause();
     _score = s;
     while (volume.length < s.tracks.length) {
-      volume.add(1);
-      muted.add(false);
-      solo.add(false);
-      pan.add(0);
+      final mix = s.tracks[volume.length].mix;
+      volume.add(mix.volume);
+      muted.add(mix.muted);
+      solo.add(mix.solo);
+      pan.add(mix.pan);
     }
     for (final l in <List>[volume, muted, solo, pan]) {
       if (l.length > s.tracks.length) l.length = s.tracks.length;
@@ -251,23 +253,62 @@ class ScorePlayer extends ChangeNotifier {
     _notify();
   }
 
+  /// Wird nach jeder Änderung am Mischpult gerufen (Spur), damit das Stück sie speichert.
+  void Function(int track)? onMixChanged;
+
+  double _reverb;
+
+  /// Hall 0..1 (über alles, auch beim Ton beim Eingeben).
+  double get reverb => _reverb;
+
+  void setReverb(double v) {
+    _reverb = v.clamp(0.0, 1.0);
+    _applyReverb();
+    _notify();
+    onMixChanged?.call(-1);
+  }
+
+  /// Hall der Audio-Technik einstellen (aus bei 0).
+  void _applyReverb() {
+    if (!_soloud.isInitialized) return;
+    try {
+      final f = _soloud.filters.freeverbFilter;
+      if (_reverb < 0.01) {
+        if (f.isActive) f.deactivate();
+        return;
+      }
+      if (!f.isActive) f.activate();
+      f.wet.value = _reverb * 0.45;
+      f.roomSize.value = 0.5 + _reverb * 0.4;
+      f.damp.value = 0.55;
+      f.width.value = 1;
+    } catch (_) {}
+  }
+
+  /// Mischpult der Spur [i], wie es im Stück gespeichert wird.
+  core.TrackMix mixOf(int i) => core.TrackMix(volume: volume[i], pan: pan[i], muted: muted[i], solo: solo[i]);
+
   void setVolume(int i, double v) {
     volume[i] = v.clamp(0.0, 1.0);
     _applyMix();
+    onMixChanged?.call(i);
   }
 
   void toggleMute(int i) {
     muted[i] = !muted[i];
     _applyMix();
+    onMixChanged?.call(i);
   }
 
   void toggleSolo(int i) {
     solo[i] = !solo[i];
     _applyMix();
+    onMixChanged?.call(i);
   }
 
   void setPan(int i, double v) {
     pan[i] = v.clamp(-1.0, 1.0);
+    onMixChanged?.call(i);
     if (i < _handles.length && _soloud.isInitialized) {
       try {
         _soloud.setPan(_handles[i], pan[i]);
@@ -405,6 +446,7 @@ class ScorePlayer extends ChangeNotifier {
 
   Future<void> _start(double from, {required bool withCountIn}) async {
     _stopVoices();
+    _applyReverb();
     final tracks = _tracks!;
     final handles = <SoundHandle>[];
     for (var i = 0; i < tracks.length; i++) {
@@ -525,6 +567,11 @@ class ScorePlayer extends ChangeNotifier {
     _ticker?.cancel();
     if (_playing) unawaited(ScreenAwake.set(false));
     _playing = false;
+    try {
+      if (_soloud.isInitialized && _soloud.filters.freeverbFilter.isActive) {
+        _soloud.filters.freeverbFilter.deactivate();
+      }
+    } catch (_) {}
     unawaited(_unload().whenComplete(() => AudioEngine.done(this)));
     position.dispose();
     super.dispose();

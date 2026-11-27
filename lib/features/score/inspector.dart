@@ -7,6 +7,7 @@ import 'score_player.dart';
 import 'tools.dart';
 import 'track_dialogs.dart';
 import 'track_lanes.dart';
+import 'transport_bar.dart';
 
 /// Eigenschaften rechts: was am Cursor steht (Ton, Takt), die Spur und das
 /// Stück. Antippen einer Zeile öffnet das passende Fenster zum Ändern.
@@ -130,6 +131,7 @@ class Inspector extends StatelessWidget {
       _row(context, tr('Interpret', 'Artist'), info.artist.isEmpty ? '–' : info.artist, onTap: host.editTitle),
       _row(context, tr('Takte', 'Bars'), '${e.score.masterBars.length}'),
       if (p != null) _row(context, tr('Dauer', 'Length'), formatTime(p.plan.duration)),
+      if (p != null) _slider(context, tr('Hall', 'Reverb'), p.reverb, 0, 1, p.setReverb, reverbText(p.reverb)),
       _row(
         context,
         tr('Spuren', 'Tracks'),

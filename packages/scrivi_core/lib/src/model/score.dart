@@ -3,8 +3,17 @@ import 'pitch.dart';
 
 /// Ein ganzes Stück: Angaben, Taktfolge (für alle Instrumente gleich) und Spuren.
 class Score {
-  Score({required this.info, required this.masterBars, required this.tracks, List<TempoMark>? tempos})
-    : tempos = tempos ?? [];
+  Score({
+    required this.info,
+    required this.masterBars,
+    required this.tracks,
+    List<TempoMark>? tempos,
+    this.reverb = defaultReverb,
+  }) : tempos = tempos ?? [];
+
+  /// Hall beim Abspielen, 0 (trocken) bis 1 (grosser Raum).
+  double reverb;
+  static const defaultReverb = 0.2;
 
   final ScoreInfo info;
 
@@ -20,7 +29,7 @@ class Score {
   TempoMark? get initialTempo => tempos.isEmpty ? null : tempos.first;
 
   Score copyWith({ScoreInfo? info}) =>
-      Score(info: info ?? this.info, masterBars: masterBars, tracks: tracks, tempos: tempos);
+      Score(info: info ?? this.info, masterBars: masterBars, tracks: tracks, tempos: tempos, reverb: reverb);
 }
 
 class ScoreInfo {
@@ -231,7 +240,11 @@ class Track {
     this.transposeSemitones = 0,
     this.program = -1,
     this.instrumentKey = 0,
+    this.mix = const TrackMix(),
   }) : chords = chords ?? {};
+
+  /// Mischpult: Lautstärke, links/rechts, stumm, solo (mit dem Stück gespeichert).
+  final TrackMix mix;
 
   final String name;
   final String shortName;
@@ -258,6 +271,35 @@ class Track {
 
   /// Schlagzeug (neutraler Schlüssel).
   bool get percussion => bars.isNotEmpty && bars.first.clef == Clef.neutral;
+}
+
+/// Einstellungen einer Spur im Mischpult.
+class TrackMix {
+  const TrackMix({this.volume = 1, this.pan = 0, this.muted = false, this.solo = false});
+
+  /// Lautstärke 0..1.
+  final double volume;
+
+  /// Links (−1) bis rechts (1).
+  final double pan;
+  final bool muted;
+  final bool solo;
+
+  bool get isDefault => volume == 1 && pan == 0 && !muted && !solo;
+
+  TrackMix copyWith({double? volume, double? pan, bool? muted, bool? solo}) => TrackMix(
+    volume: volume ?? this.volume,
+    pan: pan ?? this.pan,
+    muted: muted ?? this.muted,
+    solo: solo ?? this.solo,
+  );
+
+  @override
+  bool operator ==(Object other) =>
+      other is TrackMix && other.volume == volume && other.pan == pan && other.muted == muted && other.solo == solo;
+
+  @override
+  int get hashCode => Object.hash(volume, pan, muted, solo);
 }
 
 /// Angaben zum Notensystem eines Instruments.

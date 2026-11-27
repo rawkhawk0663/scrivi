@@ -128,7 +128,7 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
       if (!mounted) return;
       unawaited(_recent?.touch(widget.path, score));
       _score = score;
-      _player = ScorePlayer(score);
+      _player = ScorePlayer(score)..onMixChanged = _onMix;
       _editor = core.ScoreEditor(score, track: _track);
       _engrave();
     } catch (e, st) {
@@ -241,9 +241,31 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
 
   void _afterEdit() {
     final e = _editor!;
+    // Das Mischpult gehört nicht zum Rückgängigmachen: die aktuellen Werte bleiben im Stück
+    final p = _player;
+    if (p != null && p.volume.length == e.score.tracks.length) {
+      for (var i = 0; i < p.volume.length; i++) {
+        e.setMix(i, p.mixOf(i));
+      }
+      e.setReverb(p.reverb);
+    }
     _score = e.score;
     _engrave();
     unawaited(_player?.updateScore(e.score));
+    _saveTimer?.cancel();
+    _saveTimer = Timer(const Duration(milliseconds: 800), _flushSave);
+  }
+
+  /// Mischpult geändert: ins Stück übernehmen und sichern (ohne neu zu setzen).
+  void _onMix(int track) {
+    final e = _editor, p = _player;
+    if (e == null || p == null) return;
+    if (track < 0) {
+      e.setReverb(p.reverb);
+    } else {
+      e.setMix(track, p.mixOf(track));
+    }
+    _score = e.score;
     _saveTimer?.cancel();
     _saveTimer = Timer(const Duration(milliseconds: 800), _flushSave);
   }

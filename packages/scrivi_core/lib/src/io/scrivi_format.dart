@@ -51,6 +51,7 @@ class ScriviFormat {
     'version': version,
     'info': _info(s.info),
     'tempos': [for (final t in s.tempos) _tempo(t)],
+    'reverb': s.reverb == Score.defaultReverb ? null : s.reverb,
     'masterBars': [for (final m in s.masterBars) _masterBar(m)],
     'tracks': [for (final t in s.tracks) _track(t)],
   };
@@ -103,6 +104,14 @@ class ScriviFormat {
     'program': t.program < 0 ? null : t.program,
     'transpose': t.transposeSemitones == 0 ? null : t.transposeSemitones,
     'instrumentKey': t.instrumentKey == 0 ? null : t.instrumentKey,
+    'mix': t.mix.isDefault
+        ? null
+        : _compact({
+            'volume': t.mix.volume == 1 ? null : t.mix.volume,
+            'pan': t.mix.pan == 0 ? null : t.mix.pan,
+            'muted': t.mix.muted ? true : null,
+            'solo': t.mix.solo ? true : null,
+          }),
     'layout': t.layoutHint,
     'staff': _compact({
       'tuning': t.staff.tuning,
@@ -220,6 +229,7 @@ class ScriviFormat {
         tabber: _str(info['tabber']),
         instructions: _str(info['instructions']),
       ),
+      reverb: j['reverb'] is num ? (j['reverb'] as num).toDouble().clamp(0.0, 1.0) : Score.defaultReverb,
       tempos: [
         for (final t in _list(j['tempos']).map(_map))
           TempoMark(
@@ -259,6 +269,13 @@ class ScriviFormat {
     );
   }
 
+  static TrackMix _readMix(Map<String, dynamic> m) => TrackMix(
+    volume: (m['volume'] is num ? (m['volume'] as num).toDouble() : 1.0).clamp(0.0, 1.0),
+    pan: (m['pan'] is num ? (m['pan'] as num).toDouble() : 0.0).clamp(-1.0, 1.0),
+    muted: m['muted'] == true,
+    solo: m['solo'] == true,
+  );
+
   static Track _readTrack(Map<String, dynamic> t) {
     final st = _map(t['staff']);
     final layout = t['layout'];
@@ -268,6 +285,7 @@ class ScriviFormat {
       program: _int(t['program'], -1),
       transposeSemitones: _int(t['transpose']),
       instrumentKey: _int(t['instrumentKey']),
+      mix: _readMix(_map(t['mix'])),
       layoutHint: layout is List ? [for (final x in layout) _int(x)] : null,
       staff: StaffDef(
         tuning: [for (final x in _list(st['tuning'])) _int(x)],

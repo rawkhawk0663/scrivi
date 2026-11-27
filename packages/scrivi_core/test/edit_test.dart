@@ -520,6 +520,17 @@ void main() {
       expect(back.tracks.single.instrumentKey, 2);
     });
 
+    test('Mischpult wird mit dem Stück gespeichert, ohne Rückgängig-Schritt', () {
+      final e = ScoreEditor(ScoreEditor.newScore(bars: 1));
+      final rev = e.revision;
+      e.setMix(0, const TrackMix(volume: 0.5, pan: -0.25, solo: true));
+      expect(e.revision, greaterThan(rev));
+      expect(e.canUndo, isFalse);
+      final back = ScriviFormat.decode(ScriviFormat.encode(e.score)).tracks.single.mix;
+      expect(back, const TrackMix(volume: 0.5, pan: -0.25, solo: true));
+      expect(ScriviFormat.encode(ScoreEditor.newScore(bars: 1)), isNot(contains('"mix"')));
+    });
+
     test('Stift: Note setzen, Akkordton dazu, gleiche Stelle ändert nichts', () {
       final e = ScoreEditor(ScoreEditor.newScore(kind: NewPieceKind.guitarNotation, bars: 1));
       const g4 = 4 * 7 + 4, h4 = 4 * 7 + 6;

@@ -83,6 +83,9 @@ class MidiWriter {
       }
       final ev = _Events();
       ev.meta(0, 0x03, utf8.encode(t.name.isEmpty ? 'Spur ${pt.index + 1}' : t.name));
+      // Mischpult: Lautstärke (CC 7) und links/rechts (CC 10)
+      ev.add(0, [0xB0 | ch, 7, (t.mix.volume * 100).round().clamp(0, 127)]);
+      ev.add(0, [0xB0 | ch, 10, (64 + t.mix.pan * 63).round().clamp(0, 127)]);
       if (!t.percussion) {
         ev.add(0, [0xC0 | ch, t.program.clamp(0, 127)]);
         // Pitch-Bend-Bereich ±12 Halbtöne (für weites Saitenziehen)

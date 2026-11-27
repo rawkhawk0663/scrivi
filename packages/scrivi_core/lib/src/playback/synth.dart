@@ -155,11 +155,19 @@ class Synth {
     }
     for (final n in notes) {
       if (n.dead && !drums) {
-        _string(out, n, Voicing.guitar, rnd);
+        // Gedämpfte Note: ganz kurz der aufgenommene Ton, dunkel, dazu das Anschlaggeräusch
+        for (final r in preset.regionsFor(n.midi, _vel(n))) {
+          _voice(out, sf, r, n, drums: false, muted: true, dead: true);
+        }
+        _string(out, n, Voicing.guitar, rnd, gain: 0.5);
         continue;
       }
       if (n.harmonic && !drums) {
-        _bell(out, n, math.pow(n.velocity, 1.4).toDouble() * 2.5);
+        // Flageolett: der aufgenommene Ton weich und ausklingend, dazu ein glockiger Anteil
+        for (final r in preset.regionsFor(n.midi, _vel(n))) {
+          _voice(out, sf, r, n, drums: false, muted: false, harmonic: true);
+        }
+        _bell(out, n, math.pow(n.velocity, 1.4).toDouble() * 1.1);
         continue;
       }
       for (final r in preset.regionsFor(n.midi, _vel(n))) {
@@ -182,6 +190,8 @@ class Synth {
     required bool drums,
     required bool muted,
     double? cut,
+    bool dead = false,
+    bool harmonic = false,
   }) {
     final data = sf.samples;
     final s = r.sample;
@@ -194,19 +204,21 @@ class Synth {
     // Anschlag → Lautstärke (wie üblich quadratisch), Abschwächung der Zone
     var amp = math.pow(vel / 127, 2).toDouble() * math.pow(10, -r.attenuation * 0.4 / 20).toDouble();
     if (n.legato) amp *= 0.7;
+    if (dead) amp *= 0.8;
+    if (harmonic) amp *= 0.35;
     final s0 = (n.start * rate).round();
     // Loslassen: Schlagzeug spielt aus, sonst am Ende des Tons
     var offSec = drums ? double.infinity : n.duration;
-    if (muted) offSec = math.min(offSec, 0.09);
+    if (muted) offSec = math.min(offSec, dead ? 0.025 : 0.09);
     var relSec = r.release.clamp(0.006, 3.0);
-    if (muted) relSec = 0.12;
+    if (muted) relSec = dead ? 0.03 : 0.12;
     if (cut != null) {
       offSec = math.min(offSec, cut - n.start);
       relSec = 0.02;
     }
     // Tiefpass: Grenzfrequenz der Zone, leiser angeschlagen etwas dunkler, gedämpft deutlich
     var fcCents = r.filterFc - 2400 * (1 - vel / 127) * 0.5;
-    if (muted) fcCents = math.min(fcCents, 8800); // etwa 1,3 kHz
+    if (muted) fcCents = math.min(fcCents, dead ? 7000 : 8800); // etwa 470 Hz bzw. 1,3 kHz
     final fc = 8.176 * math.pow(2, fcCents / 1200);
     final useFilter = fc < rate * 0.42;
     var b0 = 1.0, b1 = 0.0, b2 = 0.0, a1 = 0.0, a2 = 0.0;
@@ -263,7 +275,8 @@ class Synth {
       } else if (db > 0) {
         env *= math.pow(10, -db / 20);
       }
-      if (muted) env *= math.exp(-sec * 9);
+      if (muted) env *= math.exp(-sec * (dead ? 40 : 9));
+      if (harmonic) env *= math.exp(-sec * 1.8) * math.min(1.0, sec / 0.012);
       // Sample lesen (kubisch zwischen den Werten)
       final ip = pos.floor();
       if (ip >= end - 1) break;
@@ -322,10 +335,10 @@ class Synth {
     return p;
   }
 
-  static void _string(Float32List out, PlayNote n, Voicing v, math.Random rnd) {
+  static void _string(Float32List out, PlayNote n, Voicing v, math.Random rnd, {double gain = 1}) {
     final s0 = (n.start * rate).round();
     // Die Saite klingt leiser als die anderen Klangfarben: angleichen
-    final amp = math.pow(n.velocity, 1.4).toDouble() * (n.legato ? 0.7 : 1.0) * 2.5;
+    final amp = math.pow(n.velocity, 1.4).toDouble() * (n.legato ? 0.7 : 1.0) * 2.5 * gain;
     if (n.dead) {
       // Gedämpfter Anschlag: kurzes, dumpfes Geräusch
       final len = (0.05 * rate).round();

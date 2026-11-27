@@ -356,7 +356,7 @@ Plan in fünf Schritten:
 5. Mikrofon-Eingabe (einstimmig).
 
 Weitere Reihenfolge (vom Besitzer am 27. November 2026 bestätigt): 1. Drucken, PDF, MusicXML und
-MIDI ausgeben ✅; 2. Stift-Gesten ✅; 3. Band-Ansicht (alle Spuren als Partitur) ✅; 4. Klang verfeinern
+MIDI ausgeben ✅; 2. Stift-Gesten ✅; 3. Band-Ansicht (alle Spuren als Partitur) ✅; 4. Klang verfeinern ✅
 (Mischpult in der Datei, Hall, Stereo, gedämpfte Noten und Flageoletts als Aufnahmen);
 5. Mikrofon-Eingabe; 6. Reiter für mehrere Stücke, schnellere Vorbereitung beim Abspielen.
 
@@ -387,6 +387,13 @@ Spuren genau übereinander. Formteile, Tempo, Häuser, Sprünge und Taktnummern 
 Spur; Akkorde, Text und Dynamik bei jeder Spur. Antippen wählt die Spur. Im PDF: diese Spur, alle
 Stimmen einzeln oder die Partitur. Noch offen: leere Spuren ausblenden, Gruppen (Klammern für
 Bläser/Streicher), Takte über mehrere Systeme durchziehen, Endlos-Ansicht als Partitur.
+
+### Klang verfeinert (27. November 2026)
+
+Mischpult (Lautstärke, links/rechts, stumm, solo) wird mit dem Stück gespeichert; Hall für das
+ganze Stück (Mischpult und Eigenschaften, gespeichert); „Im Raum verteilen“ stellt die Spuren wie
+eine Band links und rechts auf. Gedämpfte Noten und Flageoletts klingen aus den aufgenommenen
+Gitarren statt gerechnet. Offen: echte Stereo-Aufnahmen (würden die Klangsammlung verdoppeln).
 
 ### Dateien statt Bibliothek (27. November 2026)
 

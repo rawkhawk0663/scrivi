@@ -927,6 +927,7 @@ class ScoreEditor {
         transposeSemitones: t.transposeSemitones,
         program: t.program,
         instrumentKey: t.instrumentKey,
+        mix: t.mix,
       );
     }
   }
@@ -1627,17 +1628,35 @@ class ScoreEditor {
 
   // ───────────────────────── Spuren ─────────────────────────
 
-  static Track _copyTrack(Track t, {String? name, StaffDef? staff, int? program, int? instrumentKey}) => Track(
-    name: name ?? t.name,
-    shortName: t.shortName,
-    staff: staff ?? t.staff,
-    bars: t.bars,
-    chords: t.chords,
-    layoutHint: t.layoutHint,
-    transposeSemitones: t.transposeSemitones,
-    program: program ?? t.program,
-    instrumentKey: instrumentKey ?? t.instrumentKey,
-  );
+  static Track _copyTrack(Track t, {String? name, StaffDef? staff, int? program, int? instrumentKey, TrackMix? mix}) =>
+      Track(
+        name: name ?? t.name,
+        shortName: t.shortName,
+        staff: staff ?? t.staff,
+        bars: t.bars,
+        chords: t.chords,
+        layoutHint: t.layoutHint,
+        transposeSemitones: t.transposeSemitones,
+        program: program ?? t.program,
+        instrumentKey: instrumentKey ?? t.instrumentKey,
+        mix: mix ?? t.mix,
+      );
+
+  /// Hall beim Abspielen (0..1). Wie das Mischpult ohne Rückgängig-Schritt.
+  void setReverb(double v) {
+    final r = v.clamp(0.0, 1.0);
+    if (r == _score.reverb) return;
+    _score.reverb = r;
+    revision++;
+  }
+
+  /// Mischpult der Spur [index]. Kein Schritt zum Rückgängigmachen, aber das
+  /// Stück gilt als geändert (wird gespeichert).
+  void setMix(int index, TrackMix mix) {
+    if (index < 0 || index >= _score.tracks.length || _score.tracks[index].mix == mix) return;
+    _score.tracks[index] = _copyTrack(_score.tracks[index], mix: mix);
+    revision++;
+  }
 
   /// Name und Klangfarbe (General-MIDI-Nummer) der Spur [index].
   void setTrackInfo(int index, {String? name, int? program, int? instrumentKey}) {
