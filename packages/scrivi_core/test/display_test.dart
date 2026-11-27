@@ -128,6 +128,31 @@ void main() {
     });
   });
 
+  group('Endlos-Ansicht', () {
+    test('alle Takte in einer Zeile, Seite so breit wie nötig', () {
+      final e = ScoreEditor(ScoreEditor.newScore(bars: 40));
+      e.cursor = e.cursor.copyWith(string: 5);
+      for (var i = 0; i < 12; i++) {
+        e.inputFret(i);
+        e.moveBeat(1);
+      }
+      final pages = Engraver(e.score, options: const LayoutOptions(endless: true)).layout().pages;
+      expect(pages, hasLength(1));
+      final page = pages.single;
+      expect(page.systems, hasLength(1));
+      final sys = page.systems.single;
+      expect(sys.firstBar, 0);
+      expect(sys.lastBar, 39);
+      expect(page.width, greaterThan(const LayoutOptions().pageWidth * 3));
+      expect(page.height, lessThan(45));
+      // Takte von links nach rechts, ohne Lücken
+      for (var b = 1; b < sys.bars.length; b++) {
+        expect(sys.bars[b].x0, closeTo(sys.bars[b - 1].x1, 0.01));
+      }
+      expect(sys.bars.last.x1, lessThan(page.width));
+    });
+  });
+
   group('Vorschläge und Spieltechniken', () {
     final score = GpReader.read(Uint8List.fromList(utf8.encode(_graceXml)));
 

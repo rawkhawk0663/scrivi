@@ -24,6 +24,7 @@ class LayoutOptions {
     this.useLayoutHint = true,
     this.showChordDiagrams = true,
     this.germanNoteNames = false,
+    this.endless = false,
   });
 
   final double pageWidth;
@@ -52,6 +53,13 @@ class LayoutOptions {
 
   /// Deutsche Notennamen für Saiten (H statt B, B statt B♭).
   final bool germanNoteNames;
+
+  /// Alle Takte in einer einzigen langen Zeile (ohne Titel), die Seite ist
+  /// so breit wie nötig. Zum waagrechten Durchblättern beim Schreiben.
+  final bool endless;
+
+  /// Abstand der Takte in der Endlos-Zeile (1 = so eng wie möglich).
+  static const endlessSpacing = 1.25;
 
   double get contentWidth => pageWidth - marginLeft - marginRight;
 }
@@ -224,6 +232,7 @@ class Engraver {
   ScoreLayout layout() {
     if (score.tracks.isEmpty) return ScoreLayout([PageDisplay(options.pageWidth, options.pageHeight)]);
     _build();
+    if (options.endless) return _endlessLayout();
     final systems = _breakSystems();
     return _paginate(systems);
   }
@@ -714,29 +723,7 @@ class Engraver {
       for (final it in out.items) {
         page.items.add(shift(it, 0, dy));
       }
-      page.systems.add(
-        SystemBox(
-          top: top,
-          bottom: top + height,
-          firstBar: s.measures.first.index,
-          lastBar: s.measures.last.index,
-          staffTop: _tabOnly ? null : top - out.top,
-          topDiatonic: _topDiatonic(s.measures.first.bar.clef),
-          tabTop: _tab ? sb._tabTop + top - out.top : null,
-          tabSpacing: options.tabLineSpacing,
-          strings: _tab ? _track.staff.stringCount : 0,
-          bars: [
-            for (var j = 0; j < s.measures.length; j++)
-              BarSpan(
-                s.measures[j].index,
-                j == 0 ? s.x0 + s.header : s.measures[j].x,
-                s.measures[j].x + s.measures[j].w,
-                s.measures[j].mb.time.length.toDouble(),
-                [for (final c in s.measures[j].cols) (c.onset.toDouble(), c.x + 0.6)],
-              ),
-          ],
-        ),
-      );
+      page.systems.add(_box(s, sb, top, height, out.top));
       y = top + height;
       firstOnPage = false;
     }
@@ -769,6 +756,67 @@ class Engraver {
       }
     }
     return ScoreLayout(pages);
+  }
+
+  /// Lage einer gesetzten Zeile (für Markierung, Cursor und Antippen).
+  SystemBox _box(_System s, _SystemBuilder sb, double top, double height, double outTop) => SystemBox(
+    top: top,
+    bottom: top + height,
+    firstBar: s.measures.first.index,
+    lastBar: s.measures.last.index,
+    staffTop: _tabOnly ? null : top - outTop,
+    topDiatonic: _topDiatonic(s.measures.first.bar.clef),
+    tabTop: _tab ? sb._tabTop + top - outTop : null,
+    tabSpacing: options.tabLineSpacing,
+    strings: _tab ? _track.staff.stringCount : 0,
+    bars: [
+      for (var j = 0; j < s.measures.length; j++)
+        BarSpan(
+          s.measures[j].index,
+          j == 0 ? s.x0 + s.header : s.measures[j].x,
+          s.measures[j].x + s.measures[j].w,
+          s.measures[j].mb.time.length.toDouble(),
+          [for (final c in s.measures[j].cols) (c.onset.toDouble(), c.x + 0.6)],
+        ),
+    ],
+  );
+
+  /// Endlos-Ansicht: eine Zeile mit allen Takten, ohne Blocksatz.
+  ScoreLayout _endlessLayout() {
+    final s = _System(List.of(_measures))
+      ..header = _headerWidth(_measures.first, true)
+      ..first = true
+      ..x0 = options.marginLeft;
+    const factor = LayoutOptions.endlessSpacing;
+    var x = s.x0 + s.header;
+    for (var j = 0; j < s.measures.length; j++) {
+      final m = s.measures[j];
+      m.x = j == 0 ? s.x0 : x;
+      m.changeW = j > 0
+          ? (m.keyChange ? _keyWidth(m.mb.key) + 0.4 : 0) + (m.timeChange ? _timeWidth(m.mb.time) : 0)
+          : 0;
+      var cx = x + m.padL + m.changeW;
+      for (final c in m.cols) {
+        c.x = cx + c.accW;
+        cx += c.natural * factor;
+      }
+      if (m.empty) cx += 6 * factor;
+      cx += m.padR;
+      m.w = cx - m.x;
+      x = cx;
+    }
+    s.x1 = x;
+    final sb = _SystemBuilder(this, s, 0, [s]);
+    final out = sb.build(const KeySignature(0));
+    final height = out.bottom - out.top;
+    const top = 4.0;
+    final page = PageDisplay(s.x1 + options.marginRight, top + height + 4);
+    final dy = top - out.top;
+    for (final it in out.items) {
+      page.items.add(shift(it, 0, dy));
+    }
+    page.systems.add(_box(s, sb, top, height, out.top));
+    return ScoreLayout([page]);
   }
 
   double _drawHeader(PageDisplay page, double y) {

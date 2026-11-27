@@ -16,6 +16,9 @@ class DeviceSettings {
     scoreView.value = ScoreView.fromName(data['ansicht'] as String?);
     showTools.value = data['werkzeuge'] as bool? ?? true;
     showFretboard.value = data['griffbrett'] as bool? ?? true;
+    showTracks.value = data['spuren'] as bool? ?? true;
+    showInspector.value = data['eigenschaften'] as bool? ?? true;
+    endless.value = data['endlos'] as bool? ?? false;
     final groups = data['werkzeuggruppen'];
     if (groups is List) openToolGroups.value = {for (final g in groups) '$g'};
   }
@@ -35,6 +38,23 @@ class DeviceSettings {
   /// Werkzeugspalte links und Griffbrett unten eingeblendet.
   final showTools = ValueNotifier<bool>(true);
   final showFretboard = ValueNotifier<bool>(true);
+
+  /// Spur-Bahnen unten und Eigenschaften rechts eingeblendet.
+  final showTracks = ValueNotifier<bool>(true);
+  final showInspector = ValueNotifier<bool>(true);
+
+  /// Noten als eine lange Zeile statt als Seiten.
+  final endless = ValueNotifier<bool>(false);
+
+  Future<void> setShowTracks(bool v) => _set(showTracks, 'spuren', v);
+  Future<void> setShowInspector(bool v) => _set(showInspector, 'eigenschaften', v);
+  Future<void> setEndless(bool v) => _set(endless, 'endlos', v);
+
+  Future<void> _set(ValueNotifier<bool> n, String key, bool v) async {
+    n.value = v;
+    _data[key] = v;
+    await _save();
+  }
 
   /// Offene Gruppen der Werkzeugspalte (Namen wie im Code, nie übersetzen).
   final openToolGroups = ValueNotifier<Set<String>>({'duration', 'guitar'});

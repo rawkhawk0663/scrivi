@@ -287,4 +287,55 @@ void main() {
       expect(plan.tracks.single.notes, hasLength(6));
     });
   });
+
+  group('Spuren', () {
+    test('Stimmung ändern: Töne bleiben, Bünde wandern (Drop D)', () {
+      final e = ScoreEditor(ScoreEditor.newScore(bars: 1));
+      e.cursor = e.cursor.copyWith(string: 0);
+      e.inputFret(3); // G2 auf der tiefen E-Saite
+      e.setTuning(const [38, 45, 50, 55, 59, 64]);
+      expect(_bar(e, 0).first, 'q:0/5');
+      expect(e.currentBeat!.notes.single.pitch.midi, 43);
+      expect(e.score.tracks[0].staff.tuning.first, 38);
+    });
+
+    test('Stimmung ändern mit gleichen Griffen: Töne klingen tiefer', () {
+      final e = ScoreEditor(ScoreEditor.newScore(bars: 1));
+      e.cursor = e.cursor.copyWith(string: 5);
+      e.inputFret(0);
+      e.setTuning(const [39, 44, 49, 54, 58, 63], keepFrets: true); // Es-Stimmung
+      expect(_bar(e, 0).first, 'q:5/0');
+      expect(e.currentBeat!.notes.single.pitch.midi, 63);
+      e.undo();
+      expect(e.currentBeat!.notes.single.pitch.midi, 64);
+    });
+
+    test('Kapo: Töne bleiben, Bünde zählen ab dem Kapo', () {
+      final e = ScoreEditor(ScoreEditor.newScore(bars: 1));
+      e.cursor = e.cursor.copyWith(string: 4);
+      e.inputFret(5);
+      e.setTuning(const [40, 45, 50, 55, 59, 64], capo: 2);
+      expect(_bar(e, 0).first, 'q:4/3');
+      expect(e.score.tracks[0].staff.capo, 2);
+    });
+
+    test('Spur hinzufügen, umbenennen, Klang, löschen', () {
+      final e = ScoreEditor(ScoreEditor.newScore(bars: 3));
+      e.addTrack(NewPieceKind.bass);
+      expect(e.score.tracks, hasLength(2));
+      expect(e.track, 1);
+      expect(e.score.tracks[1].bars, hasLength(3));
+      expect(e.score.tracks[1].staff.stringCount, 4);
+      e.setTrackInfo(1, name: ' E-Bass ', program: 34);
+      expect(e.score.tracks[1].name, 'E-Bass');
+      expect(e.score.tracks[1].program, 34);
+      final back = ScriviFormat.decode(ScriviFormat.encode(e.score));
+      expect(back.tracks[1].name, 'E-Bass');
+      e.removeTrack(0);
+      expect(e.score.tracks.single.name, 'E-Bass');
+      expect(e.track, 0);
+      e.removeTrack(0); // die letzte bleibt
+      expect(e.score.tracks, hasLength(1));
+    });
+  });
 }

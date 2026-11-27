@@ -1252,6 +1252,121 @@ class ScoreEditor {
     last.clear();
   }
 
+  // ───────────────────────── Spuren ─────────────────────────
+
+  static Track _copyTrack(Track t, {String? name, StaffDef? staff, int? program}) => Track(
+    name: name ?? t.name,
+    shortName: t.shortName,
+    staff: staff ?? t.staff,
+    bars: t.bars,
+    chords: t.chords,
+    layoutHint: t.layoutHint,
+    transposeSemitones: t.transposeSemitones,
+    program: program ?? t.program,
+  );
+
+  /// Name und Klangfarbe (General-MIDI-Nummer) der Spur [index].
+  void setTrackInfo(int index, {String? name, int? program}) {
+    if (index < 0 || index >= _score.tracks.length) return;
+    _begin();
+    _score.tracks[index] = _copyTrack(_score.tracks[index], name: name?.trim(), program: program);
+    _done();
+  }
+
+  /// Neue Stimmung (tiefste Saite zuerst, MIDI) und Kapo für die Spur am Cursor.
+  ///
+  /// [keepFrets]: Die Griffe (Saite und Bund) bleiben, die Töne klingen mit der
+  /// neuen Stimmung anders. Sonst bleiben die Töne gleich und Saite und Bund
+  /// werden neu bestimmt, wo es nötig ist.
+  void setTuning(List<int> tuning, {int capo = 0, bool keepFrets = false}) {
+    final t = _track;
+    if (!t.staff.isStringed || tuning.isEmpty) return;
+    _begin();
+    final st = t.staff;
+    _score.tracks[track] = _copyTrack(
+      t,
+      staff: StaffDef(
+        tuning: List.of(tuning),
+        capo: capo,
+        fretCount: st.fretCount,
+        showNotation: st.showNotation,
+        showTab: st.showTab,
+      ),
+    );
+    final max = st.fretCount;
+    for (var b = 0; b < _track.bars.length; b++) {
+      final fifths = _score.masterBars[b].key.fifths;
+      for (final v in _track.bars[b].voices) {
+        for (var i = 0; i < v.beats.length; i++) {
+          final beat = v.beats[i];
+          if (beat.isRest) continue;
+          final taken = <int>{};
+          final notes = <Note>[];
+          for (final n in beat.notes) {
+            var out = n;
+            final s = n.string;
+            if (keepFrets && s != null && n.fret != null && s < tuning.length) {
+              final concert = Pitch.fromMidi(tuning[s] + capo + n.fret!, fifths: fifths);
+              final written = _writtenFor(concert, fifths);
+              out = n.copyWith(pitch: concert, written: written, clearWritten: written == concert);
+            } else if (s != null) {
+              final f = s < tuning.length ? n.pitch.midi - tuning[s] - capo : -1;
+              if (f >= 0 && f <= max && !taken.contains(s)) {
+                out = n.copyWith(fret: f);
+              } else {
+                final place = _place(n.pitch.midi, preferString: s.clamp(0, tuning.length - 1), taken: taken);
+                if (place != null) out = n.copyWith(string: place.$1, fret: place.$2);
+              }
+            }
+            if (out.string != null) taken.add(out.string!);
+            notes.add(out);
+          }
+          v.beats[i] = beat.copyWith(notes: notes);
+        }
+      }
+    }
+    _done();
+  }
+
+  /// Neue, leere Spur am Ende; der Cursor wechselt dorthin.
+  void addTrack(NewPieceKind kind) {
+    _begin();
+    final mbs = _score.masterBars;
+    final (name, tuning, clef, transpose, program) = _kindDefaults(kind);
+    _score.tracks.add(
+      Track(
+        name: name,
+        staff: StaffDef(tuning: tuning, showTab: kind != NewPieceKind.guitarNotation && tuning.isNotEmpty),
+        program: program,
+        transposeSemitones: transpose,
+        bars: [
+          for (final mb in mbs) Bar(clef: clef, voices: [Voice(_rests(mb.time.length))]),
+        ],
+      ),
+    );
+    track = _score.tracks.length - 1;
+    cursor = EditCursor(bar: cursor.bar);
+    anchor = null;
+    _done();
+  }
+
+  /// Spur [index] löschen (die letzte Spur bleibt immer).
+  void removeTrack(int index) {
+    if (_score.tracks.length <= 1 || index < 0 || index >= _score.tracks.length) return;
+    _begin();
+    _score.tracks.removeAt(index);
+    if (track >= _score.tracks.length || track > index) track = math.max(0, track - 1);
+    anchor = null;
+    _done();
+  }
+
+  static (String, List<int>, Clef, int, int) _kindDefaults(NewPieceKind kind) => switch (kind) {
+    NewPieceKind.guitarTab ||
+    NewPieceKind.guitarNotation => ('Gitarre', const [40, 45, 50, 55, 59, 64], Clef.treble8vb, 12, 25),
+    NewPieceKind.bass => ('Bass', const [28, 33, 38, 43], Clef.bass, 12, 33),
+    NewPieceKind.leadSheet => ('Melodie', const <int>[], Clef.treble, 0, 0),
+  };
+
   // ───────────────────────── Neues Stück ─────────────────────────
 
   /// Leeres Stück: [kind] bestimmt Instrument und Ansicht.
@@ -1265,12 +1380,7 @@ class ScoreEditor {
     int bars = 16,
   }) {
     final n = math.max(1, bars);
-    final (name, tuning, clef, transpose, program) = switch (kind) {
-      NewPieceKind.guitarTab ||
-      NewPieceKind.guitarNotation => ('Gitarre', const [40, 45, 50, 55, 59, 64], Clef.treble8vb, 12, 25),
-      NewPieceKind.bass => ('Bass', const [28, 33, 38, 43], Clef.bass, 12, 33),
-      NewPieceKind.leadSheet => ('Melodie', const <int>[], Clef.treble, 0, 0),
-    };
+    final (name, tuning, clef, transpose, program) = _kindDefaults(kind);
     final staff = StaffDef(tuning: tuning, showTab: kind != NewPieceKind.guitarNotation && tuning.isNotEmpty);
     return Score(
       info: ScoreInfo(title: title, artist: artist),

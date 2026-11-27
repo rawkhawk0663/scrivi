@@ -109,6 +109,10 @@ mitbenutzen (z. B. Volti zeigt Scrivi-Stücke mit mitlaufender Markierung).
   zum Schreiben und auf dem Handy).
 
 ### Klang
+- **Entscheid (27. November 2026):** Klänge fest mitliefern (funktioniert ohne Internet).
+  Gitarren und Bass von FreePats (CC0 bzw. GPL mit Ausnahme), alle übrigen Instrumente und
+  Schlagzeug aus FluidR3/MuseScore General (MIT). GeneralUser GS nicht (Herkunft der Klänge
+  unsicher).
 - **Erste Stufe:** Das Stück wird im Hintergrund in eine Tonspur umgerechnet und mit
   `flutter_soloud` abgespielt (gleiches Prinzip wie das Metronom in Volti: dadurch genau im
   Takt). Gitarre zuerst mit der gezupften Saite aus Suona und Volti, die es schon gibt.
@@ -329,8 +333,13 @@ Plan in fünf Schritten:
    Einzähler, Mischpult, Ansicht, Suche), Werkzeugspalte links (Gruppen, Notenzeichen, Hinweis nach
    0,15 s, aktiv/blass, nur passende Werkzeuge, Suchfeld), Griffbrett unten (Akkorde durch weitere
    Saiten, Töne des Takts blass), Ton beim Eingeben, Befehlssuche (Strg+K).
-2. Eigenschaften-Spalte rechts (Note, Takt, Spur, Stück) statt Fenster; Spuren mit Mischpult und
-   Song-Karte unten; Reiter für mehrere Stücke.
+2. **Aussehen wie ein Tonstudio-Programm** ✅ (Wunsch des Besitzers) – Spur-Bahnen unten (Lineal
+   mit Taktnummern, Formteile als Farbbänder, Schleife durch Ziehen, pro Spur Name, Stumm, Solo,
+   Lautstärke und die Takte als Kästchen mit kleinen Notenstrichen, Abspiel-Linie, Strg + Mausrad
+   zoomt), Eigenschaften rechts (am Cursor, Takt, Spur mit Klang/Stimmung/Kapo/Lautstärke/
+   Links-Rechts, Stück), Endlos-Ansicht (alle Takte in einer langen Zeile, waagrecht), Spuren
+   hinzufügen, umbenennen, löschen, Klang wählen, Stimmung und Kapo ändern (Töne oder Griffe
+   bleiben). Noch offen: Reiter für mehrere Stücke.
 3. Schnell-Eingaben: Akkordzeile tippen, Schlagmuster, Liedtext einfügen, Formteile wiederverwenden.
 4. Stift-Gesten, waagrechte Band-Ansicht.
 5. Mikrofon-Eingabe (einstimmig).

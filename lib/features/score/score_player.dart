@@ -21,7 +21,8 @@ class ScorePlayer extends ChangeNotifier {
   ScorePlayer(this._score)
     : volume = List.filled(_score.tracks.length, 1.0, growable: true),
       muted = List.filled(_score.tracks.length, false, growable: true),
-      solo = List.filled(_score.tracks.length, false) {
+      solo = List.filled(_score.tracks.length, false, growable: true),
+      pan = List.filled(_score.tracks.length, 0.0, growable: true) {
     _plan = core.PlaybackPlan.build(_score);
   }
 
@@ -36,6 +37,10 @@ class ScorePlayer extends ChangeNotifier {
       volume.add(1);
       muted.add(false);
       solo.add(false);
+      pan.add(0);
+    }
+    for (final l in <List>[volume, muted, solo, pan]) {
+      if (l.length > s.tracks.length) l.length = s.tracks.length;
     }
     _plan = core.PlaybackPlan.build(s, tempoFactor: _tempo);
     position.value = position.value.clamp(0.0, _plan.duration);
@@ -80,6 +85,16 @@ class ScorePlayer extends ChangeNotifier {
   final List<double> volume;
   final List<bool> muted;
   final List<bool> solo;
+
+  /// Links (−1) bis rechts (+1).
+  final List<double> pan;
+
+  /// Eine Spur wurde gelöscht: Mischpult-Werte der übrigen behalten.
+  void trackRemoved(int i) {
+    for (final l in <List>[volume, muted, solo, pan]) {
+      if (i < l.length) l.removeAt(i);
+    }
+  }
 
   double gain(int i) {
     final anySolo = solo.any((s) => s);
@@ -249,6 +264,16 @@ class ScorePlayer extends ChangeNotifier {
     _applyMix();
   }
 
+  void setPan(int i, double v) {
+    pan[i] = v.clamp(-1.0, 1.0);
+    if (i < _handles.length && _soloud.isInitialized) {
+      try {
+        _soloud.setPan(_handles[i], pan[i]);
+      } catch (_) {}
+    }
+    _notify();
+  }
+
   // ───────────────────────── intern ─────────────────────────
 
   static Duration _dur(double s) => Duration(microseconds: (s * 1e6).round());
@@ -350,7 +375,7 @@ class ScorePlayer extends ChangeNotifier {
     final tracks = _tracks!;
     final handles = <SoundHandle>[];
     for (var i = 0; i < tracks.length; i++) {
-      final h = _soloud.play(tracks[i], paused: true, volume: gain(i));
+      final h = _soloud.play(tracks[i], paused: true, volume: gain(i), pan: i < pan.length ? pan[i] : 0);
       if (from > 0) _soloud.seek(h, _dur(from));
       handles.add(h);
     }

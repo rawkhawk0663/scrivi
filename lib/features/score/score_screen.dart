@@ -25,10 +25,13 @@ import '../../widgets/visuals.dart';
 
 import 'edit_tools.dart';
 import 'fretboard.dart';
+import 'inspector.dart';
 import 'note_preview.dart';
 import 'score_painter.dart';
 import 'score_player.dart';
 import 'tools.dart';
+import 'track_dialogs.dart';
+import 'track_lanes.dart';
 import 'transport_bar.dart';
 
 /// Ein Stück schreiben und ansehen: Werkzeuge links, Noten in der Mitte,
@@ -89,6 +92,14 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
     _recent = RecentScope.maybeOf(context);
   }
 
+  bool get _endless => _settings?.endless.value ?? false;
+
+  void _setEndless(bool v) {
+    _settings?.setEndless(v);
+    _engrave();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _viewer.currentState?.revealCursor());
+  }
+
   bool get _stringed => _score != null && _score!.tracks.isNotEmpty && _score!.tracks[_track].staff.isStringed;
 
   void _setView(ScoreView v) {
@@ -121,6 +132,7 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
         showTab: _view != ScoreView.notation,
         showNotation: _view != ScoreView.tab,
         germanNoteNames: !L10n.isEnglish,
+        endless: _endless,
       );
       final layout = core.Engraver(
         score,
@@ -481,6 +493,126 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
     if (v != null && v != 0) apply((e) => e.transposeAll(v));
   }
 
+  // ───────────────────────── Spuren ─────────────────────────
+
+  /// Andere Spur zeigen und darin schreiben.
+  void _selectTrack(int i) {
+    if (i == _track || _score == null || i >= _score!.tracks.length) return;
+    _track = i;
+    _editor?.track = i;
+    _engrave();
+    _cursorTick.value++;
+  }
+
+  /// In den Spur-Bahnen angetippt: Spur wählen, Cursor dorthin.
+  void _onLaneSelect(int track, int bar, double position) {
+    _selectTrack(track);
+    apply((e) => e.setCursor(bar, position));
+  }
+
+  @override
+  Future<void> editTrackName(int track) async {
+    final t = editor.score.tracks[track];
+    final r = await askText(context, title: tr('Name der Spur', 'Track name'), initial: t.name);
+    if (r != null && r.$1.trim().isNotEmpty) apply((e) => e.setTrackInfo(track, name: r.$1));
+  }
+
+  @override
+  Future<void> editTrackSound(int track) async {
+    final v = await askSound(context, editor.score.tracks[track].program);
+    if (v != null) apply((e) => e.setTrackInfo(track, program: v));
+  }
+
+  @override
+  Future<void> editTuning() async {
+    final t = editor.score.tracks[editor.track];
+    if (!t.staff.isStringed) return;
+    final r = await askTuning(context, t.staff);
+    if (r != null) apply((e) => e.setTuning(r.tuning, capo: r.capo, keepFrets: r.keepFrets));
+  }
+
+  @override
+  Future<void> addTrack() => _addTrack();
+
+  Future<void> _addTrack({Offset? at}) async {
+    final kinds = core.NewPieceKind.values;
+    core.NewPieceKind? kind;
+    if (at != null) {
+      kind = await showMenu<core.NewPieceKind>(
+        context: context,
+        position: RelativeRect.fromLTRB(at.dx, at.dy, at.dx + 1, at.dy + 1),
+        items: [for (final k in kinds) PopupMenuItem(value: k, child: Text(newTrackName(k)))],
+      );
+    } else {
+      kind = await showDialog<core.NewPieceKind>(
+        context: context,
+        builder: (context) => SimpleDialog(
+          title: Text(tr('Spur hinzufügen', 'Add track')),
+          children: [
+            for (final k in kinds)
+              SimpleDialogOption(onPressed: () => Navigator.pop(context, k), child: Text(newTrackName(k))),
+          ],
+        ),
+      );
+    }
+    if (kind == null) return;
+    apply((e) => e.addTrack(kind!));
+    _track = editor.track;
+    _engrave();
+  }
+
+  Future<void> _removeTrack(int i) async {
+    final t = editor.score.tracks[i];
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(tr('Spur löschen?', 'Delete track?')),
+        content: Text(
+          tr(
+            '„${t.name}“ wird mit allen Noten gelöscht. Rückgängig geht mit Strg+Z.',
+            '“${t.name}” is deleted with all its notes. Undo with Ctrl+Z.',
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(tr('Abbrechen', 'Cancel'))),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: Text(tr('Löschen', 'Delete'))),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    _player?.trackRemoved(i);
+    apply((e) => e.removeTrack(i));
+    _track = editor.track;
+    _engrave();
+  }
+
+  Future<void> _trackMenu(int i, Offset at) async {
+    final t = editor.score.tracks[i];
+    final choice = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(at.dx, at.dy, at.dx + 1, at.dy + 1),
+      items: [
+        PopupMenuItem(value: 'name', child: Text(tr('Umbenennen …', 'Rename …'))),
+        PopupMenuItem(value: 'sound', child: Text(tr('Klang …', 'Sound …'))),
+        if (t.staff.isStringed)
+          PopupMenuItem(value: 'tuning', child: Text(tr('Stimmung und Kapo …', 'Tuning and capo …'))),
+        if (editor.score.tracks.length > 1)
+          PopupMenuItem(value: 'delete', child: Text(tr('Spur löschen …', 'Delete track …'))),
+      ],
+    );
+    switch (choice) {
+      case 'name':
+        await editTrackName(i);
+      case 'sound':
+        await editTrackSound(i);
+      case 'tuning':
+        _selectTrack(i);
+        await editTuning();
+      case 'delete':
+        await _removeTrack(i);
+    }
+  }
+
   @override
   void copy() {
     _clipboard = editor.copy();
@@ -668,7 +800,13 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
           ),
         ),
       ),
-    ).withListen([?settings?.showTools, ?settings?.showFretboard, ?settings?.openToolGroups]);
+    ).withListen([
+      ?settings?.showTools,
+      ?settings?.showFretboard,
+      ?settings?.openToolGroups,
+      ?settings?.showTracks,
+      ?settings?.showInspector,
+    ]);
   }
 
   Widget _body() {
@@ -688,8 +826,10 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
       for (final g in ToolGroup.values)
         if ((s?.openToolGroups.value ?? const {'duration', 'guitar'}).contains(g.name)) g,
     };
+    final showTracks = s?.showTracks.value ?? true;
+    final showInspector = s?.showInspector.value ?? true;
     final c = context.scrivi;
-    return Row(
+    final main = Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (showTools) ...[
@@ -714,6 +854,7 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
               Expanded(
                 child: _PagesViewer(
                   key: _viewer,
+                  endless: _endless,
                   pages: pages,
                   pictures: pictures,
                   player: _player,
@@ -729,6 +870,30 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
               ],
             ],
           ),
+        ),
+        if (showInspector) ...[
+          VerticalDivider(width: 1, thickness: 1, color: c.line),
+          Container(
+            width: Inspector.width,
+            color: c.card,
+            child: Inspector(host: this, player: _player, cursorTick: _cursorTick),
+          ),
+        ],
+      ],
+    );
+    if (!showTracks) return main;
+    return Column(
+      children: [
+        Expanded(child: main),
+        Divider(height: 1, thickness: 1, color: c.line),
+        TrackLanes(
+          maxLanes: MediaQuery.sizeOf(context).height < 800 ? 3 : 4,
+          editor: e,
+          player: _player,
+          cursorTick: _cursorTick,
+          onSelect: _onLaneSelect,
+          onTrackMenu: _trackMenu,
+          onAddTrack: (at) => _addTrack(at: at),
         ),
       ],
     );
@@ -791,6 +956,18 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
                     s.showFretboard.value,
                     () => s.setShowFretboard(!s.showFretboard.value),
                   ),
+                toggle(
+                  Icons.table_rows_outlined,
+                  tr('Spuren ein/aus', 'Show/hide tracks'),
+                  s.showTracks.value,
+                  () => s.setShowTracks(!s.showTracks.value),
+                ),
+                toggle(
+                  Icons.view_sidebar_outlined,
+                  tr('Eigenschaften ein/aus', 'Show/hide properties'),
+                  s.showInspector.value,
+                  () => s.setShowInspector(!s.showInspector.value),
+                ),
               ],
               const SizedBox(width: 4),
               IconButton(
@@ -891,15 +1068,23 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
                     );
                   },
                 ),
-              if (_pages != null && _stringed)
-                PopupMenuButton<ScoreView>(
+              if (_pages != null)
+                PopupMenuButton<Object>(
                   tooltip: tr('Ansicht', 'View'),
-                  initialValue: _view,
-                  icon: const Icon(Icons.view_agenda_outlined, size: 20),
-                  onSelected: _setView,
+                  icon: Icon(_endless ? Icons.view_column_outlined : Icons.view_agenda_outlined, size: 20),
+                  onSelected: (v) => v is ScoreView ? _setView(v) : _setEndless(v == 'endless'),
                   itemBuilder: (context) => [
-                    for (final v in ScoreView.values)
-                      CheckedPopupMenuItem(value: v, checked: v == _view, child: Text(_viewName(v))),
+                    CheckedPopupMenuItem(value: 'pages', checked: !_endless, child: Text(tr('Seiten', 'Pages'))),
+                    CheckedPopupMenuItem(
+                      value: 'endless',
+                      checked: _endless,
+                      child: Text(tr('Endlos (eine lange Zeile)', 'Endless (one long line)')),
+                    ),
+                    if (_stringed) ...[
+                      const PopupMenuDivider(),
+                      for (final v in ScoreView.values)
+                        CheckedPopupMenuItem(value: v, checked: v == _view, child: Text(_viewName(v))),
+                    ],
                   ],
                 ),
               if (e != null)
@@ -1013,12 +1198,7 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
                         ? PopupMenuButton<int>(
                             tooltip: tr('Spur wählen', 'Choose track'),
                             initialValue: _track,
-                            onSelected: (i) {
-                              _track = i;
-                              _editor?.track = i;
-                              _engrave();
-                              _cursorTick.value++;
-                            },
+                            onSelected: _selectTrack,
                             itemBuilder: (context) => [
                               for (var i = 0; i < score.tracks.length; i++)
                                 PopupMenuItem(value: i, child: Text('${i + 1}. ${_trackName(i)}')),
@@ -1050,14 +1230,6 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
   }
 }
 
-/// Tonart als Name, z. B. „G-Dur“ bzw. „G major“.
-String keyName(core.KeySignature k) {
-  const de = ['Ces', 'Ges', 'Des', 'As', 'Es', 'B', 'F', 'C', 'G', 'D', 'A', 'E', 'H', 'Fis', 'Cis'];
-  const en = ['C♭', 'G♭', 'D♭', 'A♭', 'E♭', 'B♭', 'F', 'C', 'G', 'D', 'A', 'E', 'B', 'F♯', 'C♯'];
-  final i = (k.fifths + 7).clamp(0, 14);
-  return L10n.isEnglish ? '${en[i]} major' : '${de[i]}-Dur';
-}
-
 extension on Widget {
   /// Neu aufbauen, wenn sich eine der Einstellungen ändert.
   Widget withListen(List<Listenable> ls) =>
@@ -1083,8 +1255,12 @@ class _PagesViewer extends StatefulWidget {
     this.cursorTick,
     this.onEditTap,
     this.onEditKey,
+    this.endless = false,
   });
   final List<core.PageDisplay> pages;
+
+  /// Eine einzige lange Zeile: waagrecht blättern.
+  final bool endless;
   final List<ui.Picture> pictures;
   final ScorePlayer? player;
 
@@ -1107,6 +1283,7 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
   late final _fling = AnimationController.unbounded(vsync: this)..addListener(_onFling);
   Size _viewport = Size.zero;
   double _contentHeight = 0;
+  double _contentWidth = 0;
 
   // Gesten mit Finger, Stift, Maus (ziehen) und Touchpad
   double _gestureStartScale = 1;
@@ -1120,7 +1297,9 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
   core.SystemBox? _followed;
 
   static const _gap = 16.0;
-  static const _minScale = 1.0;
+
+  /// In der Endlos-Zeile lässt sich auch verkleinern (mehr Takte auf einmal).
+  double get _minScale => widget.endless ? 0.5 : 1.0;
   static const _maxScale = 4.0;
 
   @override
@@ -1151,7 +1330,21 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
   void _follow() {
     final player = widget.player;
     if (player == null || !player.playing || _pageTops.isEmpty) return;
-    final (bar, _) = player.location;
+    final (bar, pos) = player.location;
+    if (widget.endless) {
+      // Waagrecht mitlaufen: die Stelle bleibt im linken Drittel
+      final page = widget.pages.first;
+      final sys = page.systems.isEmpty ? null : page.systems.first;
+      final x = sys?.xAt(bar, pos);
+      if (x == null) return;
+      final k = _pageW / page.width;
+      final vx = (_pageLeft + x * k) * _scale + _offset.dx;
+      if (vx < _viewport.width * 0.1 || vx > _viewport.width * 0.8) {
+        _fling.stop();
+        _set(_scale, Offset(_offset.dx - vx + _viewport.width * 0.2, _offset.dy));
+      }
+      return;
+    }
     for (var i = 0; i < widget.pages.length; i++) {
       for (final sys in widget.pages[i].systems) {
         if (bar < sys.firstBar || bar > sys.lastBar) continue;
@@ -1178,7 +1371,7 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
 
   void _set(double scale, Offset offset) {
     final w = _viewport.width, h = _viewport.height;
-    final contentW = w * scale, contentH = _contentHeight * scale;
+    final contentW = _contentWidth * scale, contentH = _contentHeight * scale;
     final clamped = Offset(
       offset.dx.clamp(math.min(0.0, w - contentW), 0.0),
       offset.dy.clamp(math.min(0.0, h - contentH), 0.0),
@@ -1207,7 +1400,7 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
     _set(s1, f - content * s1);
   }
 
-  void reset() => _set(1, Offset(0, _offset.dy / _scale));
+  void reset() => _set(1, Offset(widget.endless ? _offset.dx / _scale : 0, _offset.dy / _scale));
 
   void _onSignal(PointerSignalEvent e) {
     if (e is PointerScrollEvent) {
@@ -1215,8 +1408,8 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
         final s = event as PointerScrollEvent;
         if (HardwareKeyboard.instance.isControlPressed) {
           zoomBy(s.scrollDelta.dy < 0 ? 1.1 : 1 / 1.1, s.localPosition);
-        } else if (HardwareKeyboard.instance.isShiftPressed) {
-          scrollBy(0, s.scrollDelta.dy);
+        } else if (HardwareKeyboard.instance.isShiftPressed || widget.endless) {
+          scrollBy(0, s.scrollDelta.dy + s.scrollDelta.dx);
         } else {
           scrollBy(s.scrollDelta.dy, s.scrollDelta.dx);
         }
@@ -1360,13 +1553,19 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
     return LayoutBuilder(
       builder: (context, box) {
         _viewport = Size(box.maxWidth, box.maxHeight);
-        final pageW = math.min(box.maxWidth - 2 * _gap, 1100.0);
+        var pageW = math.min(box.maxWidth - 2 * _gap, 1100.0);
+        if (widget.endless && widget.pages.isNotEmpty) {
+          // Gleicher Massstab wie eine A4-Seite, nur viel breiter
+          pageW = widget.pages.first.width * pageW / const core.LayoutOptions().pageWidth;
+        }
         final heights = widget.pages.map((p) => pageW * p.height / p.width).toList();
         _contentHeight = math.max(heights.fold(_gap, (s, h) => s + h + _gap), box.maxHeight);
+        _contentWidth = math.max(box.maxWidth, pageW + 2 * _gap);
         _pageW = pageW;
-        _pageLeft = (box.maxWidth - pageW) / 2;
+        _pageLeft = (_contentWidth - pageW) / 2;
         final tops = <double>[];
-        var y = _gap;
+        // Die Endlos-Zeile steht in der Mitte
+        var y = widget.endless && heights.isNotEmpty ? math.max(_gap, (box.maxHeight - heights.first) / 2) : _gap;
         for (final h in heights) {
           tops.add(y);
           y += h + _gap;
@@ -1375,7 +1574,7 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
         // Nach einer Grössenänderung des Fensters wieder in die Grenzen holen.
         final w = box.maxWidth, h = box.maxHeight;
         _offset = Offset(
-          _offset.dx.clamp(math.min(0.0, w - w * _scale), 0.0),
+          _offset.dx.clamp(math.min(0.0, w - _contentWidth * _scale), 0.0),
           _offset.dy.clamp(math.min(0.0, h - _contentHeight * _scale), 0.0),
         );
         final viewer = Focus(
@@ -1393,8 +1592,8 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
               child: ClipRect(
                 child: OverflowBox(
                   alignment: Alignment.topLeft,
-                  minWidth: box.maxWidth,
-                  maxWidth: box.maxWidth,
+                  minWidth: _contentWidth,
+                  maxWidth: _contentWidth,
                   minHeight: _contentHeight,
                   maxHeight: _contentHeight,
                   child: Transform(
@@ -1403,7 +1602,7 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
                       ..scaleByDouble(_scale, _scale, 1, 1),
                     child: Column(
                       children: [
-                        const SizedBox(height: _gap),
+                        SizedBox(height: tops.isEmpty ? _gap : tops.first),
                         for (var i = 0; i < widget.pages.length; i++) ...[
                           SizedBox(
                             width: pageW,

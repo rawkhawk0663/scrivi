@@ -25,6 +25,12 @@ abstract class ToolHost {
   Future<void> editRepeatEnd();
   Future<void> editTitle();
   Future<void> editTranspose();
+
+  /// Spur: Name, Klang, Stimmung/Kapo (Spur am Cursor), neue Spur.
+  Future<void> editTrackName(int track);
+  Future<void> editTrackSound(int track);
+  Future<void> editTuning();
+  Future<void> addTrack();
   Future<void> save();
   Future<void> saveAs();
   void copy();
@@ -549,6 +555,34 @@ final List<ToolDef> allTools = [
     en: 'Transpose the whole piece …',
     keywords: const ['tonart', 'höher', 'tiefer', 'key'],
     run: (h) => h.editTranspose(),
+  ),
+  ToolDef(
+    id: 'tuning',
+    group: ToolGroup.piece,
+    look: const IconLook(Icons.tune_rounded),
+    de: 'Stimmung und Kapo …',
+    en: 'Tuning and capo …',
+    keywords: const ['drop', 'capo', 'saiten', 'strings', 'open'],
+    stringedOnly: true,
+    run: (h) => h.editTuning(),
+  ),
+  ToolDef(
+    id: 'track-sound',
+    group: ToolGroup.piece,
+    look: const IconLook(Icons.music_note_rounded),
+    de: 'Klang der Spur …',
+    en: 'Track sound …',
+    keywords: const ['instrument', 'sound', 'midi', 'klangfarbe'],
+    run: (h) => h.editTrackSound(h.editor.track),
+  ),
+  ToolDef(
+    id: 'track-add',
+    group: ToolGroup.piece,
+    look: const IconLook(Icons.playlist_add_rounded),
+    de: 'Spur hinzufügen …',
+    en: 'Add track …',
+    keywords: const ['instrument', 'bass', 'gitarre', 'melodie', 'track'],
+    run: (h) => h.addTrack(),
   ),
   ToolDef(
     id: 'copy',

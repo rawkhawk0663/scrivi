@@ -44,6 +44,8 @@ lib/
     start/    Startseite (Neues Stück, Öffnen, Zuletzt geöffnet, Ziehen und Ablegen); keine Seitenleiste
     score/    Notenansicht (obere Leiste, Seiten, Zoom, Blättern), score_painter (Zeichenliste → Bild),
               score_player (Abspielen), transport_bar (Dialoge Tempo/Schleife/Mischpult),
+              track_lanes (Spur-Bahnen unten), inspector (Eigenschaften rechts),
+              track_dialogs (Klang, Stimmung/Kapo, Namen von Tönen und Tonarten),
               tools (Werkzeugspalte, Suche), fretboard (Griffbrett), note_preview (Ton beim Eingeben),
               edit_tools (Dialoge zum Schreiben)
     settings/ Einstellungen, Über Scrivi, Updates
@@ -60,6 +62,7 @@ tool/         make_icon.py (Symbol), make_glyphs.py (Notenzeichen aus Bravura)
 - **Tabulatur:** Saite 0 = tiefste. Schläge mit Rhythmus-Schrägstrichen zeigen in der Tab nichts. Gehaltene Noten nur am Zeilenanfang in Klammern.
 - **Dynamik** erscheint nur bei Wechseln (die Dateien schreiben „mf“ an jeden Schlag).
 - **Vorschlagsnoten** nehmen keine Zeit: der Notensatz hängt sie an den nächsten Schlag (`_Ev.graces`) und reserviert vorne in der Spalte Platz (`_Col.graceW`).
+- **Endlos-Ansicht** (`LayoutOptions.endless`): alle Takte in einer Zeile ohne Blocksatz (`_endlessLayout`, Abstand `endlessSpacing`), ohne Titel; die Seite ist so breit wie nötig. Der Betrachter zeigt sie im Massstab einer A4-Seite und blättert waagrecht (`einstellungen.json`: `endlos`).
 - **Ansichten** (`LayoutOptions.showTab`/`showNotation`): ohne Notenzeile steht die Tab bei y = 0, der Rhythmus der Hauptstimme darunter (`_buildTabOnly`, `_tabRhythm`); ohne Saiten immer Noten. Die Wahl steht in `einstellungen.json` (`ansicht`).
 - **Griffbilder** oben auf Seite 1 (`_drawDiagrams`): aus der Datei, wenn mindestens drei Saiten belegt sind; sonst `ChordLibrary` (nur sechs Saiten in Normalstimmung und ohne Kapo). Barré in GP-Dateien: gleicher Finger auf gleichem Bund über mindestens vier Saiten.
 - **Saitennamen** nur bei besonderen Stimmungen (Liste `_standardTunings`), mit ♭ wenn die Stimmung E♭/A♭/B♭ enthält; deutsche Namen (H, B) über `LayoutOptions.germanNoteNames` nach der App-Sprache.
@@ -69,10 +72,13 @@ tool/         make_icon.py (Symbol), make_glyphs.py (Notenzeichen aus Bravura)
 - **`ScoreEditor`** (Kern): Cursor = Takt, Schlag in Stimme 1, Saite. Überschreib-Eingabe: ein Ton ersetzt die Zeit, die er braucht; was übrig bleibt, wird Pause (`_restsAt`: zuerst bis zum nächsten Schlag). Jede Änderung: `_begin()` (Schnappschuss als JSON für Rückgängig) … `_done()` (`_normalize` führt Haltebögen und Hammer-on-Ziele nach). Klingend/geschrieben über `Track.transposeSemitones`. Saite und Bund: `_place` (bequem: nahe beim vorigen Bund bzw. bis Bund 12).
 - **App:** Es gibt keinen Bearbeiten-Modus (Wunsch des Besitzers): `ScoreScreen` legt beim Öffnen den Editor an. Nach einer Änderung neu setzen, Wiedergabe nachführen (`ScorePlayer.updateScore`), nach 0,8 s sichern (`_flushSave`: `.scrivi` → in die Datei; fremdes Format → beim ersten Ändern ein Entwurf, das Original bleibt). `save`/`saveAs` (Strg+S, Strg+Umschalt+S): Dateidialog `getSaveLocation`, Android ohne Dialog in `<Dokumente>/Scrivi/`. Beim Verlassen eines Entwurfs fragt `_leave` (Speichern … / Später). Antippen → `_hitAt` (Takt, Stelle, Saite über `SystemBox.stringAt`, Stammton über `diatonicAt`). Abspielen startet am Cursor (`ScorePlayer.seekTo`), beim Anhalten geht der Cursor dorthin.
 - **Aufbau des Bildschirms:** obere Leiste (`_topBar`, rechts Platz für die Fensterknöpfe), links `ToolPanel` (`tools.dart`), Mitte Seiten, unten `Fretboard`. Alle Werkzeuge stehen einmal in `allTools` (Gruppe, Notenzeichen aus Bravura als `\uXXXX`, Name de/en, Kürzel, aktiv/möglich, Aktion); Spalte, Suche (`showToolSearch`) und Hinweise lesen daraus. Neues Werkzeug = ein Eintrag dort. Notenzeichen nur nach Gefühl skaliert (`size`, `dy`). Werkzeugspalte, Griffbrett und offene Gruppen merkt sich `einstellungen.json` (`werkzeuge`, `griffbrett`, `werkzeuggruppen`).
+- **Aussehen wie ein Tonstudio-Programm** (Wunsch des Besitzers): unten `TrackLanes` über die ganze Breite (Lineal mit Taktnummern, Formteilen und Schleife; pro Spur Kopf mit Stumm/Solo/Lautstärke und Takte als Kästchen mit Notenstrichen aus `_Summary`, neu gerechnet pro `editor.revision`; Abspiel-Linie als eigener Maler), rechts `Inspector`. Beide ein/aus in der oberen Leiste (`spuren`, `eigenschaften`). Spurfarben: `trackColor`.
+- **Spuren im Kern:** `setTrackInfo` (Name, Klang), `setTuning` (Töne bleiben und Bünde wandern, oder mit `keepFrets` bleiben die Griffe), `addTrack`, `removeTrack` (die letzte bleibt). Beim Löschen behält `ScorePlayer.trackRemoved` die Mischpult-Werte der übrigen Spuren.
 - **Ton beim Eingeben:** `NotePreview` rechnet den Ton mit `Synth` (gemerkt pro Tonhöhe und Klangfarbe) und spielt ihn über die gemeinsame Audio-Technik.
 - Neue Icons: Der lokale Linux-Bau kann ein altes, gekürztes Icon-Schriftbild behalten (`build/flutter_assets`); bei fehlenden Icons `build/` löschen. Auf GitHub wird immer frisch gebaut.
 
 ## Abspielen
+- Mischpult pro Spur: Lautstärke, stumm, solo, links/rechts (`ScorePlayer.pan`, `setPan`); noch nicht in der Datei gespeichert.
 - `PlaybackPlan.build(score, tempoFactor:)` rollt Wiederholungen, Häuser und Sprünge aus (nach einem D.C./D.S. keine Wiederholungen mehr, vom Haus das letzte) und liefert Takte mit Zeiten, Töne pro Spur und Metronom-Klicks. `locate(sekunden)` → (Takt, Stelle in ganzen Noten).
 - `Synth.renderTrack` rechnet eine Spur als Tonspur (44,1 kHz mono). Saiten: Verzögerungsschleife mit Tiefpass, Länge = Periode minus Verzögerung des Tiefpasses (sonst zu tief); die Länge darf sich im Ton ändern (Bendings, Slides, Vibrato). Klangfarbe nach `Track.program` (General MIDI), sonst nach Saiten. Tests messen die Tonhöhe.
 - App (`ScorePlayer`): Spuren und Metronom im Hintergrund (`Isolate.run`) als WAV rechnen, mit `flutter_soloud` als je eine Stimme laden und gemeinsam starten (Stimmengruppe). Einzähler über `setDelaySamples`; die Stimmen zählen die Wartezeit schon als gespielt (`_lead` abziehen). Tempo = neu rechnen. Audio-Technik wie in Volti (`AudioEngine`).
@@ -98,7 +104,7 @@ tool/         make_icon.py (Symbol), make_glyphs.py (Notenzeichen aus Bravura)
 1. **Kein Konto, keine Daten sammeln, keine Werbung, funktioniert ohne Internet.** Internet nur für Updates und (später) den eigenen Dropbox-Abgleich.
 2. **Nie Daten verlieren:** Dateien erst in eine Zwischendatei schreiben, dann umbenennen. Alte Formate bleiben lesbar.
 3. **Stücke sind Dateien** (`.scrivi`), gespeichert, wo der Besitzer will (Wunsch des Besitzers; anders als Volti keine Bibliothek). Startseite mit *Zuletzt geöffnet* und *Neues Stück*.
-4. **Gerätespezifisch** (nie abgeglichen): `<ApplicationSupport>/einstellungen.json` (Darstellung, Sprache, Notenansicht, Werkzeugspalte, Griffbrett), `zuletzt.json`, `Entwürfe/`, `fehler.log`, `update.log`.
+4. **Gerätespezifisch** (nie abgeglichen): `<ApplicationSupport>/einstellungen.json` (Darstellung, Sprache, Notenansicht, Endlos-Ansicht, Werkzeugspalte, Griffbrett, Spuren, Eigenschaften), `zuletzt.json`, `Entwürfe/`, `fehler.log`, `update.log`.
 5. **Bedienbar mit Stift, Finger, Maus und Tastatur.** Langes Drücken = Rechtsklick.
 6. **Flüssig auf dem Surface:** messen statt raten; fertige Teile als Bild zwischenspeichern, keine Schatten und Durchsichtigkeit auf grossen Flächen (Erfahrung aus Volti).
 
