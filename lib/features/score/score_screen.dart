@@ -12,44 +12,35 @@ import '../../app/device_settings.dart';
 import '../../app/error_log.dart';
 import '../../app/l10n.dart';
 import '../../app/theme.dart';
+import '../../app/window_buttons.dart';
 import '../../core/library/library_controller.dart';
 import '../../widgets/visuals.dart';
 import '../library/library_screen.dart' show LibraryScope;
 import 'edit_tools.dart';
+import 'fretboard.dart';
+import 'note_preview.dart';
 import 'score_painter.dart';
 import 'score_player.dart';
+import 'tools.dart';
 import 'transport_bar.dart';
 
-/// Zeigt ein Stück als Seiten mit Noten und Tabulatur.
+/// Ein Stück schreiben und ansehen: Werkzeuge links, Noten in der Mitte,
+/// Griffbrett unten, oben Anzeige und Abspielen. Es gibt keinen eigenen
+/// Bearbeiten-Modus: Der Cursor ist immer da.
 class ScoreScreen extends StatefulWidget {
   const ScoreScreen({super.key, required this.piece, this.startEditing = false});
   final Piece piece;
 
-  /// Gleich im Bearbeiten-Modus öffnen (neues Stück).
+  /// Früher: gleich im Bearbeiten-Modus öffnen. Heute wird immer geschrieben.
   final bool startEditing;
 
   @override
   State<ScoreScreen> createState() => _ScoreScreenState();
 }
 
-class _ScoreScreenState extends State<ScoreScreen> implements EditHost {
+class _ScoreScreenState extends State<ScoreScreen> implements ToolHost {
   core.Score? _score;
   late Piece _piece = widget.piece;
-
-  // Bearbeiten
-  core.ScoreEditor? _editor;
-  bool _penNotes = false;
-  bool _paletteOpen = true;
-  int _savedRevision = 0;
-  Timer? _saveTimer;
-  Future<void>? _saving;
-  String _fretDigits = '';
-  DateTime _fretTime = DateTime(0);
-  core.EditCursor? _fretCursor;
-  static List<core.Beat> _clipboard = const [];
-
-  /// Zählt Cursor-Bewegungen (die Markierung zeichnet sich dann neu).
-  final _cursorTick = ValueNotifier<int>(0);
   List<core.PageDisplay>? _pages;
   List<ui.Picture>? _pictures;
   Object? _error;
@@ -57,6 +48,22 @@ class _ScoreScreenState extends State<ScoreScreen> implements EditHost {
   ScoreView _view = ScoreView.both;
   ScorePlayer? _player;
   final _viewer = GlobalKey<_PagesViewerState>();
+  final _preview = NotePreview();
+
+  // Schreiben
+  core.ScoreEditor? _editor;
+  bool _penNotes = false;
+  int _savedRevision = 0;
+  Timer? _saveTimer;
+  Future<void>? _saving;
+  String _fretDigits = '';
+  DateTime _fretTime = DateTime(0);
+  core.EditCursor? _fretCursor;
+  static List<core.Beat> _clipboard = const [];
+  LibraryController? _library;
+
+  /// Zählt Cursor-Bewegungen (die Markierung zeichnet sich dann neu).
+  final _cursorTick = ValueNotifier<int>(0);
 
   @override
   void initState() {
@@ -87,7 +94,7 @@ class _ScoreScreenState extends State<ScoreScreen> implements EditHost {
       if (!mounted) return;
       _score = score;
       _player = ScorePlayer(score);
-      if (widget.startEditing) _editor = core.ScoreEditor(score, track: _track);
+      _editor = core.ScoreEditor(score, track: _track);
       _engrave();
     } catch (e, st) {
       ErrorLog.record(e, st, where: 'Stück öffnen: ${widget.piece.fileName}');
@@ -140,12 +147,10 @@ class _ScoreScreenState extends State<ScoreScreen> implements EditHost {
     return n.isEmpty ? tr('Spur ${i + 1}', 'Track ${i + 1}') : n;
   }
 
-  // ───────────────────────── Bearbeiten ─────────────────────────
+  // ───────────────────────── Schreiben ─────────────────────────
 
   @override
   core.ScoreEditor get editor => _editor!;
-
-  bool get _editing => _editor != null;
 
   @override
   bool get penNotes => _penNotes;
@@ -153,24 +158,7 @@ class _ScoreScreenState extends State<ScoreScreen> implements EditHost {
   set penNotes(bool v) => setState(() => _penNotes = v);
 
   @override
-  bool get showsNotation => _view != ScoreView.tab || !_stringed;
-
-  void _toggleEditing() {
-    if (_editing) {
-      _flushSave();
-      setState(() => _editor = null);
-      _cursorTick.value++;
-    } else {
-      final score = _score;
-      if (score == null) return;
-      unawaited(_player?.pause());
-      setState(() => _editor = core.ScoreEditor(score, track: _track));
-      _cursorTick.value++;
-    }
-  }
-
-  @override
-  void apply(void Function(core.ScoreEditor e) op) {
+  void apply(void Function(core.ScoreEditor e) op, {bool sound = false}) {
     final e = _editor;
     if (e == null) return;
     final rev = e.revision;
@@ -180,9 +168,23 @@ class _ScoreScreenState extends State<ScoreScreen> implements EditHost {
       ErrorLog.record(err, st, where: 'Bearbeiten');
     }
     if (e.revision != rev) _afterEdit();
+    if (sound) _playBeat();
     _cursorTick.value++;
     setState(() {});
     WidgetsBinding.instance.addPostFrameCallback((_) => _viewer.currentState?.revealCursor());
+  }
+
+  /// Die Töne am Cursor kurz anspielen.
+  void _playBeat() {
+    final e = _editor!;
+    final b = e.currentBeat;
+    if (b == null || b.isRest) return;
+    final t = e.score.tracks[e.track];
+    final midis = [
+      for (final n in b.notes)
+        if (!n.dead) n.pitch.midi,
+    ]..sort();
+    unawaited(_preview.play(midis, core.PlayTrack(e.track, t, const [])));
   }
 
   void _afterEdit() {
@@ -199,10 +201,8 @@ class _ScoreScreenState extends State<ScoreScreen> implements EditHost {
     _saveTimer?.cancel();
     final e = _editor;
     final score = _score;
-    if (score == null) return;
-    if (e != null && e.revision == _savedRevision) return;
-    if (e == null && _savedRevision == 0) return;
-    final rev = e?.revision ?? _savedRevision;
+    if (score == null || e == null || e.revision == _savedRevision) return;
+    final rev = e.revision;
     final lib = _library;
     if (lib == null) return;
     final prev = _saving ?? Future.value();
@@ -220,8 +220,6 @@ class _ScoreScreenState extends State<ScoreScreen> implements EditHost {
       }
     });
   }
-
-  LibraryController? _library;
 
   @override
   Future<void> editChord() async {
@@ -263,122 +261,100 @@ class _ScoreScreenState extends State<ScoreScreen> implements EditHost {
     }
   }
 
+  core.MasterBar get _bar => editor.score.masterBars[editor.cursor.bar];
+
   @override
-  void showMoreMenu(Offset globalPosition) async {
-    final e = editor;
-    final mb = e.score.masterBars[e.cursor.bar];
-    final sel = e.selection != null;
-    final choice = await showMenu<String>(
-      context: context,
-      position: RelativeRect.fromLTRB(
-        globalPosition.dx,
-        globalPosition.dy,
-        globalPosition.dx + 1,
-        globalPosition.dy + 1,
-      ),
-      items: [
-        PopupMenuItem(value: 'before', child: Text(tr('Takt davor einfügen', 'Insert bar before'))),
-        PopupMenuItem(value: 'after', child: Text(tr('Takt danach einfügen', 'Insert bar after'))),
-        PopupMenuItem(
-          value: 'delete',
-          child: Text(sel ? tr('Ausgewählte Takte löschen', 'Delete selected bars') : tr('Takt löschen', 'Delete bar')),
-        ),
-        const PopupMenuDivider(),
-        PopupMenuItem(value: 'time', child: Text(tr('Taktart …', 'Time signature …'))),
-        PopupMenuItem(value: 'key', child: Text(tr('Tonart …', 'Key …'))),
-        PopupMenuItem(value: 'tempo', child: Text(tr('Tempo …', 'Tempo …'))),
-        PopupMenuItem(value: 'section', child: Text(tr('Formteil …', 'Section …'))),
-        CheckedPopupMenuItem(
-          value: 'repeatStart',
-          checked: mb.repeatStart,
-          child: Text(tr('Wiederholung: Anfang', 'Repeat: start')),
-        ),
-        CheckedPopupMenuItem(
-          value: 'repeatEnd',
-          checked: mb.hasRepeatEnd,
-          child: Text(tr('Wiederholung: Ende …', 'Repeat: end …')),
-        ),
-        CheckedPopupMenuItem(
-          value: 'double',
-          checked: mb.doubleBar,
-          child: Text(tr('Doppelstrich', 'Double bar line')),
-        ),
-        const PopupMenuDivider(),
-        PopupMenuItem(value: 'copy', child: Text(tr('Kopieren  (Strg+C)', 'Copy  (Ctrl+C)'))),
-        PopupMenuItem(value: 'cut', child: Text(tr('Ausschneiden  (Strg+X)', 'Cut  (Ctrl+X)'))),
-        PopupMenuItem(
-          value: 'paste',
-          enabled: _clipboard.isNotEmpty,
-          child: Text(tr('Einfügen  (Strg+V)', 'Paste  (Ctrl+V)')),
-        ),
-        const PopupMenuDivider(),
-        PopupMenuItem(value: 'title', child: Text(tr('Titel und Interpret …', 'Title and artist …'))),
-        PopupMenuItem(
-          value: 'transpose',
-          child: Text(tr('Ganzes Stück transponieren …', 'Transpose the whole piece …')),
-        ),
-      ],
-    );
-    if (choice == null || !mounted) return;
-    switch (choice) {
-      case 'before':
-        apply((e) => e.insertBars(after: false));
-      case 'after':
-        apply((e) => e.insertBars());
-      case 'delete':
-        apply((e) => e.deleteBars());
-      case 'time':
-        final t = await askTimeSignature(context, mb.time);
-        if (t != null) apply((e) => e.setTimeSignature(t));
-      case 'key':
-        final k = await askKey(context, mb.key);
-        if (k != null) apply((e) => e.setKey(k));
-      case 'tempo':
-        final v = await askNumber(
-          context,
-          title: tr('Tempo (Viertel pro Minute)', 'Tempo (quarters per minute)'),
-          initial: e.tempoAtCursor.round(),
-          min: 20,
-          max: 400,
-        );
-        if (v != null) apply((e) => e.setTempo(v.toDouble()));
-      case 'section':
-        final r = await askText(
-          context,
-          title: tr('Formteil', 'Section'),
-          initial: mb.section?.label ?? '',
-          suggestions: sectionSuggestions(),
-        );
-        if (r != null) apply((e) => e.setSection(r.$1));
-      case 'repeatStart':
-        apply((e) => e.toggleRepeatStart());
-      case 'repeatEnd':
-        final v = await askNumber(
-          context,
-          title: tr('Wie oft spielen? (0 = keine Wiederholung)', 'How many times? (0 = no repeat)'),
-          initial: mb.hasRepeatEnd ? mb.repeatEnd : 2,
-          min: 0,
-          max: 9,
-        );
-        if (v != null) apply((e) => e.setRepeatEnd(v));
-      case 'double':
-        apply((e) => e.toggleDoubleBar());
-      case 'copy':
-        _clipboard = e.copy();
-      case 'cut':
-        apply((e) => _clipboard = e.cut());
-      case 'paste':
-        apply((e) => e.paste(_clipboard));
-      case 'title':
-        final r = await askTitle(context, e.score.info.title, e.score.info.artist);
-        if (r != null) apply((e) => e.setInfo(title: r.$1.trim(), artist: r.$2.trim()));
-      case 'transpose':
-        final v = await askTranspose(context);
-        if (v != null && v != 0) apply((e) => e.transposeAll(v));
-    }
+  Future<void> editTimeSignature() async {
+    final t = await askTimeSignature(context, _bar.time);
+    if (t != null) apply((e) => e.setTimeSignature(t));
   }
 
-  /// Tastatur beim Bearbeiten. Gibt true zurück, wenn die Taste verwendet wurde.
+  @override
+  Future<void> editKey() async {
+    final k = await askKey(context, _bar.key);
+    if (k != null) apply((e) => e.setKey(k));
+  }
+
+  @override
+  Future<void> editTempo() async {
+    final v = await askNumber(
+      context,
+      title: tr('Tempo (Viertel pro Minute)', 'Tempo (quarters per minute)'),
+      initial: editor.tempoAtCursor.round(),
+      min: 20,
+      max: 400,
+    );
+    if (v != null) apply((e) => e.setTempo(v.toDouble()));
+  }
+
+  @override
+  Future<void> editSection() async {
+    final r = await askText(
+      context,
+      title: tr('Formteil', 'Section'),
+      initial: _bar.section?.label ?? '',
+      suggestions: sectionSuggestions(),
+    );
+    if (r != null) apply((e) => e.setSection(r.$1));
+  }
+
+  @override
+  Future<void> editRepeatEnd() async {
+    final v = await askNumber(
+      context,
+      title: tr('Wie oft spielen? (0 = keine Wiederholung)', 'How many times? (0 = no repeat)'),
+      initial: _bar.hasRepeatEnd ? _bar.repeatEnd : 2,
+      min: 0,
+      max: 9,
+    );
+    if (v != null) apply((e) => e.setRepeatEnd(v));
+  }
+
+  @override
+  Future<void> editTitle() async {
+    final r = await askTitle(context, editor.score.info.title, editor.score.info.artist);
+    if (r != null) apply((e) => e.setInfo(title: r.$1.trim(), artist: r.$2.trim()));
+  }
+
+  @override
+  Future<void> editTranspose() async {
+    final v = await askTranspose(context);
+    if (v != null && v != 0) apply((e) => e.transposeAll(v));
+  }
+
+  @override
+  void copy() {
+    _clipboard = editor.copy();
+    setState(() {});
+  }
+
+  @override
+  void cut() => apply((e) => _clipboard = e.cut());
+
+  @override
+  void paste() {
+    if (_clipboard.isNotEmpty) apply((e) => e.paste(_clipboard));
+  }
+
+  @override
+  bool get canPaste => _clipboard.isNotEmpty;
+
+  /// Abspielen ab dem Cursor; beim Anhalten steht der Cursor dort, wo die Musik war.
+  Future<void> _togglePlay() async {
+    final p = _player, e = _editor;
+    if (p == null || e == null) return;
+    if (p.playing) {
+      await p.pause();
+      final (bar, pos) = p.location;
+      apply((e) => e.setCursor(bar, pos));
+    } else {
+      p.seekTo(e.cursor.bar, e.cursorOnset.toDouble());
+      await p.play();
+    }
+    setState(() {});
+  }
+
+  /// Tastatur. Gibt true zurück, wenn die Taste verwendet wurde.
   bool _onEditKey(KeyEvent ev) {
     final e = _editor;
     if (e == null || (ev is! KeyDownEvent && ev is! KeyRepeatEvent)) return false;
@@ -392,13 +368,15 @@ class _ScoreScreenState extends State<ScoreScreen> implements EditHost {
       } else if (k == LogicalKeyboardKey.keyY) {
         apply((e) => e.redo());
       } else if (k == LogicalKeyboardKey.keyC) {
-        _clipboard = e.copy();
+        copy();
       } else if (k == LogicalKeyboardKey.keyX) {
-        apply((e) => _clipboard = e.cut());
+        cut();
       } else if (k == LogicalKeyboardKey.keyV) {
-        apply((e) => e.paste(_clipboard));
+        paste();
       } else if (k == LogicalKeyboardKey.keyA) {
         apply((e) => e.selectAll());
+      } else if (k == LogicalKeyboardKey.keyK || k == LogicalKeyboardKey.keyF) {
+        showToolSearch(context, this);
       } else if (k == LogicalKeyboardKey.arrowLeft) {
         apply((e) => e.moveBar(-1, select: shift));
       } else if (k == LogicalKeyboardKey.arrowRight) {
@@ -406,6 +384,10 @@ class _ScoreScreenState extends State<ScoreScreen> implements EditHost {
       } else {
         return false;
       }
+      return true;
+    }
+    if (k == LogicalKeyboardKey.space) {
+      _togglePlay();
       return true;
     }
     // Bundzahlen: zwei Ziffern kurz nacheinander ergeben eine zweistellige Zahl
@@ -423,14 +405,14 @@ class _ScoreScreenState extends State<ScoreScreen> implements EditHost {
       }
       _fretTime = now;
       final f = int.parse(_fretDigits);
-      apply((e) => e.inputFret(f));
+      apply((e) => e.inputFret(f), sound: true);
       _fretCursor = e.cursor;
       return true;
     }
     final ch = (ev.character ?? '').toUpperCase();
     const steps = {'C': 0, 'D': 1, 'E': 2, 'F': 3, 'G': 4, 'A': 5, 'B': 6, 'H': 6};
     if (steps.containsKey(ch) && !hw.isAltPressed) {
-      apply((e) => e.inputStep(steps[ch]!, addToChord: shift));
+      apply((e) => e.inputStep(steps[ch]!, addToChord: shift), sound: true);
       return true;
     }
     if (k == LogicalKeyboardKey.arrowLeft) {
@@ -438,9 +420,9 @@ class _ScoreScreenState extends State<ScoreScreen> implements EditHost {
     } else if (k == LogicalKeyboardKey.arrowRight) {
       apply((e) => e.moveBeat(1, select: shift));
     } else if (k == LogicalKeyboardKey.arrowUp) {
-      apply((e) => shift ? e.transposeSelection(1) : e.moveString(1));
+      apply((e) => shift ? e.transposeSelection(1) : e.moveString(1), sound: shift);
     } else if (k == LogicalKeyboardKey.arrowDown) {
-      apply((e) => shift ? e.transposeSelection(-1) : e.moveString(-1));
+      apply((e) => shift ? e.transposeSelection(-1) : e.moveString(-1), sound: shift);
     } else if (k == LogicalKeyboardKey.delete || k == LogicalKeyboardKey.backspace) {
       apply((e) => e.toRest());
     } else if (ch == '+' || k == LogicalKeyboardKey.numpadAdd) {
@@ -452,7 +434,7 @@ class _ScoreScreenState extends State<ScoreScreen> implements EditHost {
     } else if (ch == 'T') {
       apply((e) => e.toggleTriplet());
     } else if (ch == 'L') {
-      apply((e) => e.toggleTie());
+      apply((e) => e.toggleTie(), sound: true);
     } else if (ch == 'K') {
       editChord();
     } else if (ch == 'Y') {
@@ -475,12 +457,21 @@ class _ScoreScreenState extends State<ScoreScreen> implements EditHost {
     return core.NoteValue.values[(v.index - 1).clamp(1, core.NoteValue.values.length - 2)];
   }
 
-  /// Angetippt beim Bearbeiten: Cursor dorthin, mit „Stift setzt Noten“ auch eine Note.
+  /// Angetippt: Cursor dorthin, mit „Stift setzt Noten“ auch eine Note.
   void _onEditTap(_PageHit hit) {
+    final pen = _penNotes && hit.diatonic != null && hit.string == null;
     apply((e) {
       e.setCursor(hit.bar, hit.position, string: hit.string, select: HardwareKeyboard.instance.isShiftPressed);
-      if (_penNotes && hit.diatonic != null && hit.string == null) e.inputDiatonic(hit.diatonic!);
-    });
+      if (pen) e.inputDiatonic(hit.diatonic!);
+    }, sound: pen);
+  }
+
+  /// Griffbrett angetippt: Ton auf den Cursor (weitere Saiten = Akkord).
+  void _onFret(int string, int fret) {
+    apply((e) {
+      e.cursor = e.cursor.copyWith(string: string);
+      e.inputFret(fret);
+    }, sound: true);
   }
 
   @override
@@ -488,131 +479,29 @@ class _ScoreScreenState extends State<ScoreScreen> implements EditHost {
     _flushSave();
     _cursorTick.dispose();
     _player?.dispose();
+    _preview.dispose();
     for (final p in _pictures ?? const <ui.Picture>[]) {
       p.dispose();
     }
     super.dispose();
   }
 
+  // ───────────────────────── Aufbau ─────────────────────────
+
   @override
   Widget build(BuildContext context) {
-    final info = _score?.info;
-    final title = (info?.title.isNotEmpty ?? false) ? info!.title : widget.piece.displayTitle;
-    final artist = info?.artist ?? widget.piece.artist;
+    final settings = _settings;
     return Scaffold(
       backgroundColor: ScriviColors.pageSurround,
-      appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      body: SafeArea(
+        child: Column(
           children: [
-            Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
-            if (artist.isNotEmpty)
-              Text(
-                artist,
-                style: TextStyle(fontSize: 13, color: context.scrivi.muted),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
+            _topBar(context),
+            Expanded(child: _body()),
           ],
         ),
-        actions: [
-          if (_editing) ...[
-            IconButton(
-              tooltip: tr('Rückgängig  (Strg+Z)', 'Undo  (Ctrl+Z)'),
-              icon: const Icon(Icons.undo_rounded),
-              onPressed: editor.canUndo ? () => apply((e) => e.undo()) : null,
-            ),
-            IconButton(
-              tooltip: tr('Wiederholen  (Strg+Y)', 'Redo  (Ctrl+Y)'),
-              icon: const Icon(Icons.redo_rounded),
-              onPressed: editor.canRedo ? () => apply((e) => e.redo()) : null,
-            ),
-            IconButton(
-              tooltip: _paletteOpen ? tr('Werkzeuge ausblenden', 'Hide tools') : tr('Werkzeuge zeigen', 'Show tools'),
-              icon: Icon(_paletteOpen ? Icons.handyman : Icons.handyman_outlined),
-              onPressed: () => setState(() => _paletteOpen = !_paletteOpen),
-            ),
-          ],
-          if (_pages != null)
-            _editing
-                ? Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 6),
-                    child: FilledButton.icon(
-                      onPressed: _toggleEditing,
-                      icon: const Icon(Icons.check_rounded),
-                      label: Text(tr('Fertig', 'Done')),
-                    ),
-                  )
-                : IconButton(
-                    tooltip: tr('Bearbeiten', 'Edit'),
-                    icon: const Icon(Icons.edit_outlined),
-                    onPressed: _toggleEditing,
-                  ),
-          if ((_score?.tracks.length ?? 0) > 1)
-            PopupMenuButton<int>(
-              tooltip: tr('Spur wählen', 'Choose track'),
-              initialValue: _track,
-              onSelected: (i) {
-                _track = i;
-                _editor?.track = i;
-                _engrave();
-                _cursorTick.value++;
-              },
-              itemBuilder: (context) => [
-                for (var i = 0; i < _score!.tracks.length; i++)
-                  PopupMenuItem(
-                    value: i,
-                    child: Text(
-                      _score!.tracks[i].name.isEmpty ? tr('Spur ${i + 1}', 'Track ${i + 1}') : _score!.tracks[i].name,
-                    ),
-                  ),
-              ],
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.queue_music_outlined),
-                    const SizedBox(width: 6),
-                    Text(_trackName(_track)),
-                    const Icon(Icons.arrow_drop_down),
-                  ],
-                ),
-              ),
-            ),
-          if (_pages != null && _stringed)
-            PopupMenuButton<ScoreView>(
-              tooltip: tr('Ansicht', 'View'),
-              initialValue: _view,
-              icon: const Icon(Icons.view_agenda_outlined),
-              onSelected: _setView,
-              itemBuilder: (context) => [
-                for (final v in ScoreView.values)
-                  CheckedPopupMenuItem(value: v, checked: v == _view, child: Text(_viewName(v))),
-              ],
-            ),
-          if (_pages != null) ...[
-            IconButton(
-              tooltip: tr('Kleiner', 'Zoom out'),
-              icon: const Icon(Icons.zoom_out),
-              onPressed: () => _viewer.currentState?.zoomBy(1 / 1.25),
-            ),
-            IconButton(
-              tooltip: tr('Grösser', 'Zoom in'),
-              icon: const Icon(Icons.zoom_in),
-              onPressed: () => _viewer.currentState?.zoomBy(1.25),
-            ),
-            IconButton(
-              tooltip: tr('Ganze Breite', 'Fit width'),
-              icon: const Icon(Icons.fit_screen_outlined),
-              onPressed: () => _viewer.currentState?.reset(),
-            ),
-          ],
-        ],
       ),
-      body: _body(),
-      bottomNavigationBar: _player == null || _pages == null ? null : TransportBar(player: _player!),
-    );
+    ).withListen([?settings?.showTools, ?settings?.showFretboard, ?settings?.openToolGroups]);
   }
 
   Widget _body() {
@@ -623,25 +512,381 @@ class _ScoreScreenState extends State<ScoreScreen> implements EditHost {
         text: problemText(_error!),
       );
     }
-    final pages = _pages, pictures = _pictures;
-    if (pages == null || pictures == null) return const Center(child: CircularProgressIndicator());
-    return _PagesViewer(
-      key: _viewer,
-      pages: pages,
-      pictures: pictures,
-      player: _player,
-      onBarTap: (bar) => _player?.seekToBar(bar),
-      editor: _editor,
-      cursorTick: _cursorTick,
-      onEditTap: _onEditTap,
-      onEditKey: _onEditKey,
-      palette: _editing && _paletteOpen ? EditPalette(host: this) : null,
+    final pages = _pages, pictures = _pictures, e = _editor;
+    if (pages == null || pictures == null || e == null) return const Center(child: CircularProgressIndicator());
+    final s = _settings;
+    final showTools = s?.showTools.value ?? true;
+    final showFretboard = (s?.showFretboard.value ?? true) && e.stringed;
+    final open = {
+      for (final g in ToolGroup.values)
+        if ((s?.openToolGroups.value ?? const {'duration', 'guitar'}).contains(g.name)) g,
+    };
+    final c = context.scrivi;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (showTools) ...[
+          SizedBox(
+            width: 4 * ToolButton.size + 3 * 4 + 20 + 2 * ToolButton.size + 8,
+            child: ToolPanel(
+              host: this,
+              open: open,
+              onToggleGroup: (g) {
+                final names = {for (final x in open) x.name};
+                names.contains(g.name) ? names.remove(g.name) : names.add(g.name);
+                s?.setOpenToolGroups(names);
+                setState(() {});
+              },
+            ),
+          ),
+          VerticalDivider(width: 1, thickness: 1, color: c.line),
+        ],
+        Expanded(
+          child: Column(
+            children: [
+              Expanded(
+                child: _PagesViewer(
+                  key: _viewer,
+                  pages: pages,
+                  pictures: pictures,
+                  player: _player,
+                  editor: e,
+                  cursorTick: _cursorTick,
+                  onEditTap: _onEditTap,
+                  onEditKey: _onEditKey,
+                ),
+              ),
+              if (showFretboard) ...[
+                Divider(height: 1, thickness: 1, color: c.line),
+                Fretboard(editor: e, onTap: _onFret),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Obere Leiste: zurück, Bereiche ein/aus, Rückgängig, Zoom; in der Mitte
+  /// Abspielen und Anzeige; rechts Tempo, Schleife, Metronom, Einzähler,
+  /// Mischpult, Ansicht, Suche.
+  Widget _topBar(BuildContext context) {
+    final c = context.scrivi;
+    final e = _editor;
+    final p = _player;
+    final s = _settings;
+    final scheme = Theme.of(context).colorScheme;
+    Widget toggle(IconData icon, String tip, bool on, VoidCallback onTap) => IconButton(
+      tooltip: tip,
+      isSelected: on,
+      style: IconButton.styleFrom(backgroundColor: on ? scheme.primaryContainer : null),
+      icon: Icon(icon, size: 20, color: on ? scheme.onPrimaryContainer : null),
+      onPressed: onTap,
+    );
+    // Rechts Platz für die Fensterknöpfe; an freien Stellen lässt sich das Fenster ziehen.
+    return WindowDragArea(
+      mouseOnly: true,
+      doubleTapMaximizes: false,
+      child: Container(
+        height: 60,
+        color: c.background,
+        padding: EdgeInsets.only(left: 6, right: hasWindowButtons ? windowButtonsWidth : 6),
+        child: LayoutBuilder(
+          builder: (context, box) {
+            final compact = box.maxWidth < 1100;
+            final left = <Widget>[
+              IconButton(
+                tooltip: tr('Zur Bibliothek', 'Back to library'),
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => Navigator.of(context).maybePop(),
+              ),
+              if (s != null) ...[
+                toggle(
+                  Icons.handyman_outlined,
+                  tr('Werkzeuge ein/aus', 'Show/hide tools'),
+                  s.showTools.value,
+                  () => s.setShowTools(!s.showTools.value),
+                ),
+                if (_stringed)
+                  toggle(
+                    Icons.view_week_outlined,
+                    tr('Griffbrett ein/aus', 'Show/hide fretboard'),
+                    s.showFretboard.value,
+                    () => s.setShowFretboard(!s.showFretboard.value),
+                  ),
+              ],
+              const SizedBox(width: 4),
+              IconButton(
+                tooltip: tr('Rückgängig  (Strg+Z)', 'Undo  (Ctrl+Z)'),
+                icon: const Icon(Icons.undo_rounded),
+                onPressed: e != null && e.canUndo ? () => apply((e) => e.undo()) : null,
+              ),
+              IconButton(
+                tooltip: tr('Wiederholen  (Strg+Y)', 'Redo  (Ctrl+Y)'),
+                icon: const Icon(Icons.redo_rounded),
+                onPressed: e != null && e.canRedo ? () => apply((e) => e.redo()) : null,
+              ),
+              if (!compact) ...[
+                IconButton(
+                  tooltip: tr('Kleiner', 'Zoom out'),
+                  icon: const Icon(Icons.zoom_out),
+                  onPressed: () => _viewer.currentState?.zoomBy(1 / 1.25),
+                ),
+                IconButton(
+                  tooltip: tr('Grösser', 'Zoom in'),
+                  icon: const Icon(Icons.zoom_in),
+                  onPressed: () => _viewer.currentState?.zoomBy(1.25),
+                ),
+                IconButton(
+                  tooltip: tr('Ganze Breite', 'Fit width'),
+                  icon: const Icon(Icons.fit_screen_outlined),
+                  onPressed: () => _viewer.currentState?.reset(),
+                ),
+              ],
+            ];
+            final center = <Widget>[
+              IconButton(
+                tooltip: tr('Zum Anfang', 'To the start'),
+                icon: const Icon(Icons.skip_previous_rounded),
+                onPressed: p == null
+                    ? null
+                    : () {
+                        p.rewind();
+                        apply((e) => e.setCursor(0, 0));
+                      },
+              ),
+              if (p != null)
+                ListenableBuilder(
+                  listenable: p,
+                  builder: (context, _) => SizedBox(
+                    width: 44,
+                    height: 44,
+                    child: p.preparing
+                        ? const Padding(padding: EdgeInsets.all(11), child: CircularProgressIndicator(strokeWidth: 3))
+                        : IconButton.filled(
+                            tooltip: p.playing
+                                ? tr('Anhalten  (Leertaste)', 'Pause  (Space)')
+                                : tr('Abspielen ab Cursor  (Leertaste)', 'Play from cursor  (Space)'),
+                            icon: Icon(p.playing ? Icons.pause_rounded : Icons.play_arrow_rounded, size: 28),
+                            onPressed: _togglePlay,
+                          ),
+                  ),
+                ),
+              const SizedBox(width: 8),
+              if (e != null && p != null) _display(context, e, p, compact),
+            ];
+            final right = <Widget>[
+              if (p != null)
+                ListenableBuilder(
+                  listenable: p,
+                  builder: (context, _) {
+                    final t = TransportBar(player: p);
+                    return Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _chip(
+                          context,
+                          '${(p.tempo * 100).round()} %',
+                          tr('Tempo beim Abspielen', 'Playback tempo'),
+                          p.tempo != 1,
+                          () => t.tempoDialog(context),
+                        ),
+                        _chip(
+                          context,
+                          p.loop == null ? '⟲' : '⟲ ${p.loop!.$1 + 1}–${p.loop!.$2 + 1}',
+                          tr('Schleife', 'Loop'),
+                          p.loop != null,
+                          () => t.loopDialog(context),
+                        ),
+                        toggle(
+                          Icons.av_timer_rounded,
+                          tr('Metronom', 'Metronome'),
+                          p.metronome,
+                          () => p.setMetronome(!p.metronome),
+                        ),
+                        _chip(context, '1·2', tr('Einzähler', 'Count-in'), p.countIn, () => p.setCountIn(!p.countIn)),
+                        IconButton(
+                          tooltip: tr('Mischpult', 'Mixer'),
+                          icon: const Icon(Icons.tune_rounded, size: 20),
+                          onPressed: () => t.mixer(context),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              if (_pages != null && _stringed)
+                PopupMenuButton<ScoreView>(
+                  tooltip: tr('Ansicht', 'View'),
+                  initialValue: _view,
+                  icon: const Icon(Icons.view_agenda_outlined, size: 20),
+                  onSelected: _setView,
+                  itemBuilder: (context) => [
+                    for (final v in ScoreView.values)
+                      CheckedPopupMenuItem(value: v, checked: v == _view, child: Text(_viewName(v))),
+                  ],
+                ),
+              if (e != null)
+                IconButton(
+                  tooltip: tr('Werkzeug suchen  (Strg+K)', 'Find a tool  (Ctrl+K)'),
+                  icon: const Icon(Icons.search_rounded),
+                  onPressed: () => showToolSearch(context, this),
+                ),
+            ];
+            return Row(
+              children: [
+                ...left,
+                Expanded(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Flexible(
+                        child: Row(mainAxisSize: MainAxisSize.min, children: center),
+                      ),
+                    ],
+                  ),
+                ),
+                ...right,
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _chip(BuildContext context, String label, String tip, bool on, VoidCallback onTap) {
+    final scheme = Theme.of(context).colorScheme;
+    final c = context.scrivi;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      child: Tooltip(
+        message: tip,
+        waitDuration: const Duration(milliseconds: 300),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onTap,
+          child: Container(
+            height: 32,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: on ? scheme.primaryContainer : c.cardHigh,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: on ? scheme.onPrimaryContainer : null,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Anzeige: Spur (zum Wechseln antippen), Takt, Zeit, Tempo, Taktart, Tonart.
+  Widget _display(BuildContext context, core.ScoreEditor e, ScorePlayer p, bool compact) {
+    final c = context.scrivi;
+    final score = e.score;
+    return ListenableBuilder(
+      listenable: Listenable.merge([p, p.position, _cursorTick]),
+      builder: (context, _) {
+        final bar = p.playing ? p.location.$1 : e.cursor.bar;
+        final mb = score.masterBars[bar.clamp(0, score.masterBars.length - 1)];
+        double bpm = 120;
+        for (final t in score.tempos) {
+          if (t.bar <= bar) bpm = t.bpm;
+        }
+        final muted = TextStyle(fontSize: 12, color: c.muted, fontFeatures: const [FontFeature.tabularFigures()]);
+        final strong = const TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          fontFeatures: [FontFeature.tabularFigures()],
+        );
+        final trackLabel = Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: Text('${_track + 1}. ${_trackName(_track)}', style: strong, overflow: TextOverflow.ellipsis),
+            ),
+            if (score.tracks.length > 1) Icon(Icons.arrow_drop_down, size: 18, color: c.muted),
+          ],
+        );
+        return Container(
+          constraints: BoxConstraints(minWidth: compact ? 160 : 300, maxWidth: compact ? 220 : 380),
+          height: 44,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: c.card,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: c.line),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    score.tracks.length > 1
+                        ? PopupMenuButton<int>(
+                            tooltip: tr('Spur wählen', 'Choose track'),
+                            initialValue: _track,
+                            onSelected: (i) {
+                              _track = i;
+                              _editor?.track = i;
+                              _engrave();
+                              _cursorTick.value++;
+                            },
+                            itemBuilder: (context) => [
+                              for (var i = 0; i < score.tracks.length; i++)
+                                PopupMenuItem(value: i, child: Text('${i + 1}. ${_trackName(i)}')),
+                            ],
+                            child: trackLabel,
+                          )
+                        : trackLabel,
+                    Text('${tr('Takt', 'Bar')} ${bar + 1} / ${score.masterBars.length}', style: muted),
+                  ],
+                ),
+              ),
+              if (!compact)
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text('${formatTime(p.position.value)} / ${formatTime(p.plan.duration)}', style: strong),
+                    Text(
+                      '♩ = ${bpm.round()} · ${mb.time.beats}/${mb.time.beatType} · ${keyName(mb.key)}',
+                      style: muted,
+                    ),
+                  ],
+                ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
 
-/// Seiten untereinander, mit Zoom (zwei Finger, Strg + Mausrad, Knöpfe) und
-/// Blättern (Mausrad, Wischen, Bild auf/ab, Pfeiltasten, Pedal).
+/// Tonart als Name, z. B. „G-Dur“ bzw. „G major“.
+String keyName(core.KeySignature k) {
+  const de = ['Ces', 'Ges', 'Des', 'As', 'Es', 'B', 'F', 'C', 'G', 'D', 'A', 'E', 'H', 'Fis', 'Cis'];
+  const en = ['C♭', 'G♭', 'D♭', 'A♭', 'E♭', 'B♭', 'F', 'C', 'G', 'D', 'A', 'E', 'B', 'F♯', 'C♯'];
+  final i = (k.fifths + 7).clamp(0, 14);
+  return L10n.isEnglish ? '${en[i]} major' : '${de[i]}-Dur';
+}
+
+extension on Widget {
+  /// Neu aufbauen, wenn sich eine der Einstellungen ändert.
+  Widget withListen(List<Listenable> ls) =>
+      ls.isEmpty ? this : ListenableBuilder(listenable: Listenable.merge(ls), builder: (_, _) => this);
+}
+
 /// Angetippte Stelle: Takt, Stelle im Takt (ganze Noten), Saite bzw. Stammton.
 class _PageHit {
   const _PageHit(this.bar, this.position, this.string, this.diatonic);
@@ -657,26 +902,20 @@ class _PagesViewer extends StatefulWidget {
     required this.pages,
     required this.pictures,
     this.player,
-    this.onBarTap,
     this.editor,
     this.cursorTick,
     this.onEditTap,
     this.onEditKey,
-    this.palette,
   });
   final List<core.PageDisplay> pages;
   final List<ui.Picture> pictures;
   final ScorePlayer? player;
-
-  /// Antippen eines Takts (Partitur-Nummer).
-  final ValueChanged<int>? onBarTap;
 
   /// Bearbeiten: Cursor, Antippen, Tasten, Werkzeugleiste.
   final core.ScoreEditor? editor;
   final ValueNotifier<int>? cursorTick;
   final ValueChanged<_PageHit>? onEditTap;
   final bool Function(KeyEvent)? onEditKey;
-  final Widget? palette;
 
   @override
   State<_PagesViewer> createState() => _PagesViewerState();
@@ -756,30 +995,8 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
   /// Angetippter Takt: Fensterpunkt → Seite → Zeile → Takt.
   void _onTapUp(TapUpDetails d) {
     _focus.requestFocus();
-    if (widget.editor != null) {
-      final hit = _hitAt(d.localPosition);
-      if (hit != null) widget.onEditTap?.call(hit);
-      return;
-    }
-    final cb = widget.onBarTap;
-    if (cb == null) return;
-    final p = (d.localPosition - _offset) / _scale;
-    for (var i = 0; i < widget.pages.length && i < _pageTops.length; i++) {
-      final page = widget.pages[i];
-      final k = _pageW / page.width;
-      final h = page.height * k;
-      if (p.dy < _pageTops[i] || p.dy > _pageTops[i] + h) continue;
-      final x = (p.dx - _pageLeft) / k, y = (p.dy - _pageTops[i]) / k;
-      for (final sys in page.systems) {
-        if (y < sys.top - 2 || y > sys.bottom + 2) continue;
-        for (final b in sys.bars) {
-          if (x >= b.x0 - 1 && x <= b.x1) {
-            cb(b.bar);
-            return;
-          }
-        }
-      }
-    }
+    final hit = _hitAt(d.localPosition);
+    if (hit != null) widget.onEditTap?.call(hit);
   }
 
   void _set(double scale, Offset offset) {
@@ -1037,30 +1254,7 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
             ),
           ),
         );
-        final palette = widget.palette;
-        if (palette == null) return viewer;
-        // Werkzeugleiste beim Cursor: unter der Zeile, sonst darüber
-        final r = _cursorRect();
-        const maxW = 560.0;
-        final left = r == null
-            ? (box.maxWidth - maxW) / 2
-            : (r.center.dx - 140).clamp(8.0, math.max(8.0, box.maxWidth - maxW - 8));
-        final visible = r != null && r.bottom > 0 && r.top < box.maxHeight;
-        final below = visible && r.bottom + 150 < box.maxHeight;
-        return Stack(
-          children: [
-            Positioned.fill(child: viewer),
-            Positioned(
-              left: left.toDouble(),
-              top: below ? r.bottom + 6 : null,
-              bottom: below ? null : (visible ? math.max(8.0, box.maxHeight - r.top + 6) : 8),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: maxW),
-                child: palette,
-              ),
-            ),
-          ],
-        );
+        return viewer;
       },
     );
   }
@@ -1074,7 +1268,8 @@ class _CursorPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (!player.playing && player.position.value <= 0) return;
+    // Nur während des Abspielens; danach zeigt der Cursor die Stelle.
+    if (!player.playing) return;
     final (bar, pos) = player.location;
     final k = size.width / page.width;
     for (final sys in page.systems) {

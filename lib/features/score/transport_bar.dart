@@ -64,7 +64,7 @@ class TransportBar extends StatelessWidget {
                       context,
                       label: '${tr('Tempo', 'Tempo')} ${(player.tempo * 100).round()} %',
                       selected: player.tempo != 1,
-                      onTap: () => _tempoDialog(context),
+                      onTap: () => tempoDialog(context),
                     ),
                     _chip(
                       context,
@@ -84,12 +84,12 @@ class TransportBar extends StatelessWidget {
                           ? tr('Schleife', 'Loop')
                           : '${tr('Schleife', 'Loop')} ${player.loop!.$1 + 1}–${player.loop!.$2 + 1}',
                       selected: player.loop != null,
-                      onTap: () => _loopDialog(context),
+                      onTap: () => loopDialog(context),
                     ),
                     IconButton(
                       tooltip: tr('Mischpult', 'Mixer'),
                       icon: const Icon(Icons.tune_rounded),
-                      onPressed: () => _mixer(context),
+                      onPressed: () => mixer(context),
                     ),
                     if (player.error != null)
                       Padding(
@@ -116,7 +116,7 @@ class TransportBar extends StatelessWidget {
     );
   }
 
-  Future<void> _tempoDialog(BuildContext context) async {
+  Future<void> tempoDialog(BuildContext context) async {
     var value = player.tempo;
     final result = await showDialog<double>(
       context: context,
@@ -156,7 +156,7 @@ class TransportBar extends StatelessWidget {
     if (result != null) await player.setTempo(result);
   }
 
-  Future<void> _loopDialog(BuildContext context) async {
+  Future<void> loopDialog(BuildContext context) async {
     final bars = player.score.masterBars.length;
     final (current, _) = player.location;
     final from = TextEditingController(text: '${(player.loop?.$1 ?? current) + 1}');
@@ -212,7 +212,7 @@ class TransportBar extends StatelessWidget {
     player.setLoop(result.$1 < 0 ? null : result);
   }
 
-  void _mixer(BuildContext context) {
+  void mixer(BuildContext context) {
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,

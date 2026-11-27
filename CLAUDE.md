@@ -42,9 +42,10 @@ lib/
   features/
     shell/    Rahmen: Leiste links (breit) bzw. unten (schmal), ein Navigator pro Bereich
     library/  Bibliothek (Raster mit Vorschau, Suche, Import, Ziehen und Ablegen)
-    score/    Notenansicht (Seiten, Zoom, Blättern, Spurwahl), score_painter (Zeichenliste → Bild),
-              score_player (Abspielen), transport_bar (Leiste unten),
-              edit_tools (Werkzeugleiste beim Cursor, Dialoge zum Schreiben)
+    score/    Notenansicht (obere Leiste, Seiten, Zoom, Blättern), score_painter (Zeichenliste → Bild),
+              score_player (Abspielen), transport_bar (Dialoge Tempo/Schleife/Mischpult),
+              tools (Werkzeugspalte, Suche), fretboard (Griffbrett), note_preview (Ton beim Eingeben),
+              edit_tools (Dialoge zum Schreiben)
     settings/ Einstellungen, Über Scrivi, Updates
   widgets/    gemeinsame Bausteine (ScriviMark, SectionCard, EmptyState …)
 tool/         make_icon.py (Symbol), make_glyphs.py (Notenzeichen aus Bravura)
@@ -66,7 +67,9 @@ tool/         make_icon.py (Symbol), make_glyphs.py (Notenzeichen aus Bravura)
 ## Schreiben
 - **Format `.scrivi`:** JSON `{"format":"scrivi","version":1,…}` mit dem ganzen Modell; Grundwerte werden weggelassen, unbekannte Felder beim Lesen übergangen. Schlüssel nie übersetzen. Erkannt über `ScriviFormat.looksLike` in `GpReader.read`.
 - **`ScoreEditor`** (Kern): Cursor = Takt, Schlag in Stimme 1, Saite. Überschreib-Eingabe: ein Ton ersetzt die Zeit, die er braucht; was übrig bleibt, wird Pause (`_restsAt`: zuerst bis zum nächsten Schlag). Jede Änderung: `_begin()` (Schnappschuss als JSON für Rückgängig) … `_done()` (`_normalize` führt Haltebögen und Hammer-on-Ziele nach). Klingend/geschrieben über `Track.transposeSemitones`. Saite und Bund: `_place` (bequem: nahe beim vorigen Bund bzw. bis Bund 12).
-- **App:** `ScoreScreen` hält den Editor; nach einer Änderung neu setzen, Wiedergabe nachführen (`ScorePlayer.updateScore`), nach 0,8 s speichern (`LibraryController.save`: Zwischendatei, dann umbenennen; nicht-`.scrivi` → neue `.scrivi`, Original nach `Bibliothek/Originale/`). Die Werkzeugleiste (`EditPalette`) liegt im Seiten-Viewer bei `_cursorRect()`. Antippen → `_hitAt` (Takt, Stelle, Saite über `SystemBox.stringAt`, Stammton über `diatonicAt`).
+- **App:** Es gibt keinen Bearbeiten-Modus (Wunsch des Besitzers): `ScoreScreen` legt beim Öffnen den Editor an. Nach einer Änderung neu setzen, Wiedergabe nachführen (`ScorePlayer.updateScore`), nach 0,8 s speichern (`LibraryController.save`: Zwischendatei, dann umbenennen; nicht-`.scrivi` → neue `.scrivi`, Original nach `Bibliothek/Originale/`). Antippen → `_hitAt` (Takt, Stelle, Saite über `SystemBox.stringAt`, Stammton über `diatonicAt`). Abspielen startet am Cursor (`ScorePlayer.seekTo`), beim Anhalten geht der Cursor dorthin.
+- **Aufbau des Bildschirms:** obere Leiste (`_topBar`, rechts Platz für die Fensterknöpfe), links `ToolPanel` (`tools.dart`), Mitte Seiten, unten `Fretboard`. Alle Werkzeuge stehen einmal in `allTools` (Gruppe, Notenzeichen aus Bravura als `\uXXXX`, Name de/en, Kürzel, aktiv/möglich, Aktion); Spalte, Suche (`showToolSearch`) und Hinweise lesen daraus. Neues Werkzeug = ein Eintrag dort. Notenzeichen nur nach Gefühl skaliert (`size`, `dy`). Werkzeugspalte, Griffbrett und offene Gruppen merkt sich `einstellungen.json` (`werkzeuge`, `griffbrett`, `werkzeuggruppen`).
+- **Ton beim Eingeben:** `NotePreview` rechnet den Ton mit `Synth` (gemerkt pro Tonhöhe und Klangfarbe) und spielt ihn über die gemeinsame Audio-Technik.
 - Neue Icons: Der lokale Linux-Bau kann ein altes, gekürztes Icon-Schriftbild behalten (`build/flutter_assets`); bei fehlenden Icons `build/` löschen. Auf GitHub wird immer frisch gebaut.
 
 ## Abspielen

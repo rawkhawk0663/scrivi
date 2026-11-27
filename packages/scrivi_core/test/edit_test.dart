@@ -170,6 +170,23 @@ void main() {
       expect(e.chordAtCursor(), 'Am7');
     });
 
+    test('Dynamik, Gabel, Anschlag, Tenuto', () {
+      final e = fresh();
+      e.inputFret(3);
+      e.setDynamic(Dynamic.p);
+      expect(e.currentBeat!.dynamic, Dynamic.p);
+      e.toggleHairpin(Hairpin.crescendo);
+      expect(e.currentBeat!.hairpin, Hairpin.crescendo);
+      e.toggleHairpin(Hairpin.crescendo);
+      expect(e.currentBeat!.hairpin, Hairpin.none);
+      e.togglePickStroke(1);
+      expect(e.currentBeat!.pickStroke, 1);
+      e.toggleTechnique(Technique.tenuto);
+      expect(e.hasTechnique(Technique.tenuto), isTrue);
+      e.setDynamic(null);
+      expect(e.currentBeat!.dynamic, isNull);
+    });
+
     test('Rückgängig und Wiederholen', () {
       final e = fresh();
       e.inputFret(1);

@@ -170,6 +170,20 @@ class ScorePlayer extends ChangeNotifier {
     }
   }
 
+  /// An Takt [bar], Stelle [onset] (ganze Noten) springen: im Durchgang, der der
+  /// aktuellen Stelle am nächsten liegt (bei Wiederholungen).
+  void seekTo(int bar, double onset) {
+    final here = _plan.barAt(position.value);
+    int? best;
+    for (var i = 0; i < _plan.bars.length; i++) {
+      if (_plan.bars[i].bar != bar) continue;
+      if (best == null || (i - here).abs() < (best - here).abs()) best = i;
+    }
+    if (best == null) return;
+    final pb = _plan.bars[best];
+    seek(pb.start + pb.secondsAt(onset));
+  }
+
   /// Zum Takt [bar] springen: zum nächsten Durchgang ab der aktuellen Stelle.
   void seekToBar(int bar) {
     final from = _plan.barAt(position.value);

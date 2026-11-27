@@ -14,6 +14,10 @@ class DeviceSettings {
     themeMode.value = _themeFrom(data['theme'] as String?);
     language.value = AppLanguage.fromCode(data['language'] as String?);
     scoreView.value = ScoreView.fromName(data['ansicht'] as String?);
+    showTools.value = data['werkzeuge'] as bool? ?? true;
+    showFretboard.value = data['griffbrett'] as bool? ?? true;
+    final groups = data['werkzeuggruppen'];
+    if (groups is List) openToolGroups.value = {for (final g in groups) '$g'};
   }
 
   final File? _file;
@@ -27,6 +31,31 @@ class DeviceSettings {
 
   /// Ansicht der Noten bei Saiteninstrumenten.
   final scoreView = ValueNotifier<ScoreView>(ScoreView.both);
+
+  /// Werkzeugspalte links und Griffbrett unten eingeblendet.
+  final showTools = ValueNotifier<bool>(true);
+  final showFretboard = ValueNotifier<bool>(true);
+
+  /// Offene Gruppen der Werkzeugspalte (Namen wie im Code, nie übersetzen).
+  final openToolGroups = ValueNotifier<Set<String>>({'duration', 'guitar'});
+
+  Future<void> setShowTools(bool v) async {
+    showTools.value = v;
+    _data['werkzeuge'] = v;
+    await _save();
+  }
+
+  Future<void> setShowFretboard(bool v) async {
+    showFretboard.value = v;
+    _data['griffbrett'] = v;
+    await _save();
+  }
+
+  Future<void> setOpenToolGroups(Set<String> v) async {
+    openToolGroups.value = v;
+    _data['werkzeuggruppen'] = v.toList()..sort();
+    await _save();
+  }
 
   /// Sprache, die gerade gilt.
   AppLanguage get effectiveLanguage => language.value ?? AppLanguage.system;

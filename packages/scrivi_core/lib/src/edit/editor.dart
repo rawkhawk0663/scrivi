@@ -42,6 +42,8 @@ enum Technique {
   bendHalf,
   accent,
   staccato,
+  tenuto,
+  marcato,
   tapping,
 }
 
@@ -704,6 +706,8 @@ class ScoreEditor {
     Technique.bendHalf => n.bend != null && (n.bend!.maxSemitones - 1).abs() < 0.01,
     Technique.accent => n.accent & 8 != 0,
     Technique.staccato => n.accent & 1 != 0,
+    Technique.tenuto => n.accent & 16 != 0,
+    Technique.marcato => n.accent & 4 != 0,
     Technique.tapping => n.tapped,
   };
 
@@ -726,6 +730,8 @@ class ScoreEditor {
           : n.copyWith(clearBend: true),
     Technique.accent => n.copyWith(accent: on ? n.accent | 8 : n.accent & ~8),
     Technique.staccato => n.copyWith(accent: on ? n.accent | 1 : n.accent & ~1),
+    Technique.tenuto => n.copyWith(accent: on ? n.accent | 16 : n.accent & ~16),
+    Technique.marcato => n.copyWith(accent: on ? n.accent | 4 : n.accent & ~4),
     Technique.tapping => n.copyWith(tapped: on),
   };
 
@@ -807,6 +813,38 @@ class ScoreEditor {
       bar++;
       beat = 0;
     }
+  }
+
+  /// Dynamik am Schlag des Cursors (null = entfernen).
+  void setDynamic(Dynamic? d) {
+    final b = currentBeat;
+    if (b == null) return;
+    _begin();
+    beatsOf(cursor.bar)[cursor.beat] = d == null ? b.copyWith(clearDynamic: true) : b.copyWith(dynamic: d);
+    _done();
+  }
+
+  /// Gabel (cresc./decresc.) für die Auswahl bzw. den Schlag am Cursor; gleiche Gabel = ausschalten.
+  void toggleHairpin(Hairpin h) {
+    final targets = _targets;
+    if (targets.isEmpty) return;
+    _begin();
+    final (b0, i0) = targets.first;
+    final off = beatsOf(b0)[i0].hairpin == h;
+    for (final (bar, i) in targets) {
+      final beats = beatsOf(bar);
+      beats[i] = beats[i].copyWith(hairpin: off ? Hairpin.none : h);
+    }
+    _done();
+  }
+
+  /// Anschlag: 1 = abwärts, −1 = aufwärts, gleicher Wert = ausschalten.
+  void togglePickStroke(int dir) {
+    final b = currentBeat;
+    if (b == null) return;
+    _begin();
+    beatsOf(cursor.bar)[cursor.beat] = b.copyWith(pickStroke: b.pickStroke == dir ? 0 : dir);
+    _done();
   }
 
   void toggleFermata() {

@@ -314,6 +314,27 @@ Bewusst offen:
 - Griffbrett zum Antippen (aus Suona) fehlt noch; die Bundzahlen-Tasten in der Werkzeugleiste
   ersetzen es vorerst.
 
+### Schreiben neu gedacht (27. November 2026)
+
+Rückmeldung des Besitzers: Scrivi ist zum Schreiben da, ein Bearbeiten-Modus ist falsch; die
+Aufteilung des bisherigen Gitarren-Programms gefällt (Werkzeuge links, Noten Mitte, Eigenschaften
+rechts, Spuren unten), nicht aber die Anordnung der Werkzeuge und das Aussehen. Kein Ring-Menü
+(verdeckt die Noten), kein automatisches Weiterspringen (Akkorde!), Notenzeichen statt Wörter mit
+schnell erscheinendem Hinweis. Vorschlag mit Skizze:
+https://claude.ai/artifact/GpYAHjvszpKnWipUK5Lvgt
+
+Plan in fünf Schritten:
+1. **Neuer Bildschirm, immer schreiben** ✅ – obere Leiste (Bereiche ein/aus, Rückgängig, Zoom,
+   Abspielen ab Cursor, Anzeige Spur/Takt/Zeit/Tempo/Taktart/Tonart, Tempo %, Schleife, Metronom,
+   Einzähler, Mischpult, Ansicht, Suche), Werkzeugspalte links (Gruppen, Notenzeichen, Hinweis nach
+   0,15 s, aktiv/blass, nur passende Werkzeuge, Suchfeld), Griffbrett unten (Akkorde durch weitere
+   Saiten, Töne des Takts blass), Ton beim Eingeben, Befehlssuche (Strg+K).
+2. Eigenschaften-Spalte rechts (Note, Takt, Spur, Stück) statt Fenster; Spuren mit Mischpult und
+   Song-Karte unten; Reiter für mehrere Stücke.
+3. Schnell-Eingaben: Akkordzeile tippen, Schlagmuster, Liedtext einfügen, Formteile wiederverwenden.
+4. Stift-Gesten, waagrechte Band-Ansicht.
+5. Mikrofon-Eingabe (einstimmig).
+
 ## 9. Entscheidungen (26. November 2026)
 
 1. **Umfang:** alles, was unter Punkt 1 steht.
