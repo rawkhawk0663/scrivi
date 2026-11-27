@@ -20,6 +20,7 @@ class DeviceSettings {
     showInspector.value = data['eigenschaften'] as bool? ?? true;
     endless.value = data['endlos'] as bool? ?? false;
     fullScore.value = data['partitur'] as bool? ?? false;
+    cursorStrip.value = data['cursorleiste'] as bool? ?? true;
     transposed.value = data['transponiert'] as bool? ?? false;
     final groups = data['werkzeuggruppen'];
     if (groups is List) openToolGroups.value = {for (final g in groups) '$g'};
@@ -57,6 +58,10 @@ class DeviceSettings {
   /// Alle Spuren untereinander als Partitur (statt nur die gewählte Spur).
   final fullScore = ValueNotifier<bool>(false);
   Future<void> setFullScore(bool v) => _set(fullScore, 'partitur', v);
+
+  /// Leiste mit Werkzeugen unter der Zeile, in der man schreibt.
+  final cursorStrip = ValueNotifier<bool>(true);
+  Future<void> setCursorStrip(bool v) => _set(cursorStrip, 'cursorleiste', v);
 
   /// Transponierende Instrumente so zeigen, wie die Musiker lesen (statt klingend).
   final transposed = ValueNotifier<bool>(false);

@@ -24,6 +24,7 @@ import '../../core/files/recent_files.dart';
 import '../../core/files/score_files.dart';
 import '../../widgets/visuals.dart';
 
+import 'cursor_strip.dart';
 import 'edit_tools.dart';
 import 'export_dialog.dart';
 import 'fretboard.dart';
@@ -1269,6 +1270,7 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
       ?settings?.showFretboard,
       ?settings?.openToolGroups,
       ?settings?.showTracks,
+      ?settings?.cursorStrip,
       ?settings?.showInspector,
     ]);
   }
@@ -1328,6 +1330,7 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
                   onEditKey: _onEditKey,
                   onPen: _onPen,
                   penWrites: _penNotes,
+                  stripHost: (_settings?.cursorStrip.value ?? true) ? this : null,
                 ),
               ),
               if (showFretboard) ...[
@@ -1423,6 +1426,12 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
                     s.showFretboard.value,
                     () => s.setShowFretboard(!s.showFretboard.value),
                   ),
+                toggle(
+                  Icons.call_to_action_outlined,
+                  tr('Leiste am Cursor ein/aus', 'Show/hide the strip at the cursor'),
+                  s.cursorStrip.value,
+                  () => s.setCursorStrip(!s.cursorStrip.value),
+                ),
                 toggle(
                   Icons.table_rows_outlined,
                   tr('Spuren ein/aus', 'Show/hide tracks'),
@@ -1759,6 +1768,7 @@ class _PagesViewer extends StatefulWidget {
     this.onEditKey,
     this.onPen,
     this.penWrites = false,
+    this.stripHost,
     this.endless = false,
   });
   final List<core.PageDisplay> pages;
@@ -1779,6 +1789,9 @@ class _PagesViewer extends StatefulWidget {
 
   /// Die Maus schreibt wie der Stift (statt die Seiten zu verschieben).
   final bool penWrites;
+
+  /// Leiste mit Werkzeugen unter der Zeile am Cursor (null = aus).
+  final ToolHost? stripHost;
 
   @override
   State<_PagesViewer> createState() => _PagesViewerState();
@@ -2092,6 +2105,34 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
     return null;
   }
 
+  /// Leiste unter (bzw. über) der Zeile am Cursor; beim Abspielen und wenn der
+  /// Cursor nicht zu sehen ist, verschwindet sie.
+  Widget _strip() {
+    final host = widget.stripHost;
+    final r = _cursorRect();
+    if (host == null || r == null || (widget.player?.playing ?? false)) return const SizedBox.shrink();
+    const w = CursorStrip.width, h = CursorStrip.height;
+    final vw = _viewport.width, vh = _viewport.height;
+    if (r.right < 0 || r.left > vw || r.bottom < 0 || r.top > vh || vw < w + 16) return const SizedBox.shrink();
+    final left = (r.center.dx - w / 2).clamp(8.0, vw - w - 8);
+    var above = false;
+    var top = r.bottom + 12;
+    if (top + h > vh - 4) {
+      above = true;
+      top = r.top - h - 12;
+    }
+    top = top.clamp(4.0, math.max(4.0, vh - h - 4));
+    return Stack(
+      children: [
+        Positioned(
+          left: left,
+          top: top,
+          child: CursorStrip(host: host, arrowX: r.center.dx - left, above: above),
+        ),
+      ],
+    );
+  }
+
   /// Rechteck des Cursors im Fenster (null = nicht sichtbar bzw. kein Bearbeiten).
   Rect? _cursorRect() {
     final e = widget.editor;
@@ -2255,6 +2296,13 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
                 child: CustomPaint(painter: _InkPainter(_ink, _inkTick, () => _eraser, Theme.of(context).colorScheme)),
               ),
             ),
+            if (widget.stripHost != null && widget.editor != null)
+              Positioned.fill(
+                child: ListenableBuilder(
+                  listenable: Listenable.merge([?widget.cursorTick, ?widget.player]),
+                  builder: (context, _) => _strip(),
+                ),
+              ),
           ],
         );
       },
