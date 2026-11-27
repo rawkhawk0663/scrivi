@@ -108,6 +108,8 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+          # Gradle-Teile zwischenspeichern: weniger Downloads, weniger Abweisungen
+          cache: gradle
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
@@ -118,8 +120,9 @@ jobs:
         run: echo "SCRIVI_VER=${VERSION_PREFIX}.$(( ${{ github.run_number }} - VERSION_START ))" >> "$GITHUB_ENV"
       # Mit festem Schlüssel signieren, damit Updates über die installierte
       # App gehen, auch mit Obtainium (Geheimnisse SCRIVI_KEYSTORE und
-      # SCRIVI_KEYSTORE_PASSWORD). Bricht beim Herunterladen von Android-Teilen
-      # die Verbindung ab, einmal nochmals versuchen.
+      # SCRIVI_KEYSTORE_PASSWORD). Weist der Server beim Herunterladen von
+      # Android-Teilen ab (zu viele Anfragen), mit wachsender Pause bis zu
+      # dreimal nochmals versuchen.
       - name: Android-App bauen
         env:
           SCRIVI_KEYSTORE: ${{ secrets.SCRIVI_KEYSTORE }}
@@ -127,7 +130,11 @@ jobs:
         run: |
           if [ -z "$SCRIVI_KEYSTORE" ]; then echo "::warning::Kein Signier-Schlüssel hinterlegt – Test-Schlüssel wird verwendet."; fi
           ARGS="--release --build-name=${{ env.SCRIVI_VER }} --build-number=${{ github.run_number }} --dart-define=SCRIVI_VERSION=v${{ env.SCRIVI_VER }}"
-          flutter build apk $ARGS || (echo "Zweiter Versuch …" && sleep 30 && flutter build apk $ARGS)
+          for wait in 0 60 180 300; do
+            if [ "$wait" != 0 ]; then echo "Nochmals in $wait s …"; sleep "$wait"; fi
+            if flutter build apk $ARGS; then exit 0; fi
+          done
+          exit 1
       - run: mkdir -p dist && cp build/app/outputs/flutter-apk/app-release.apk dist/Scrivi-Android.apk
       - uses: actions/cache/save@v4
         with:
