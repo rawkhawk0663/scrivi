@@ -126,12 +126,7 @@ class ScoreEngraver {
 
   String _name(Engraver e, bool first) {
     final n = e._track.name.trim();
-    if (first || n.length <= 6) return n;
-    // Kurzform ab der zweiten Zeile: erstes Wort gekürzt, der Rest bleibt („Viol. 1“)
-    final parts = n.split(' ');
-    final w = parts.first;
-    final short = w.length > 5 ? '${w.substring(0, 4)}.' : w;
-    return [short, ...parts.skip(1)].join(' ');
+    return first ? n : _short(n);
   }
 
   double _namesWidth(bool first) {
@@ -139,7 +134,9 @@ class ScoreEngraver {
     for (final e in _engs) {
       w = math.max(w, measurer.width(_name(e, first), TextRole.credit, _nameSize));
     }
-    return w > 0 ? w + 1.6 : 0;
+    // Platz für die Klammern links der Zeile
+    final braces = _engs.any((e) => _braceBase(e._track) != null);
+    return w > 0 ? w + 1.6 + (braces ? 2.6 : 0.8) : 0;
   }
 
   // ───────────────────────── Zeilen ─────────────────────────
@@ -253,18 +250,30 @@ class ScoreEngraver {
     final prevKeys = [for (final _ in _engs) const KeySignature(0)];
     var firstOnPage = true;
     for (var r = 0; r < all.length; r++) {
+      // Welche Spuren in dieser Zeile stehen (leere auf Wunsch weg, nie in der ersten Zeile)
+      final vis = [
+        for (var k = 0; k < _engs.length; k++)
+          if (!score.pageSetup.hideEmpty || r == 0 || _hasNotes(_engs[k], all[r][k])) k,
+      ];
+      if (vis.isEmpty) vis.add(0);
+      // Formteile, Tempo, Häuser, Sprünge und Taktnummern über der obersten gezeigten Spur
+      for (var k = 0; k < _engs.length; k++) {
+        _engs[k]._topStaff = k == vis.first;
+      }
       // Alle Spuren dieser Zeile zeichnen
-      final outs = <({List<DisplayItem> items, double top, double bottom})>[];
-      final builders = <_SystemBuilder>[];
+      final outs = <int, ({List<DisplayItem> items, double top, double bottom})>{};
+      final builders = <int, _SystemBuilder>{};
       for (var k = 0; k < _engs.length; k++) {
         final sb = _SystemBuilder(_engs[k], all[r][k], r, perTrack[k]);
-        outs.add(sb.build(prevKeys[k]));
-        builders.add(sb);
+        final out = sb.build(prevKeys[k]);
         prevKeys[k] = _engs[k]._keyOf(all[r][k].measures.last.mb);
+        if (!vis.contains(k)) continue;
+        outs[k] = out;
+        builders[k] = sb;
       }
       var height = 0.0;
-      for (var k = 0; k < outs.length; k++) {
-        height += outs[k].bottom - outs[k].top + (k > 0 ? staffGap : 0);
+      for (final k in vis) {
+        height += outs[k]!.bottom - outs[k]!.top + (k != vis.first ? staffGap : 0);
       }
       var top = firstOnPage ? y : y + systemGap;
       final pageBreak = r > 0 && all[r - 1].first.measures.last.mb.breakAfter == 2;
@@ -281,10 +290,11 @@ class ScoreEngraver {
       final s0 = all[r].first;
       top = e0._systemNudge(page, s0, top, height, x0: options.marginLeft);
       var cursor = top;
-      double? lineTop, lineBottom;
-      for (var k = 0; k < outs.length; k++) {
-        final e = _engs[k], out = outs[k], sb = builders[k], s = all[r][k];
-        if (k > 0) cursor += staffGap;
+      // Lage der Linien jeder gezeigten Spur (für Namen und Klammern)
+      final lines = <int, (double, double)>{};
+      for (final k in vis) {
+        final e = _engs[k], out = outs[k]!, sb = builders[k]!, s = all[r][k];
+        if (k != vis.first) cursor += staffGap;
         final dy = cursor - out.top;
         for (final it in out.items) {
           page.items.add(shift(it, 0, dy));
@@ -294,36 +304,140 @@ class ScoreEngraver {
         }
         final h = out.bottom - out.top;
         page.systems.add(e._box(s, sb, cursor, h, out.top));
-        // Lage der Linien dieser Spur (Noten bzw. Tabulatur)
         final staffTop = e._tabOnly ? sb._tabTop : 0.0;
         final staffBottom = e._tab ? sb._tabBottom : 4.0;
-        lineTop ??= staffTop + dy;
-        lineBottom = staffBottom + dy;
-        // Name links, auf der Höhe der Linien
-        final name = _name(e, s.first);
-        if (name.isNotEmpty) {
-          page.items.add(
-            TextItem(
-              name,
-              s0.x0 - 1.0,
-              (staffTop + staffBottom) / 2 + dy + _nameSize * 0.35,
-              TextRole.credit,
-              _nameSize,
-              align: TextAlign.right,
-            ),
-          );
-        }
+        lines[k] = (staffTop + dy, staffBottom + dy);
         cursor += h;
       }
-      // Linie und Klammer links über alle Spuren der Zeile
-      final lt = lineTop!, lb = lineBottom!;
-      page.items.add(LineItem(s0.x0, lt - _staffLineT / 2, s0.x0, lb + _staffLineT / 2, _thinT));
-      page.items.add(LineItem(s0.x0 - 0.55, lt - 0.3, s0.x0 - 0.55, lb + 0.3, _thickT));
+      _drawGroups(page, vis, lines, s0.x0, s0.first);
       y = cursor;
       firstOnPage = false;
     }
     e0._drawCopyright(pages.first);
     e0._pageNumbers(pages);
     return ScoreLayout(pages);
+  }
+
+  /// Hat die Spur in dieser Zeile etwas zu spielen?
+  static bool _hasNotes(Engraver e, _System s) => s.measures.any(
+    (m) =>
+        m.index < e._track.bars.length &&
+        e._track.bars[m.index].voices.any((v) => v.beats.any((b) => b.notes.isNotEmpty)),
+  );
+
+  static final _partOf = RegExp(r'^(.*) \((\d+)\)$');
+
+  /// Mehrere Notenzeilen eines Instruments („Klavier (1)“, „Klavier (2)“): gemeinsamer Name.
+  static String? _braceBase(Track t) => _partOf.firstMatch(t.name.trim())?.group(1);
+
+  /// Familie für die eckige Klammer: Tasten, Gitarren und Bass, Streicher, Bläser
+  /// (Schlagzeug und Unbekanntes stehen allein).
+  static String? _family(Track t) {
+    if (t.percussion) return null;
+    final p = t.program;
+    if (p < 0) return t.staff.isStringed ? 'guitar' : null;
+    if (p < 24) return 'keys';
+    if (p < 40) return 'guitar';
+    if (p < 56) return 'strings';
+    if (p < 80) return 'winds';
+    return null;
+  }
+
+  /// Linke Seite einer Zeile: Linie über alle Spuren, eckige Klammern um Familien, geschweifte
+  /// um die Notenzeilen eines Instruments, Namen links davon.
+  void _drawGroups(PageDisplay page, List<int> vis, Map<int, (double, double)> lines, double x0, bool first) {
+    final lt = lines[vis.first]!.$1, lb = lines[vis.last]!.$2;
+    page.items.add(LineItem(x0, lt - _staffLineT / 2, x0, lb + _staffLineT / 2, _thinT));
+    // Läufe gleicher Gruppen
+    List<List<int>> runs(String? Function(Track) key) {
+      final out = <List<int>>[];
+      for (final k in vis) {
+        final g = key(_engs[k]._track);
+        if (g != null && out.isNotEmpty && key(_engs[out.last.last]._track) == g) {
+          out.last.add(k);
+        } else {
+          out.add([k]);
+        }
+      }
+      return out;
+    }
+
+    final braces = runs(_braceBase).where((r) => r.length > 1).toList();
+    final braced = {for (final r in braces) ...r};
+    // Eckige Klammern um Familien mit mehreren Spuren (ein Klavier allein bekommt nur die geschweifte);
+    // gibt es keine solche Familie, eine Klammer über alle
+    final brackets = [
+      for (final run in runs(_family))
+        if (run.length > 1 && !braces.any((b) => b.length == run.length && b.first == run.first)) run,
+    ];
+    if (brackets.isEmpty && vis.length > 1 && braces.every((b) => b.length < vis.length)) brackets.add(vis);
+    const bracketX = -0.55;
+    for (final run in brackets) {
+      _bracket(page, x0 + bracketX, lines[run.first]!.$1, lines[run.last]!.$2);
+    }
+    // Geschweifte Klammern links der eckigen
+    final braceX = x0 - (brackets.isEmpty ? 0.5 : 1.9);
+    for (final run in braces) {
+      _brace(page, braceX, lines[run.first]!.$1, lines[run.last]!.$2);
+    }
+    // Namen links, auf der Höhe der Linien (bei geschweifter Klammer einmal in der Mitte)
+    final nameRight = braces.isNotEmpty ? braceX - 1.6 : (brackets.isEmpty ? x0 - 1.0 : x0 - 1.8);
+    void name(String t, double mid) {
+      if (t.isEmpty) return;
+      page.items.add(
+        TextItem(t, nameRight, mid + _nameSize * 0.35, TextRole.credit, _nameSize, align: TextAlign.right),
+      );
+    }
+
+    for (final run in braces) {
+      final base = _braceBase(_engs[run.first]._track)!;
+      name(first ? base : _short(base), (lines[run.first]!.$1 + lines[run.last]!.$2) / 2);
+    }
+    for (final k in vis) {
+      if (braced.contains(k)) continue;
+      name(_name(_engs[k], first), (lines[k]!.$1 + lines[k]!.$2) / 2);
+    }
+  }
+
+  /// Eckige Klammer: dicker Strich mit Haken oben und unten.
+  void _bracket(PageDisplay page, double x, double top, double bottom) {
+    const t = 0.5;
+    page.items.add(LineItem(x - t / 2, top - 0.25, x - t / 2, bottom + 0.25, t));
+    page.items.add(GlyphItem('bracketTop', x - t, top - 0.25));
+    page.items.add(GlyphItem('bracketBottom', x - t, bottom + 0.25));
+  }
+
+  /// Geschweifte Klammer, nur in der Höhe gestreckt.
+  void _brace(PageDisplay page, double x, double top, double bottom) {
+    final g = Glyphs.get('brace');
+    final sy = (bottom - top) / (g.top - g.bottom);
+    const sx = 3.2;
+    final c = g.path;
+    final out = <double>[];
+    var i = 0;
+    while (i < c.length) {
+      final op = c[i].toInt();
+      out.add(op.toDouble());
+      final n = switch (op) {
+        0 || 1 => 1,
+        3 => 3,
+        _ => 0,
+      };
+      for (var j = 0; j < n; j++) {
+        out
+          ..add(x - g.right * sx + c[i + 1 + j * 2] * sx)
+          ..add(bottom - (c[i + 2 + j * 2] - g.bottom) * sy);
+      }
+      i += 1 + n * 2;
+    }
+    page.items.add(PathItem(out));
+  }
+
+  /// Kurzform ab der zweiten Zeile: erstes Wort gekürzt, der Rest bleibt („Viol. 1“).
+  String _short(String n) {
+    if (n.length <= 6) return n;
+    final parts = n.split(' ');
+    final w = parts.first;
+    return [w.length > 5 ? '${w.substring(0, 4)}.' : w, ...parts.skip(1)].join(' ');
   }
 }

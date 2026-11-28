@@ -23,6 +23,8 @@ FONT = os.path.join(BASE, 'assets/fonts/Bravura.otf')
 OUT = os.path.join(BASE, 'packages/scrivi_core/lib/src/render/glyphs.g.dart')
 
 GLYPHS = [
+    # Klammern der Partitur
+    'brace', 'bracketTop', 'bracketBottom',
     # Notenköpfe
     'noteheadBlack', 'noteheadHalf', 'noteheadWhole', 'noteheadDoubleWhole',
     'noteheadXBlack', 'noteheadXHalf', 'noteheadXWhole',

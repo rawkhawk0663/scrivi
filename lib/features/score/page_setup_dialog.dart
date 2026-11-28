@@ -326,6 +326,21 @@ class _PageSetupPanelState extends State<_PageSetupPanel> {
                       s.pageNumbers,
                       (v) => _set(s.copyWith(pageNumbers: v)),
                     ),
+                    label(tr('Partitur', 'Full score')),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                      title: Text(tr('Leere Spuren ausblenden', 'Hide empty tracks'), style: const TextStyle(fontSize: 13)),
+                      subtitle: Text(
+                        tr(
+                          'Spuren, die in einer Zeile nichts spielen, fallen weg (nicht in der ersten Zeile).',
+                          'Tracks with nothing to play in a line are left out (not in the first line).',
+                        ),
+                        style: TextStyle(fontSize: 12, color: c.muted),
+                      ),
+                      value: s.hideEmpty,
+                      onChanged: (v) => _set(s.copyWith(hideEmpty: v)),
+                    ),
                     label(tr('Schriften', 'Fonts')),
                     for (final g in core.PageSetup.fontGroups) _fontRow(g, c),
                     label(tr('Vorlage für neue Stücke', 'Template for new pieces')),

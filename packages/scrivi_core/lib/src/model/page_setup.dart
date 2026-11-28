@@ -17,7 +17,11 @@ class PageSetup {
     this.pageNumbers = 0,
     this.fonts = const {},
     this.fontScales = const {},
+    this.hideEmpty = false,
   });
+
+  /// Partitur: Spuren, die in einer Zeile nichts zu spielen haben, weglassen (nicht in der ersten Zeile).
+  final bool hideEmpty;
 
   /// Papierformat: 'a4', 'letter' oder 'a3'.
   final String paper;
@@ -107,6 +111,7 @@ class PageSetup {
     int? pageNumbers,
     Map<String, String>? fonts,
     Map<String, double>? fontScales,
+    bool? hideEmpty,
   }) => PageSetup(
     paper: paper ?? this.paper,
     landscape: landscape ?? this.landscape,
@@ -122,6 +127,7 @@ class PageSetup {
     pageNumbers: pageNumbers ?? this.pageNumbers,
     fonts: fonts ?? this.fonts,
     fontScales: fontScales ?? this.fontScales,
+    hideEmpty: hideEmpty ?? this.hideEmpty,
   );
 
   static double _r(double v) => (v * 1000).roundToDouble() / 1000;
@@ -142,6 +148,7 @@ class PageSetup {
       if (barsPerLine != 0) 'barsPerLine': barsPerLine,
       if (barNumbers != 0) 'barNumbers': barNumbers,
       if (pageNumbers != 0) 'pageNumbers': pageNumbers,
+      if (hideEmpty) 'hideEmpty': true,
       if (fonts.isNotEmpty) 'fonts': {...fonts},
       if (fontScales.isNotEmpty) 'fontSizes': {for (final e in fontScales.entries) e.key: _r(e.value)},
     };
@@ -173,6 +180,7 @@ class PageSetup {
       barsPerLine: whole('barsPerLine', 16),
       barNumbers: whole('barNumbers', 3),
       pageNumbers: whole('pageNumbers', 3),
+      hideEmpty: j['hideEmpty'] == true,
       fonts: {
         if (j['fonts'] case final Map f)
           for (final e in f.entries)

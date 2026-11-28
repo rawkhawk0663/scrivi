@@ -348,6 +348,38 @@ void main() {
     final back = ScriviFormat.decode(ScriviFormat.encode(e.score));
     expect(back.nudges['diagrams'], const Nudge(5, 0));
   });
+
+  test('Partitur: Klammern, geschweifte Klammer, leere Spuren ausblenden', () {
+    final e = ScoreEditor(ScoreEditor.newScore(title: 'Band', bars: 12));
+    e.duration = const NoteDuration(NoteValue.whole);
+    e.cursor = const EditCursor(string: 3);
+    e.inputFret(2);
+    final g = e.score.tracks.first;
+    e.score.tracks.add(Track(name: 'Bass', staff: g.staff, bars: [for (final b in g.bars) b], program: 33));
+    for (final n in ['Klavier (1)', 'Klavier (2)']) {
+      e.score.tracks.add(
+        Track(
+          name: n,
+          staff: const StaffDef(),
+          bars: [for (var i = 0; i < 12; i++) Bar(clef: Clef.treble, voices: const [])],
+          program: 0,
+        ),
+      );
+    }
+    List<PageDisplay> pages() => ScoreEngraver(e.score).layout().pages;
+    final p0 = pages().first;
+    final glyphs = p0.items.whereType<GlyphItem>().map((g) => g.name).toSet();
+    expect(glyphs, containsAll(['bracketTop', 'bracketBottom']));
+    final names = p0.items.whereType<TextItem>().map((t) => t.text).toList();
+    expect(names, contains('Klavier')); // einmal neben der geschweiften Klammer
+    expect(names.where((t) => t.startsWith('Klavier (')), isEmpty);
+    final systemsBefore = pages().expand((p) => p.systems).length;
+    e.setPageSetup(e.score.pageSetup.copyWith(hideEmpty: true));
+    final hidden = pages();
+    // Ab der zweiten Zeile spielt nur noch die Gitarre (Takt 1) bzw. niemand: je eine Spur pro Zeile
+    expect(hidden.expand((p) => p.systems).length, lessThan(systemsBefore));
+    expect(ScriviFormat.decode(ScriviFormat.encode(e.score)).pageSetup.hideEmpty, isTrue);
+  });
 }
 
 class _Recording implements TextMeasurer {
