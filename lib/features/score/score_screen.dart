@@ -2612,8 +2612,6 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
     }
     lines.sort((a, b) => a.first.compareTo(b.first));
     final mbs = e.score.masterBars;
-    final c = context.scrivi;
-    final scheme = Theme.of(context).colorScheme;
     final out = <Widget>[];
     for (var j = 0; j < lines.length; j++) {
       final l = lines[j];
@@ -2623,60 +2621,17 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
       final at = toScreen(l.right, (l.top + l.bottom) / 2);
       if (at.dx < -40 || at.dx > _viewport.width || at.dy < -60 || at.dy > _viewport.height + 60) continue;
       final page = mbs[l.last].breakAfter == 2;
-      Widget button(IconData icon, String tip, VoidCallback? onTap, {bool on = false}) => Tooltip(
-        message: tip,
-        waitDuration: const Duration(milliseconds: 300),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(6),
-          onTap: onTap,
-          child: Container(
-            width: 24,
-            height: 22,
-            decoration: BoxDecoration(color: on ? scheme.primary : null, borderRadius: BorderRadius.circular(6)),
-            child: Icon(
-              icon,
-              size: 16,
-              color: on ? scheme.onPrimary : (onTap == null ? c.muted.withAlpha(90) : scheme.onSurface),
-            ),
-          ),
-        ),
-      );
       out.add(
         Positioned(
-          left: at.dx + 8,
-          top: at.dy - 37,
-          child: Material(
-            color: c.card,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-              side: BorderSide(color: c.line),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(2),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  button(
-                    Icons.add_rounded,
-                    tr('Einen Takt mehr in diese Zeile', 'One more bar on this line'),
-                    next == null ? null : () => widget.onLineChange!((e) => e.lineMore(l.last, next.last)),
-                  ),
-                  button(
-                    Icons.remove_rounded,
-                    tr('Einen Takt weniger (in die nächste Zeile)', 'One bar less (to the next line)'),
-                    l.last <= l.first
-                        ? null
-                        : () => widget.onLineChange!((e) => e.lineLess(l.first, l.last, next?.last)),
-                  ),
-                  button(
-                    Icons.vertical_align_bottom_rounded,
-                    tr('Neue Seite nach dieser Zeile', 'New page after this line'),
-                    next == null ? null : () => widget.onLineChange!((e) => e.togglePageAfter(l.last)),
-                    on: page,
-                  ),
-                ],
-              ),
-            ),
+          left: at.dx + 3,
+          top: at.dy - 17,
+          child: _LineDots(
+            onMore: next == null ? null : () => widget.onLineChange!((e) => e.lineMore(l.last, next.last)),
+            onLess: l.last <= l.first
+                ? null
+                : () => widget.onLineChange!((e) => e.lineLess(l.first, l.last, next?.last)),
+            onPage: next == null ? null : () => widget.onLineChange!((e) => e.togglePageAfter(l.last)),
+            page: page,
           ),
         ),
       );
@@ -3036,4 +2991,74 @@ class _EditCursorPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_EditCursorPainter old) => old.editor != editor || old.page != page;
+}
+
+/// Am Ende einer Zeile im Layout: kleine runde Knöpfe + und − (Takte pro Zeile), in der Farbe der
+/// Anfasser; „neue Seite danach“ erscheint nur beim Darüberfahren oder wenn sie gesetzt ist.
+class _LineDots extends StatefulWidget {
+  const _LineDots({required this.onMore, required this.onLess, required this.onPage, required this.page});
+  final VoidCallback? onMore, onLess, onPage;
+  final bool page;
+
+  @override
+  State<_LineDots> createState() => _LineDotsState();
+}
+
+class _LineDotsState extends State<_LineDots> {
+  bool _hover = false;
+
+  Widget _dot(IconData icon, String tip, VoidCallback? onTap, {bool on = false}) {
+    const color = ScriviColors.selection;
+    // Nicht möglich: Platz frei lassen, damit die Knöpfe nicht springen
+    if (onTap == null) return const SizedBox(width: 15, height: 15);
+    return Tooltip(
+      message: tip,
+      waitDuration: const Duration(milliseconds: 300),
+      child: InkResponse(
+        radius: 12,
+        onTap: onTap,
+        child: Container(
+          width: 15,
+          height: 15,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: on ? color : const Color(0xFFFFFFFF),
+            border: Border.all(color: color.withAlpha(on ? 255 : 150)),
+          ),
+          child: Icon(icon, size: 11, color: on ? const Color(0xFFFFFFFF) : color),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => MouseRegion(
+    onEnter: (_) => setState(() => _hover = true),
+    onExit: (_) => setState(() => _hover = false),
+    child: Padding(
+      padding: const EdgeInsets.only(right: 4, bottom: 4),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _dot(Icons.add_rounded, tr('Einen Takt mehr in diese Zeile', 'One more bar on this line'), widget.onMore),
+          const SizedBox(height: 3),
+          _dot(
+            Icons.remove_rounded,
+            tr('Einen Takt weniger (in die nächste Zeile)', 'One bar less (to the next line)'),
+            widget.onLess,
+          ),
+          const SizedBox(height: 3),
+          if (widget.onPage != null && (_hover || widget.page))
+            _dot(
+              Icons.vertical_align_bottom_rounded,
+              tr('Neue Seite nach dieser Zeile', 'New page after this line'),
+              widget.onPage,
+              on: widget.page,
+            )
+          else
+            const SizedBox(width: 15, height: 15),
+        ],
+      ),
+    ),
+  );
 }
