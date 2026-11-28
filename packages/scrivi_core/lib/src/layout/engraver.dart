@@ -306,8 +306,9 @@ class Engraver {
   final _measures = <_Meas>[];
 
   ScoreLayout layout() {
-    if (score.tracks.isEmpty)
+    if (score.tracks.isEmpty) {
       return ScoreLayout([PageDisplay(options.pageWidth, options.pageHeight, spaceMm: options.spaceMm)]);
+    }
     _build();
     if (options.endless) return _endlessLayout();
     final systems = _breakSystems();
