@@ -2594,11 +2594,13 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
         (byFirst[sys.firstBar] ??= []).add(sys);
       }
       for (final list in byFirst.values) {
+        // Mitte der Linien (Noten und/oder Tab), nicht der ganzen Zeile mit Akkorden und Rhythmus
         var right = 0.0, top = double.infinity, bottom = -double.infinity;
         for (final sys in list) {
           if (sys.bars.isNotEmpty) right = math.max(right, sys.bars.last.x1);
-          top = math.min(top, sys.top);
-          bottom = math.max(bottom, sys.bottom);
+          final tabBottom = sys.tabTop == null ? null : sys.tabTop! + (sys.strings - 1) * sys.tabSpacing;
+          top = math.min(top, sys.staffTop ?? sys.tabTop ?? sys.top);
+          bottom = math.max(bottom, tabBottom ?? (sys.staffTop == null ? sys.bottom : sys.staffTop! + 4));
         }
         lines.add((
           page: i,
