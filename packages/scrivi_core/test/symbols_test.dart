@@ -267,24 +267,37 @@ void main() {
   });
 
   test('Umbrüche: neue Zeile, neue Seite, zusammenhalten; Zeile verschieben', () {
-    final e = ScoreEditor(ScoreEditor.newScore(kind: NewPieceKind.leadSheet, title: 'Umbruch', bars: 16));
+    final e = ScoreEditor(ScoreEditor.newScore(kind: NewPieceKind.leadSheet, title: 'Umbruch', bars: 40));
     List<PageDisplay> pages() => Engraver(e.score).layout().pages;
     final before = pages().first.systems.first.lastBar;
     expect(before, greaterThan(2));
     e.setBreak(1, 1); // neue Zeile nach Takt 2
     expect(pages().first.systems.first.lastBar, 1);
-    expect(pages().first.breakMarks.single.$3, 1);
     e.setBreak(1, 2); // neue Seite nach Takt 2
     final p = pages();
     expect(p.length, greaterThanOrEqualTo(2));
     expect(p.first.systems.last.lastBar, 1);
     expect(p[1].systems.first.firstBar, 2);
-    e.clearBreaks(0, 15);
+    e.setBreak(1, 0);
     expect(pages().first.systems.first.lastBar, before);
-    // Zusammenhalten: auch über die Breite hinaus
-    e.keepTogether(0, before + 1);
-    expect(pages().first.systems.first.lastBar, before + 1);
-    e.clearBreaks(0, 15);
+    // + und − am Ende einer Zeile: nur diese und die nächste Zeile ändern sich
+    List<(int, int)> lines() => [for (final s in pages().expand((p) => p.systems)) (s.firstBar, s.lastBar)];
+    final l0 = lines();
+    e.lineMore(l0[0].$2, l0[1].$2);
+    final l1 = lines();
+    expect(l1[0], (l0[0].$1, l0[0].$2 + 1)); // auch über die Breite hinaus
+    expect(l1[1], (l0[1].$1 + 1, l0[1].$2));
+    expect(l1.sublist(2), l0.sublist(2));
+    e.lineLess(l1[1].$1, l1[1].$2, l1[2].$2);
+    final l2 = lines();
+    expect(l2[1], (l1[1].$1, l1[1].$2 - 1));
+    expect(l2[2], (l1[2].$1 - 1, l1[2].$2));
+    expect(l2.sublist(3), l1.sublist(3));
+    e.togglePageAfter(l2[0].$2);
+    expect(pages()[1].systems.first.firstBar, l2[1].$1);
+    e.togglePageAfter(l2[0].$2);
+    expect(lines(), l2);
+    e.resetAllNudges();
     // Zeile verschieben: nur senkrecht, die folgenden rutschen mit
     final sys = pages().first.systems;
     final h = pages().first.handles.firstWhere((h) => h.ref.key == 'system' && h.ref.bar == sys[1].firstBar);

@@ -124,10 +124,6 @@ class PageDisplay {
 
   /// Was sich im Layout verschieben lässt (Anfasser).
   final List<LayoutHandle> handles = [];
-
-  /// Von Hand gesetzte Umbrüche (nur am Bildschirm im Layout): Lage und Art
-  /// (1 neue Zeile, 2 neue Seite, −1 zusammenhalten).
-  final List<(double x, double y, int kind)> breakMarks = [];
 }
 
 /// Welches Element verschoben wird: im Kopf der Seite ([key] allein), an einem Takt ([bar])

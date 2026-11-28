@@ -1153,16 +1153,6 @@ final List<ToolDef> allTools = [
     run: (h) => h.editTitle(),
   ),
   ToolDef(
-    id: 'break-line',
-    group: ToolGroup.bar,
-    look: const IconLook(Icons.keyboard_return_rounded),
-    de: 'Neue Zeile nach diesem Takt',
-    en: 'New line after this bar',
-    keywords: const ['umbruch', 'zeilenumbruch', 'break', 'line break', 'zeile', 'layout'],
-    active: (e) => e.score.masterBars[e.cursor.bar].breakAfter == 1,
-    run: (h) => h.apply((e) => e.setBreak(e.cursor.bar, e.score.masterBars[e.cursor.bar].breakAfter == 1 ? 0 : 1)),
-  ),
-  ToolDef(
     id: 'break-page',
     group: ToolGroup.bar,
     look: const IconLook(Icons.vertical_align_bottom_rounded),

@@ -137,76 +137,6 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
         on && sel != null && sel.$1.bar == 0 && sel.$1.beat == 0 && sel.$2.bar == editor.score.masterBars.length - 1;
   }
 
-  /// Umbrüche am Takt [bar] (Zeile [first]..[last]).
-  Future<void> _breakMenu(int bar, int first, int last, Offset at) async {
-    final e = _editor;
-    if (e == null) return;
-    final mbs = e.score.masterBars;
-    final n = bar + 1;
-    final isLast = bar == last && bar + 1 < mbs.length;
-    final lineNudged = !(mbs[first].nudges['system']?.isZero ?? true);
-    final hasBreaks = [for (var b = first; b <= last; b++) mbs[b].breakAfter].any((k) => k != 0);
-    PopupMenuItem<VoidCallback> item(IconData icon, String text, VoidCallback run, {bool checked = false}) =>
-        PopupMenuItem(
-          value: run,
-          child: Row(
-            children: [Icon(checked ? Icons.check_rounded : icon, size: 18), const SizedBox(width: 12), Text(text)],
-          ),
-        );
-    final run = await showMenu<VoidCallback>(
-      context: context,
-      position: RelativeRect.fromLTRB(at.dx, at.dy, at.dx + 1, at.dy + 1),
-      items: [
-        item(
-          Icons.keyboard_return_rounded,
-          tr('Neue Zeile nach Takt $n', 'New line after bar $n'),
-          () => apply((e) => e.setBreak(bar, mbs[bar].breakAfter == 1 ? 0 : 1)),
-          checked: mbs[bar].breakAfter == 1,
-        ),
-        item(
-          Icons.vertical_align_bottom_rounded,
-          tr('Neue Seite nach Takt $n', 'New page after bar $n'),
-          () => apply((e) => e.setBreak(bar, mbs[bar].breakAfter == 2 ? 0 : 2)),
-          checked: mbs[bar].breakAfter == 2,
-        ),
-        if (isLast)
-          item(
-            Icons.keyboard_tab_rounded,
-            tr('Takt ${n + 1} in diese Zeile holen', 'Pull bar ${n + 1} into this line'),
-            () => apply((e) => e.setBreak(bar, -1)),
-          ),
-        if (bar + 1 < mbs.length && bar < last)
-          item(
-            Icons.link_off_rounded,
-            tr('Hier nie umbrechen', 'Never break here'),
-            () => apply((e) => e.setBreak(bar, mbs[bar].breakAfter == -1 ? 0 : -1)),
-            checked: mbs[bar].breakAfter == -1,
-          ),
-        item(
-          Icons.view_week_outlined,
-          tr(
-            'Zeile zusammenhalten (Takt ${first + 1}–${last + 1})',
-            'Keep line together (bars ${first + 1}–${last + 1})',
-          ),
-          () => apply((e) => e.keepTogether(first, last)),
-        ),
-        if (hasBreaks)
-          item(
-            Icons.layers_clear_outlined,
-            tr('Umbrüche in dieser Zeile aufheben', 'Clear breaks in this line'),
-            () => apply((e) => e.clearBreaks(first, last)),
-          ),
-        if (lineNudged)
-          item(
-            Icons.undo_rounded,
-            tr('Zeile zurück an ihren Platz', 'Line back to its place'),
-            () => apply((e) => e.setNudge(core.LayoutRef('system', bar: first), core.Nudge.zero)),
-          ),
-      ],
-    );
-    run?.call();
-  }
-
   Future<void> _resetAllNudges() async {
     final ok = await showDialog<bool>(
       context: context,
@@ -239,6 +169,16 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
 
   /// Zählt Cursor-Bewegungen (die Markierung zeichnet sich dann neu).
   final _cursorTick = ValueNotifier<int>(0);
+
+  /// Nichts gewählt (ins Leere getippt): Cursor, Auswahl und Leiste am Cursor ausgeblendet, bis
+  /// wieder eine Note angetippt, eine Taste gedrückt oder etwas geändert wird.
+  final _cursorHidden = ValueNotifier<bool>(false);
+
+  void _deselect() {
+    _editor?.anchor = null;
+    _cursorHidden.value = true;
+    _cursorTick.value++;
+  }
 
   @override
   void initState() {
@@ -442,6 +382,7 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
   void apply(void Function(core.ScoreEditor e) op, {bool sound = false}) {
     final e = _editor;
     if (e == null) return;
+    _cursorHidden.value = false;
     final rev = e.revision;
     try {
       op(e);
@@ -1306,6 +1247,8 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
   bool _onEditKey(KeyEvent ev) {
     final e = _editor;
     if (e == null || (ev is! KeyDownEvent && ev is! KeyRepeatEvent)) return false;
+    // Eine Taste holt den Cursor zurück (Esc bei schon ausgeblendetem Cursor nicht)
+    if (_cursorHidden.value && ev.logicalKey != LogicalKeyboardKey.escape) _cursorHidden.value = false;
     final hw = HardwareKeyboard.instance;
     final ctrl = hw.isControlPressed || hw.isMetaPressed;
     final shift = hw.isShiftPressed;
@@ -1427,7 +1370,12 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
     } else if (ch == 'Y') {
       editLyrics();
     } else if (k == LogicalKeyboardKey.escape) {
-      apply((e) => e.anchor = null);
+      // Esc: Auswahl weg; ohne Auswahl alles abwählen (Cursor und Leiste ausblenden)
+      if (e.anchor != null) {
+        apply((e) => e.anchor = null);
+      } else {
+        _deselect();
+      }
     } else {
       return false;
     }
@@ -1508,6 +1456,7 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
     _heard.dispose();
     _flushSave();
     _cursorTick.dispose();
+    _cursorHidden.dispose();
     _player?.dispose();
     _preview.dispose();
     for (final p in _pictures ?? const <ui.Picture>[]) {
@@ -1607,6 +1556,8 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
                   player: _player,
                   editor: e,
                   cursorTick: _cursorTick,
+                  cursorHidden: _cursorHidden,
+                  onDeselect: _layoutMode ? null : _deselect,
                   onEditTap: _layoutMode ? null : _onEditTap,
                   onEditInfo: _layoutMode || _editor == null ? null : editTitle,
                   onEditKey: _onEditKey,
@@ -1617,7 +1568,7 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
                   onLayoutDone: () => _setLayoutMode(false),
                   onLayoutResetAll: _resetAllNudges,
                   onPageSetup: editPageSetup,
-                  onLayoutMenu: _breakMenu,
+                  onLineChange: (op) => apply(op),
                 ),
               ),
               if (showFretboard) ...[
@@ -1988,6 +1939,8 @@ class _PagesViewer extends StatefulWidget {
     this.player,
     this.editor,
     this.cursorTick,
+    this.cursorHidden,
+    this.onDeselect,
     this.onEditTap,
     this.onEditInfo,
     this.onEditKey,
@@ -1999,7 +1952,7 @@ class _PagesViewer extends StatefulWidget {
     this.onLayoutDone,
     this.onLayoutResetAll,
     this.onPageSetup,
-    this.onLayoutMenu,
+    this.onLineChange,
   });
   final List<core.PageDisplay> pages;
 
@@ -2009,8 +1962,8 @@ class _PagesViewer extends StatefulWidget {
   final VoidCallback? onLayoutResetAll;
   final VoidCallback? onPageSetup;
 
-  /// Menü für Umbrüche: Takt, erster und letzter Takt seiner Zeile, Stelle auf dem Bildschirm.
-  final void Function(int bar, int first, int last, Offset global)? onLayoutMenu;
+  /// Takte pro Zeile ändern (+/− am Ende jeder Zeile im Layout).
+  final void Function(void Function(core.ScoreEditor e) op)? onLineChange;
 
   /// Eine einzige lange Zeile: waagrecht blättern.
   final bool endless;
@@ -2021,6 +1974,10 @@ class _PagesViewer extends StatefulWidget {
   final core.ScoreEditor? editor;
   final ValueNotifier<int>? cursorTick;
   final ValueChanged<_PageHit>? onEditTap;
+
+  /// Cursor ausgeblendet (nichts gewählt) und Antippen ins Leere (alles abwählen).
+  final ValueNotifier<bool>? cursorHidden;
+  final VoidCallback? onDeselect;
 
   /// Titel, Interpret, Copyright … auf dem Blatt angetippt: Angaben zum Stück ändern.
   final VoidCallback? onEditInfo;
@@ -2235,19 +2192,6 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
     widget.layout!.drag.value = _layoutHandle?.ref.key == 'system' ? Offset(0, d.dy) : d;
   }
 
-  /// Rechtsklick bzw. langes Drücken auf einen Takt im Layout: Umbrüche.
-  void _layoutMenu(Offset local, Offset global) {
-    final hit = _hitAt(local);
-    if (hit == null) return;
-    core.SystemBox? sys;
-    for (final page in widget.pages) {
-      for (final s in page.systems) {
-        if (hit.bar >= s.firstBar && hit.bar <= s.lastBar) sys = s;
-      }
-    }
-    widget.onLayoutMenu?.call(hit.bar, sys?.firstBar ?? hit.bar, sys?.lastBar ?? hit.bar, global);
-  }
-
   void _layoutUp() {
     final h = _layoutHandle, layout = widget.layout;
     _layoutPointer = null;
@@ -2413,7 +2357,11 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
       }
     }
     final hit = _hitAt(d.localPosition);
-    if (hit != null) widget.onEditTap?.call(hit);
+    if (hit != null) {
+      widget.onEditTap?.call(hit);
+    } else {
+      widget.onDeselect?.call();
+    }
   }
 
   void _set(double scale, Offset offset) {
@@ -2564,7 +2512,9 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
   Widget _strip() {
     final host = widget.stripHost;
     final r = _cursorRect();
-    if (host == null || r == null || (widget.player?.playing ?? false)) return const SizedBox.shrink();
+    if (host == null || r == null || (widget.player?.playing ?? false) || (widget.cursorHidden?.value ?? false)) {
+      return const SizedBox.shrink();
+    }
     final vw = _viewport.width, vh = _viewport.height;
     if (r.right < 0 || r.left > vw || r.bottom < 0 || r.top > vh) return const SizedBox.shrink();
     final beside = context.getInheritedWidgetOfExactType<SettingsScope>()?.settings.stripBeside.value ?? false;
@@ -2630,6 +2580,108 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
         ),
       ],
     );
+  }
+
+  /// Layout: am Ende jeder Zeile + (einen Takt mehr), − (einen Takt weniger) und „neue Seite danach“.
+  List<Widget> _lineControls(BuildContext context) {
+    final e = widget.editor;
+    if (e == null || _pageRects.isEmpty) return const [];
+    // Zeilen über alle Seiten (in der Partitur gehören mehrere Kästchen zu einer Zeile)
+    final lines = <({int page, int first, int last, double right, double top, double bottom})>[];
+    for (var i = 0; i < widget.pages.length && i < _pageRects.length; i++) {
+      final byFirst = <int, List<core.SystemBox>>{};
+      for (final sys in widget.pages[i].systems) {
+        (byFirst[sys.firstBar] ??= []).add(sys);
+      }
+      for (final list in byFirst.values) {
+        var right = 0.0, top = double.infinity, bottom = -double.infinity;
+        for (final sys in list) {
+          if (sys.bars.isNotEmpty) right = math.max(right, sys.bars.last.x1);
+          top = math.min(top, sys.top);
+          bottom = math.max(bottom, sys.bottom);
+        }
+        lines.add((
+          page: i,
+          first: list.first.firstBar,
+          last: list.first.lastBar,
+          right: right,
+          top: top,
+          bottom: bottom,
+        ));
+      }
+    }
+    lines.sort((a, b) => a.first.compareTo(b.first));
+    final mbs = e.score.masterBars;
+    final c = context.scrivi;
+    final scheme = Theme.of(context).colorScheme;
+    final out = <Widget>[];
+    for (var j = 0; j < lines.length; j++) {
+      final l = lines[j];
+      final next = j + 1 < lines.length ? lines[j + 1] : null;
+      final k = _k(l.page), pr = _pageRects[l.page];
+      Offset toScreen(double px, double py) => Offset(pr.left + px * k, pr.top + py * k) * _scale + _offset;
+      final at = toScreen(l.right, (l.top + l.bottom) / 2);
+      if (at.dx < -40 || at.dx > _viewport.width || at.dy < -60 || at.dy > _viewport.height + 60) continue;
+      final page = mbs[l.last].breakAfter == 2;
+      Widget button(IconData icon, String tip, VoidCallback? onTap, {bool on = false}) => Tooltip(
+        message: tip,
+        waitDuration: const Duration(milliseconds: 300),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(6),
+          onTap: onTap,
+          child: Container(
+            width: 24,
+            height: 22,
+            decoration: BoxDecoration(color: on ? scheme.primary : null, borderRadius: BorderRadius.circular(6)),
+            child: Icon(
+              icon,
+              size: 16,
+              color: on ? scheme.onPrimary : (onTap == null ? c.muted.withAlpha(90) : scheme.onSurface),
+            ),
+          ),
+        ),
+      );
+      out.add(
+        Positioned(
+          left: at.dx + 8,
+          top: at.dy - 37,
+          child: Material(
+            color: c.card,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+              side: BorderSide(color: c.line),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(2),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  button(
+                    Icons.add_rounded,
+                    tr('Einen Takt mehr in diese Zeile', 'One more bar on this line'),
+                    next == null ? null : () => widget.onLineChange!((e) => e.lineMore(l.last, next.last)),
+                  ),
+                  button(
+                    Icons.remove_rounded,
+                    tr('Einen Takt weniger (in die nächste Zeile)', 'One bar less (to the next line)'),
+                    l.last <= l.first
+                        ? null
+                        : () => widget.onLineChange!((e) => e.lineLess(l.first, l.last, next?.last)),
+                  ),
+                  button(
+                    Icons.vertical_align_bottom_rounded,
+                    tr('Neue Seite nach dieser Zeile', 'New page after this line'),
+                    next == null ? null : () => widget.onLineChange!((e) => e.togglePageAfter(l.last)),
+                    on: page,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+    return out;
   }
 
   /// Rechteck des Cursors im Fenster (null = nicht sichtbar bzw. kein Bearbeiten).
@@ -2767,8 +2819,6 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
               onScaleUpdate: _onScaleUpdate,
               onScaleEnd: _onScaleEnd,
               onTapUp: _onTapUp,
-              onSecondaryTapUp: widget.layout == null ? null : (d) => _layoutMenu(d.localPosition, d.globalPosition),
-              onLongPressStart: widget.layout == null ? null : (d) => _layoutMenu(d.localPosition, d.globalPosition),
               child: ClipRect(
                 child: OverflowBox(
                   alignment: Alignment.topLeft,
@@ -2793,7 +2843,12 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
                                 child: CustomPaint(
                                   foregroundPainter: widget.editor == null
                                       ? null
-                                      : _EditCursorPainter(widget.editor!, widget.pages[i], widget.cursorTick!),
+                                      : _EditCursorPainter(
+                                          widget.editor!,
+                                          widget.pages[i],
+                                          widget.cursorTick!,
+                                          widget.cursorHidden,
+                                        ),
                                   child: CustomPaint(
                                     foregroundPainter: widget.layout == null
                                         ? null
@@ -2820,6 +2875,7 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
                 child: CustomPaint(painter: _InkPainter(_ink, _inkTick, () => _eraser, Theme.of(context).colorScheme)),
               ),
             ),
+            if (widget.layout != null && widget.onLineChange != null) ..._lineControls(context),
             if (widget.layout != null)
               Positioned(
                 top: 10,
@@ -2851,7 +2907,7 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
             if (widget.stripHost != null && widget.editor != null)
               Positioned.fill(
                 child: ListenableBuilder(
-                  listenable: Listenable.merge([?widget.cursorTick, ?widget.player]),
+                  listenable: Listenable.merge([?widget.cursorTick, ?widget.player, ?widget.cursorHidden]),
                   builder: (context, _) => _strip(),
                 ),
               ),
@@ -2921,12 +2977,17 @@ class _CursorPainter extends CustomPainter {
 /// Cursor beim Bearbeiten: Balken über die Zeile, Markierung auf der Saite,
 /// ausgewählte Schläge hinterlegt.
 class _EditCursorPainter extends CustomPainter {
-  _EditCursorPainter(this.editor, this.page, Listenable tick) : super(repaint: tick);
+  _EditCursorPainter(this.editor, this.page, Listenable tick, this.hidden)
+    : super(repaint: Listenable.merge([tick, ?hidden]));
   final core.ScoreEditor editor;
   final core.PageDisplay page;
 
+  /// Nichts gewählt: kein Cursor.
+  final ValueNotifier<bool>? hidden;
+
   @override
   void paint(Canvas canvas, Size size) {
+    if (hidden?.value ?? false) return;
     final k = size.width / page.width;
     final color = ScriviColors.voices[editor.voice.clamp(0, 3)];
     // Auswahl

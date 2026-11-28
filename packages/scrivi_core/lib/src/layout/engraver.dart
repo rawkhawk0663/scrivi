@@ -271,9 +271,9 @@ class _Meas {
 
 /// Eine Zeile auf ihrer Seite: wo ihre Zeichen in den Listen der Seite beginnen (für „Seiten füllen“).
 class _Placed {
-  _Placed(this.page, this.items, this.handles, this.marks, this.boxes);
+  _Placed(this.page, this.items, this.handles, this.boxes);
   final PageDisplay page;
-  final int items, handles, marks, boxes;
+  final int items, handles, boxes;
   double bottom = 0;
 }
 
@@ -903,7 +903,7 @@ class Engraver {
         pages.add(page);
         top = options.marginTop;
       }
-      placed.add(_Placed(page, page.items.length, page.handles.length, page.breakMarks.length, page.systems.length));
+      placed.add(_Placed(page, page.items.length, page.handles.length, page.systems.length));
       top = _systemNudge(page, s, top, height);
       final dy = top - out.top;
       for (final it in out.items) {
@@ -949,10 +949,6 @@ class Engraver {
         }
         for (var i = a.handles; i < (b?.handles ?? page.handles.length); i++) {
           page.handles[i] = page.handles[i].shifted(0, dy);
-        }
-        for (var i = a.marks; i < (b?.marks ?? page.breakMarks.length); i++) {
-          final (x, y, k) = page.breakMarks[i];
-          page.breakMarks[i] = (x, y + dy, k);
         }
         for (var i = a.boxes; i < (b?.boxes ?? page.systems.length); i++) {
           page.systems[i] = page.systems[i].shifted(dy);
@@ -1196,8 +1192,7 @@ class Engraver {
     dy: n.dy,
   );
 
-  /// Zeile von Hand verschoben (nur senkrecht): neue Oberkante; dazu Anfasser am linken Rand
-  /// und die Zeichen für Umbrüche am Ende der Zeile.
+  /// Zeile von Hand verschoben (nur senkrecht): neue Oberkante; dazu der Anfasser am linken Rand.
   double _systemNudge(PageDisplay page, _System s, double top, double height, {double? x0}) {
     final first = s.measures.first.index;
     final n = score.masterBars[first].nudges['system'] ?? Nudge.zero;
@@ -1216,8 +1211,6 @@ class Engraver {
         refX: left + 1.0,
       ),
     );
-    final kind = s.measures.last.mb.breakAfter;
-    if (kind != 0) page.breakMarks.add((s.x1 + 1.2, top + n.dy + 1.0, kind));
     return top + n.dy;
   }
 

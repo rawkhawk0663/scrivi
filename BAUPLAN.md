@@ -445,6 +445,8 @@ Anfassern; jedes Element hängt an einem Anker, angezeigt werden die Abstände w
   OFL, auf Latein gekürzt); Vorlage für neue Stücke (Seite, Schriften, Akkordsymbole); Liedtext,
   Fingersätze und das Feld der Griffbilder lassen sich verschieben.
 - Später: Hinweise (P.M., let ring …) und Spieltechniken verschieben.
+- Takte pro Zeile mit + / − am Zeilenende ✅ (28. November 2026, Wunsch des Besitzers; ersetzt das
+  Umbruch-Menü per Rechtsklick), dazu „neue Seite danach“. Alles abwählen durch Tippen ins Leere.
 - Partitur für die Band ✅ (28. November 2026): Klammern um Instrumentgruppen, geschweifte Klammer
   um Instrumente mit zwei Notenzeilen, leere Spuren pro Zeile ausblenden. Offen: Einzelstimmen mit
   eigenem Layout (Verschiebungen und Umbrüche getrennt von der Partitur).

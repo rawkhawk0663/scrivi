@@ -289,7 +289,7 @@ class ScoreEngraver {
         top = options.marginTop;
       }
       final s0 = all[r].first;
-      placed.add(_Placed(page, page.items.length, page.handles.length, page.breakMarks.length, page.systems.length));
+      placed.add(_Placed(page, page.items.length, page.handles.length, page.systems.length));
       top = e0._systemNudge(page, s0, top, height, x0: options.marginLeft);
       var cursor = top;
       // Lage der Linien jeder gezeigten Spur (für Namen und Klammern)

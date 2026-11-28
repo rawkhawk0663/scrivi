@@ -1671,21 +1671,49 @@ class ScoreEditor {
     _done();
   }
 
-  /// Takte [from]..[to] in einer Zeile zusammenhalten (kein Umbruch dazwischen).
-  void keepTogether(int from, int to) {
+  /// Einen Takt mehr auf die Zeile, die mit Takt [last] endet: der erste Takt der nächsten Zeile
+  /// (die bis [nextLast] reicht) kommt herauf. Die Zeilen danach bleiben, wie sie sind.
+  void lineMore(int last, int nextLast) {
+    final mbs = _score.masterBars;
+    if (last + 1 >= mbs.length || nextLast <= last || nextLast >= mbs.length) return;
     _begin();
-    for (var b = from; b < to && b < _score.masterBars.length; b++) {
-      _score.masterBars[b] = _score.masterBars[b].copyWith(breakAfter: -1);
+    final page = mbs[last].breakAfter == 2;
+    mbs[last] = mbs[last].copyWith(breakAfter: -1);
+    // Die Zeile endet jetzt nach dem herübergeholten Takt (eine neue Seite bleibt nach der Zeile)
+    mbs[last + 1] = mbs[last + 1].copyWith(breakAfter: page ? 2 : 1);
+    // Die nächste Zeile endet weiterhin dort, wo sie bisher endete
+    if (nextLast > last + 1 && mbs[nextLast].breakAfter < 1) {
+      mbs[nextLast] = mbs[nextLast].copyWith(breakAfter: 1);
     }
     _done();
   }
 
-  /// Umbrüche und Zusammenhalten in Takten [from]..[to] aufheben.
-  void clearBreaks(int from, int to) {
+  /// Einen Takt weniger auf der Zeile [first]..[last]: der letzte Takt wandert an den Anfang der
+  /// nächsten Zeile (die bis [nextLast] reicht; null = es gibt keine, dann entsteht eine neue).
+  void lineLess(int first, int last, int? nextLast) {
+    final mbs = _score.masterBars;
+    if (last <= first || last >= mbs.length) return;
     _begin();
-    for (var b = from; b <= to && b < _score.masterBars.length; b++) {
-      if (_score.masterBars[b].breakAfter != 0) _score.masterBars[b] = _score.masterBars[b].copyWith(breakAfter: 0);
+    final page = mbs[last].breakAfter == 2;
+    mbs[last - 1] = mbs[last - 1].copyWith(breakAfter: page ? 2 : 1);
+    if (nextLast != null && nextLast > last && nextLast < mbs.length) {
+      // Die nächste Zeile behält ihre Takte und nimmt den gewanderten dazu
+      for (var b = last; b < nextLast; b++) {
+        mbs[b] = mbs[b].copyWith(breakAfter: -1);
+      }
+      if (mbs[nextLast].breakAfter < 1) mbs[nextLast] = mbs[nextLast].copyWith(breakAfter: 1);
+    } else if (mbs[last].breakAfter != 0) {
+      mbs[last] = mbs[last].copyWith(breakAfter: 0);
     }
+    _done();
+  }
+
+  /// Neue Seite nach der Zeile, die mit Takt [last] endet (ein/aus; aus = die Zeile endet trotzdem dort).
+  void togglePageAfter(int last) {
+    final mbs = _score.masterBars;
+    if (last < 0 || last >= mbs.length) return;
+    _begin();
+    mbs[last] = mbs[last].copyWith(breakAfter: mbs[last].breakAfter == 2 ? 1 : 2);
     _done();
   }
 
