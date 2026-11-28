@@ -1981,15 +1981,20 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
   double _flingLast = 0;
 
   // Lage der Seiten im Inhalt (ungezoomt)
-  List<double> _pageTops = const [];
-  double _pageW = 0;
-  double _pageLeft = 0;
+  // Seiten nebeneinander, jede so gross, dass sie ganz zu sehen ist (ungezoomt, im Inhalt)
+  List<Rect> _pageRects = const [];
+
+  /// Bildpunkte pro Linienabstand auf Seite [i] (ungezoomt).
+  double _k(int i) => _pageRects[i].width / widget.pages[i].width;
+
+  /// Lassen sich die Seiten senkrecht verschieben (nur beim Hineinzoomen bzw. Endlos)?
+  bool get _vertical => _contentHeight * _scale > _viewport.height + 1;
   core.SystemBox? _followed;
 
   static const _gap = 16.0;
 
   /// In der Endlos-Zeile lässt sich auch verkleinern (mehr Takte auf einmal).
-  double get _minScale => widget.endless ? 0.5 : 1.0;
+  double get _minScale => 0.5;
   static const _maxScale = 4.0;
 
   @override
@@ -2020,7 +2025,7 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
   /// ganz zu sehen ist, wird sie oben ins Bild gerückt.
   void _follow() {
     final player = widget.player;
-    if (player == null || !player.playing || _pageTops.isEmpty) return;
+    if (player == null || !player.playing || _pageRects.isEmpty) return;
     final (bar, pos) = player.location;
     if (widget.endless) {
       // Waagrecht mitlaufen: die Stelle bleibt im linken Drittel
@@ -2028,8 +2033,8 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
       final sys = page.systems.isEmpty ? null : page.systems.first;
       final x = sys?.xAt(bar, pos);
       if (x == null) return;
-      final k = _pageW / page.width;
-      final vx = (_pageLeft + x * k) * _scale + _offset.dx;
+      final k = _k(0);
+      final vx = (_pageRects.first.left + x * k) * _scale + _offset.dx;
       if (vx < _viewport.width * 0.1 || vx > _viewport.width * 0.8) {
         _fling.stop();
         _set(_scale, Offset(_offset.dx - vx + _viewport.width * 0.2, _offset.dy));
@@ -2041,12 +2046,17 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
         if (bar < sys.firstBar || bar > sys.lastBar) continue;
         if (identical(sys, _followed)) return;
         _followed = sys;
-        final k = _pageW / widget.pages[i].width;
-        final top = (_pageTops[i] + sys.top * k) * _scale + _offset.dy;
-        final bottom = (_pageTops[i] + sys.bottom * k) * _scale + _offset.dy;
-        if (top < 0 || bottom > _viewport.height) {
+        final k = _k(i), r = _pageRects[i];
+        final top = (r.top + sys.top * k) * _scale + _offset.dy;
+        final bottom = (r.top + sys.bottom * k) * _scale + _offset.dy;
+        final left = r.left * _scale + _offset.dx, right = r.right * _scale + _offset.dx;
+        var off = _offset;
+        // Seite nicht ganz zu sehen: waagrecht zu ihr blättern
+        if (left < 0 || right > _viewport.width) off = Offset(off.dx - left + _gap, off.dy);
+        if (top < 0 || bottom > _viewport.height) off = Offset(off.dx, off.dy - top + _viewport.height * 0.12);
+        if (off != _offset) {
           _fling.stop();
-          _set(_scale, Offset(_offset.dx, _offset.dy - top + _viewport.height * 0.12));
+          _set(_scale, off);
         }
         return;
       }
@@ -2081,11 +2091,11 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
   /// Fensterpunkt → Seite und Stelle darauf (sp).
   (int, Offset)? _pagePoint(Offset local) {
     final p = (local - _offset) / _scale;
-    for (var i = 0; i < widget.pages.length && i < _pageTops.length; i++) {
-      final page = widget.pages[i];
-      final k = _pageW / page.width;
-      if (p.dy < _pageTops[i] || p.dy > _pageTops[i] + page.height * k) continue;
-      return (i, Offset((p.dx - _pageLeft) / k, (p.dy - _pageTops[i]) / k));
+    for (var i = 0; i < widget.pages.length && i < _pageRects.length; i++) {
+      final r = _pageRects[i];
+      if (!r.contains(p)) continue;
+      final k = _k(i);
+      return (i, Offset((p.dx - r.left) / k, (p.dy - r.top) / k));
     }
     return null;
   }
@@ -2317,7 +2327,7 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
     _set(s1, f - content * s1);
   }
 
-  void reset() => _set(1, Offset(widget.endless ? _offset.dx / _scale : 0, _offset.dy / _scale));
+  void reset() => _set(1, Offset(_offset.dx / _scale, widget.endless ? _offset.dy / _scale : 0));
 
   void _onSignal(PointerSignalEvent e) {
     if (e is PointerScrollEvent) {
@@ -2325,7 +2335,7 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
         final s = event as PointerScrollEvent;
         if (HardwareKeyboard.instance.isControlPressed) {
           zoomBy(s.scrollDelta.dy < 0 ? 1.1 : 1 / 1.1, s.localPosition);
-        } else if (HardwareKeyboard.instance.isShiftPressed || widget.endless) {
+        } else if (HardwareKeyboard.instance.isShiftPressed || widget.endless || !_vertical) {
           scrollBy(0, s.scrollDelta.dy + s.scrollDelta.dx);
         } else {
           scrollBy(s.scrollDelta.dy, s.scrollDelta.dx);
@@ -2380,11 +2390,12 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
   /// hierher (rechtes Ende), 0 = der nächste.
   _PageHit? _hitAt(Offset local, {int snap = 0}) {
     final p = (local - _offset) / _scale;
-    for (var i = 0; i < widget.pages.length && i < _pageTops.length; i++) {
+    for (var i = 0; i < widget.pages.length && i < _pageRects.length; i++) {
       final page = widget.pages[i];
-      final k = _pageW / page.width;
-      if (p.dy < _pageTops[i] || p.dy > _pageTops[i] + page.height * k) continue;
-      final x = (p.dx - _pageLeft) / k, y = (p.dy - _pageTops[i]) / k;
+      final r = _pageRects[i];
+      if (!r.contains(p)) continue;
+      final k = _k(i);
+      final x = (p.dx - r.left) / k, y = (p.dy - r.top) / k;
       core.SystemBox? best;
       var bestDist = double.infinity;
       for (final sys in page.systems) {
@@ -2456,18 +2467,18 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
   /// Rechteck des Cursors im Fenster (null = nicht sichtbar bzw. kein Bearbeiten).
   Rect? _cursorRect() {
     final e = widget.editor;
-    if (e == null || _pageTops.isEmpty) return null;
+    if (e == null || _pageRects.isEmpty) return null;
     final bar = e.cursor.bar;
     final onset = e.cursorOnset.toDouble();
-    for (var i = 0; i < widget.pages.length && i < _pageTops.length; i++) {
+    for (var i = 0; i < widget.pages.length && i < _pageRects.length; i++) {
       final page = widget.pages[i];
       for (final sys in page.systems) {
         if (bar < sys.firstBar || bar > sys.lastBar) continue;
         if (sys.track != null && sys.track != e.track) continue;
         final x = sys.xAt(bar, onset);
         if (x == null) continue;
-        final k = _pageW / page.width;
-        Offset tr(double px, double py) => Offset(_pageLeft + px * k, _pageTops[i] + py * k) * _scale + _offset;
+        final k = _k(i), pr = _pageRects[i];
+        Offset tr(double px, double py) => Offset(pr.left + px * k, pr.top + py * k) * _scale + _offset;
         return Rect.fromPoints(tr(x - 1.2, sys.top), tr(x + 1.2, sys.bottom));
       }
     }
@@ -2493,16 +2504,18 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
       return KeyEventResult.handled;
     }
     if (e is! KeyDownEvent && e is! KeyRepeatEvent) return KeyEventResult.ignored;
-    final page = _viewport.height * 0.85;
+    // Blättern: senkrecht beim Hineinzoomen, sonst um eine Seite nach rechts bzw. links
+    final page = _vertical ? _viewport.height * 0.85 : 0.0;
+    final side = _vertical || _pageRects.isEmpty ? 0.0 : (_pageRects.first.width + _gap) * _scale;
     final k = e.logicalKey;
     if (k == LogicalKeyboardKey.space && widget.player != null) {
       widget.player!.toggle();
     } else if (k == LogicalKeyboardKey.pageDown ||
         k == LogicalKeyboardKey.space ||
         k == LogicalKeyboardKey.arrowRight) {
-      scrollBy(page);
+      scrollBy(page, side);
     } else if (k == LogicalKeyboardKey.pageUp || k == LogicalKeyboardKey.arrowLeft) {
-      scrollBy(-page);
+      scrollBy(-page, -side);
     } else if (k == LogicalKeyboardKey.arrowDown) {
       scrollBy(60);
     } else if (k == LogicalKeyboardKey.arrowUp) {
@@ -2522,24 +2535,39 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
     return LayoutBuilder(
       builder: (context, box) {
         _viewport = Size(box.maxWidth, box.maxHeight);
-        var pageW = math.min(box.maxWidth - 2 * _gap, 1100.0);
+        final rects = <Rect>[];
         if (widget.endless && widget.pages.isNotEmpty) {
-          // Gleicher Massstab wie eine A4-Seite, nur viel breiter
-          pageW = widget.pages.first.width * pageW / const core.LayoutOptions().pageWidth;
+          // Endlos: Massstab einer A4-Seite in Fensterbreite, die Zeile in der Mitte
+          final k = math.min(box.maxWidth - 2 * _gap, 1100.0) / const core.LayoutOptions().pageWidth;
+          final p = widget.pages.first;
+          final w = p.width * k, h = p.height * k;
+          _contentWidth = math.max(box.maxWidth, w + 2 * _gap);
+          _contentHeight = math.max(box.maxHeight, h + 2 * _gap);
+          rects.add(Rect.fromLTWH(_gap, math.max(_gap, (box.maxHeight - h) / 2), w, h));
+        } else if (widget.pages.isNotEmpty) {
+          // Seiten nebeneinander, jede ganz zu sehen (so hoch bzw. breit, wie das Fenster erlaubt)
+          final maxH = widget.pages.map((p) => p.height).reduce(math.max);
+          final maxW = widget.pages.map((p) => p.width).reduce(math.max);
+          final k = math.max(0.5, math.min((box.maxHeight - 2 * _gap) / maxH, (box.maxWidth - 2 * _gap) / maxW));
+          var x = _gap;
+          for (final p in widget.pages) {
+            rects.add(Rect.fromLTWH(x, _gap, p.width * k, p.height * k));
+            x += p.width * k + _gap;
+          }
+          _contentWidth = math.max(box.maxWidth, x);
+          _contentHeight = math.max(box.maxHeight, maxH * k + 2 * _gap);
+          // Weniger Seiten als Platz: in die Mitte
+          final shift = (_contentWidth - x) / 2;
+          if (shift > 0) {
+            for (var i = 0; i < rects.length; i++) {
+              rects[i] = rects[i].shift(Offset(shift, 0));
+            }
+          }
+        } else {
+          _contentWidth = box.maxWidth;
+          _contentHeight = box.maxHeight;
         }
-        final heights = widget.pages.map((p) => pageW * p.height / p.width).toList();
-        _contentHeight = math.max(heights.fold(_gap, (s, h) => s + h + _gap), box.maxHeight);
-        _contentWidth = math.max(box.maxWidth, pageW + 2 * _gap);
-        _pageW = pageW;
-        _pageLeft = (_contentWidth - pageW) / 2;
-        final tops = <double>[];
-        // Die Endlos-Zeile steht in der Mitte
-        var y = widget.endless && heights.isNotEmpty ? math.max(_gap, (box.maxHeight - heights.first) / 2) : _gap;
-        for (final h in heights) {
-          tops.add(y);
-          y += h + _gap;
-        }
-        _pageTops = tops;
+        _pageRects = rects;
         // Nach einer Grössenänderung des Fensters wieder in die Grenzen holen.
         final w = box.maxWidth, h = box.maxHeight;
         _offset = Offset(
@@ -2584,12 +2612,11 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
                     transform: Matrix4.identity()
                       ..translateByDouble(_offset.dx, _offset.dy, 0, 1)
                       ..scaleByDouble(_scale, _scale, 1, 1),
-                    child: Column(
+                    child: Stack(
                       children: [
-                        SizedBox(height: tops.isEmpty ? _gap : tops.first),
-                        for (var i = 0; i < widget.pages.length; i++) ...[
-                          SizedBox(
-                            width: pageW,
+                        for (var i = 0; i < widget.pages.length && i < rects.length; i++)
+                          Positioned.fromRect(
+                            rect: rects[i],
                             child: RepaintBoundary(
                               child: CustomPaint(
                                 foregroundPainter: widget.player == null
@@ -2609,8 +2636,6 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
                               ),
                             ),
                           ),
-                          const SizedBox(height: _gap),
-                        ],
                       ],
                     ),
                   ),
