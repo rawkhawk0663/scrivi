@@ -284,13 +284,24 @@ class Engraver {
     this.score, {
     this.trackIndex = 0,
     LayoutOptions options = const LayoutOptions(),
-    this.measurer = const ApproxTextMeasurer(),
-  }) : options = options.withPage(score.pageSetup);
+    TextMeasurer measurer = const ApproxTextMeasurer(),
+  }) : options = options.withPage(score.pageSetup),
+       measurer = FontMeasurer.of(measurer, score.pageSetup.fonts);
 
   final Score score;
   final int trackIndex;
   final LayoutOptions options;
   final TextMeasurer measurer;
+
+  /// Grösse der Texte nach „Seite einrichten“ (Gruppe der Schriften).
+  late final double _titleScale = score.pageSetup.scaleOf('title');
+  late final double _textScale = score.pageSetup.scaleOf('text');
+  late final double _chordSz = _chordSize * score.pageSetup.scaleOf('chord');
+  late final double _lyricsSz = _lyricsSize * score.pageSetup.scaleOf('lyrics');
+  late final double _textSz = _textSize * _textScale;
+
+  /// Neue Seite mit den gewählten Schriften.
+  PageDisplay _newPage(double w, double h) => PageDisplay(w, h, spaceMm: options.spaceMm, fonts: score.pageSetup.fonts);
 
   late final Track _track = score.tracks[trackIndex];
 
@@ -307,7 +318,7 @@ class Engraver {
 
   ScoreLayout layout() {
     if (score.tracks.isEmpty) {
-      return ScoreLayout([PageDisplay(options.pageWidth, options.pageHeight, spaceMm: options.spaceMm)]);
+      return ScoreLayout([_newPage(options.pageWidth, options.pageHeight)]);
     }
     _build();
     if (options.endless) return _endlessLayout();
@@ -678,11 +689,11 @@ class Engraver {
         }
         if (e.beat.chordId != null) {
           // Akkordnamen dürfen etwas überstehen, aber nicht zu viel.
-          w = math.max(w, _chordWidth(_chordParts(e.beat.chordId!), _chordSize) * 0.85);
+          w = math.max(w, _chordWidth(_chordParts(e.beat.chordId!), _chordSz) * 0.85);
           if (_inlineDiagrams) w = math.max(w, (_track.staff.stringCount - 1) * _inlineSs + 1.6);
         }
         if (e.beat.lyrics.isNotEmpty) {
-          w = math.max(w, measurer.width(e.beat.lyrics.first, TextRole.lyrics, _lyricsSize) + 0.6);
+          w = math.max(w, measurer.width(e.beat.lyrics.first, TextRole.lyrics, _lyricsSz) + 0.6);
         }
         minW = math.max(minW, w);
       }
@@ -862,7 +873,7 @@ class Engraver {
 
   ScoreLayout _paginate(List<_System> systems) {
     final pages = <PageDisplay>[];
-    var page = PageDisplay(options.pageWidth, options.pageHeight, spaceMm: options.spaceMm);
+    var page = _newPage(options.pageWidth, options.pageHeight);
     pages.add(page);
     var y = options.marginTop;
     y = _drawHeader(page, y);
@@ -879,7 +890,7 @@ class Engraver {
       var top = firstOnPage ? y : y + options.systemGap;
       final pageBreak = si > 0 && systems[si - 1].measures.last.mb.breakAfter == 2;
       if ((top + height > options.pageHeight - options.marginBottom || pageBreak) && !firstOnPage) {
-        page = PageDisplay(options.pageWidth, options.pageHeight, spaceMm: options.spaceMm);
+        page = _newPage(options.pageWidth, options.pageHeight);
         pages.add(page);
         top = options.marginTop;
       }
@@ -954,7 +965,7 @@ class Engraver {
     final out = sb.build(const KeySignature(0));
     final height = out.bottom - out.top;
     const top = 4.0;
-    final page = PageDisplay(s.x1 + options.marginRight, top + height + 4, spaceMm: options.spaceMm);
+    final page = _newPage(s.x1 + options.marginRight, top + height + 4);
     final dy = top - out.top;
     for (final it in out.items) {
       page.items.add(shift(it, 0, dy));
@@ -971,6 +982,7 @@ class Engraver {
     final cx = options.pageWidth / 2;
     final de = options.germanNoteNames;
     final top = y;
+    final ts = _titleScale, xs = _textScale;
     // Bei mehreren Spuren: Name des Instruments oben links (Einzelstimmen beim Drucken)
     final part = score.tracks.length > 1 && !_inScore ? _track.name.trim() : '';
     if (part.isNotEmpty) {
@@ -978,60 +990,60 @@ class Engraver {
         page,
         'part',
         de ? 'Instrument' : 'Instrument',
-        TextItem(part, options.marginLeft, y + 3.0, TextRole.credit, 1.6, bold: true),
+        TextItem(part, options.marginLeft, y + 3.0, TextRole.credit, 1.6 * xs, bold: true),
         options.marginLeft,
         top,
       );
     }
     if (info.title.isNotEmpty) {
-      y += 3.0;
+      y += 3.0 * ts;
       _head(
         page,
         'title',
         de ? 'Titel' : 'Title',
-        TextItem(info.title, cx, y, TextRole.title, 3.2, align: TextAlign.center, bold: true),
+        TextItem(info.title, cx, y, TextRole.title, 3.2 * ts, align: TextAlign.center, bold: true),
         cx,
         top,
       );
-      y += 1.2;
+      y += 1.2 * ts;
     } else if (part.isNotEmpty) {
-      y += 4.2;
+      y += 4.2 * xs;
     }
     if (info.subtitle.isNotEmpty) {
-      y += 2.0;
+      y += 2.0 * ts;
       _head(
         page,
         'subtitle',
         de ? 'Untertitel' : 'Subtitle',
-        TextItem(info.subtitle, cx, y, TextRole.subtitle, 1.8, align: TextAlign.center),
+        TextItem(info.subtitle, cx, y, TextRole.subtitle, 1.8 * ts, align: TextAlign.center),
         cx,
         top,
       );
-      y += 0.6;
+      y += 0.6 * ts;
     }
     if (info.artist.isNotEmpty) {
-      y += 1.8;
+      y += 1.8 * xs;
       _head(
         page,
         'artist',
         de ? 'Interpret' : 'Artist',
-        TextItem(info.artist, cx, y, TextRole.credit, 1.5, align: TextAlign.center),
+        TextItem(info.artist, cx, y, TextRole.credit, 1.5 * xs, align: TextAlign.center),
         cx,
         top,
       );
-      y += 0.6;
+      y += 0.6 * xs;
     }
     if (info.album.isNotEmpty) {
-      y += 1.6;
+      y += 1.6 * xs;
       _head(
         page,
         'album',
         'Album',
-        TextItem(info.album, cx, y, TextRole.credit, 1.3, align: TextAlign.center, italic: true),
+        TextItem(info.album, cx, y, TextRole.credit, 1.3 * xs, align: TextAlign.center, italic: true),
         cx,
         top,
       );
-      y += 0.5;
+      y += 0.5 * xs;
     }
     // Rechts: Text und Musik; links: wer die Noten geschrieben hat
     final words = info.words.trim(), music = info.music.trim();
@@ -1047,26 +1059,26 @@ class Engraver {
       if (info.tabber.trim().isNotEmpty) (de ? 'Transkription: ' : 'Transcribed by ') + info.tabber.trim(),
     ];
     // Unter dem Titel beginnen, damit sich nichts überdeckt
-    var side = top + (info.title.isNotEmpty ? 6.4 : 1.5);
+    var side = top + (info.title.isNotEmpty ? 2.0 + 4.4 * ts : 1.5);
     var ry = side, ly = side;
     for (final t in right) {
-      ry += 1.6;
+      ry += 1.6 * xs;
       _head(
         page,
         'credits',
         de ? 'Text und Musik' : 'Words and music',
-        TextItem(t, options.pageWidth - options.marginRight, ry, TextRole.credit, 1.25, align: TextAlign.right),
+        TextItem(t, options.pageWidth - options.marginRight, ry, TextRole.credit, 1.25 * xs, align: TextAlign.right),
         options.pageWidth - options.marginRight,
         top,
       );
     }
     for (final t in left) {
-      ly += 1.6;
+      ly += 1.6 * xs;
       _head(
         page,
         'tabber',
         de ? 'Transkription' : 'Transcriber',
-        TextItem(t, options.marginLeft, ly, TextRole.credit, 1.25),
+        TextItem(t, options.marginLeft, ly, TextRole.credit, 1.25 * xs),
         options.marginLeft,
         top,
       );
@@ -1076,12 +1088,12 @@ class Engraver {
     for (final line in info.instructions.split('\n')) {
       final t = line.trim();
       if (t.isEmpty) continue;
-      y += 1.9;
+      y += 1.9 * xs;
       _head(
         page,
         'instructions',
         de ? 'Anleitungen' : 'Instructions',
-        TextItem(t, options.marginLeft, y, TextRole.text, 1.35, italic: true),
+        TextItem(t, options.marginLeft, y, TextRole.text, 1.35 * xs, italic: true),
         options.marginLeft,
         top,
       );
@@ -1262,7 +1274,7 @@ class Engraver {
     if (!_tab && !_standardTuning) parts.add(staff.tuning.map(_noteName).join(' '));
     if (parts.isEmpty) return y;
     y += 1.4;
-    page.items.add(TextItem(parts.join('   ·   '), options.marginLeft, y, TextRole.text, _textSize, bold: true));
+    page.items.add(TextItem(parts.join('   ·   '), options.marginLeft, y, TextRole.text, _textSz, bold: true));
     return y + 1.6;
   }
 
@@ -1314,16 +1326,40 @@ class Engraver {
     final perRow = math.max(1, ((options.contentWidth + gap) / (cw + gap)).floor());
     final rowH = 2.6 + frets * fs + 1.8;
     y += 0.8;
+    final y0 = y;
+    final block = PageDisplay(0, 0);
+    var left = double.infinity, right = -double.infinity;
     for (var r = 0; r * perRow < list.length; r++) {
       final row = list.skip(r * perRow).take(perRow).toList();
       final total = row.length * cw + (row.length - 1) * gap;
       var x = options.marginLeft + (options.contentWidth - total) / 2;
+      left = math.min(left, x);
+      right = math.max(right, x + total);
       for (final (name, d) in row) {
-        _diagram(page, name, d, x + (cw - gridW) / 2, y, nameSize, ss, fs, frets);
+        _diagram(block, name, d, x + (cw - gridW) / 2, y, nameSize, ss, fs, frets);
         x += cw + gap;
       }
       y += rowH;
     }
+    // Das ganze Feld lässt sich im Layout verschieben (die Noten darunter bleiben, wo sie sind)
+    final nd = score.nudges['diagrams'] ?? Nudge.zero;
+    for (final it in block.items) {
+      page.items.add(nd.isZero ? it : shift(it, nd.dx, nd.dy));
+    }
+    page.handles.add(
+      handleFor(
+        LayoutRef('diagrams'),
+        options.germanNoteNames ? 'Griffbilder' : 'Chord diagrams',
+        left + nd.dx,
+        y0 - 1.6 + nd.dy,
+        right + nd.dx,
+        y - 1.4 + nd.dy,
+        options.marginLeft + options.contentWidth / 2,
+        y0 - 0.8,
+        nd,
+        refX: (left + right) / 2 + nd.dx,
+      ),
+    );
     return y + 0.4;
   }
 
@@ -2193,6 +2229,33 @@ class _SystemBuilder {
   /// Saitennummern im Kreis und Fingersätze der Anschlagshand (p i m a c) über dem Schlag,
   /// der höchste Ton zuoberst. Gibt die neue Oberkante zurück.
   double _fingerings(_Ev ev, double cx, double y) {
+    final start = items.length, y0 = y;
+    y = _fingeringItems(ev, cx, y);
+    if (items.length == start) return y;
+    // Von Hand verschoben: erst nachträglich, damit die Zeile gleich hoch bleibt
+    final n = ev.beat.nudges['finger'] ?? Nudge.zero;
+    if (!n.isZero) {
+      for (var i = start; i < items.length; i++) {
+        items[i] = shift(items[i], n.dx, n.dy);
+      }
+    }
+    handles.add(
+      Engraver.handleFor(
+        _beatRef(ev, 'finger'),
+        _de ? 'Fingersatz' : 'Fingering',
+        cx - 0.75 + n.dx,
+        y + 0.2 + n.dy,
+        cx + 0.75 + n.dx,
+        y0 + n.dy,
+        ev.x,
+        _lineTop,
+        n,
+      ),
+    );
+    return y;
+  }
+
+  double _fingeringItems(_Ev ev, double cx, double y) {
     final notes = [...ev.beat.notes]..sort((a, b) => a.pitch.midi.compareTo(b.pitch.midi));
     final strings = track.staff.stringCount;
     for (final n in notes) {
@@ -2505,13 +2568,13 @@ class _SystemBuilder {
         var right = x0, hTop = double.infinity, hBottom = -double.infinity;
         _nudge = n;
         if (showText || diagram == null) {
-          final d = drawChord(parts, x0, cy, _chordSize, e.measurer);
+          final d = drawChord(parts, x0, cy, e._chordSz, e.measurer);
           for (final it in d.items) {
             add(it);
           }
           right = x0 + d.width;
           hTop = d.top;
-          hBottom = cy + _chordSize * 0.25;
+          hBottom = cy + e._chordSz * 0.25;
           newTop = math.min(newTop, d.top - n.dy);
         }
         if (diagram != null) {
@@ -2556,7 +2619,7 @@ class _SystemBuilder {
       final y = rowTop - 0.6;
       for (final ev in textEvs) {
         final n = ev.beat.nudges['text'] ?? Nudge.zero;
-        final it = TextItem(ev.beat.text!, ev.x + n.dx, y + n.dy, TextRole.text, _textSize, italic: true);
+        final it = TextItem(ev.beat.text!, ev.x + n.dx, y + n.dy, TextRole.text, e._textSz, italic: true);
         _nudge = n;
         add(it);
         _nudge = Nudge.zero;
@@ -2564,12 +2627,12 @@ class _SystemBuilder {
       }
       for (final m in swings) {
         final label = m.mb.swing ? 'Swing' : (e.options.germanNoteNames ? 'Gerade' : 'Straight');
-        text(label, m.x + 1.0, y, TextRole.text, _textSize, bold: true);
+        text(label, m.x + 1.0, y, TextRole.text, e._textSz, bold: true);
       }
       for (final m in jumps) {
         _directions(m, y);
       }
-      rowTop = math.min(top, y - _textSize * 0.8);
+      rowTop = math.min(top, y - e._textSz * 0.8);
     }
     // Formteile und Tempo
     final sections = s.measures.where((m) => m.mb.section != null && m.mb.section!.label.isNotEmpty).toList();
@@ -2747,21 +2810,21 @@ class _SystemBuilder {
         case Direction.coda || Direction.doubleCoda:
           glyph('coda', start, y + 0.2, scale: 0.6);
         case Direction.fine:
-          text('Fine', end, y, TextRole.text, _textSize, align: TextAlign.right, italic: true, bold: true);
+          text('Fine', end, y, TextRole.text, e._textSz, align: TextAlign.right, italic: true, bold: true);
         case Direction.daCapo:
-          text('D.C.', end, y, TextRole.text, _textSize, align: TextAlign.right, italic: true);
+          text('D.C.', end, y, TextRole.text, e._textSz, align: TextAlign.right, italic: true);
         case Direction.daCapoAlFine:
-          text('D.C. al Fine', end, y, TextRole.text, _textSize, align: TextAlign.right, italic: true);
+          text('D.C. al Fine', end, y, TextRole.text, e._textSz, align: TextAlign.right, italic: true);
         case Direction.daCapoAlCoda:
-          text('D.C. al Coda', end, y, TextRole.text, _textSize, align: TextAlign.right, italic: true);
+          text('D.C. al Coda', end, y, TextRole.text, e._textSz, align: TextAlign.right, italic: true);
         case Direction.dalSegno:
-          text('D.S.', end, y, TextRole.text, _textSize, align: TextAlign.right, italic: true);
+          text('D.S.', end, y, TextRole.text, e._textSz, align: TextAlign.right, italic: true);
         case Direction.dalSegnoAlFine:
-          text('D.S. al Fine', end, y, TextRole.text, _textSize, align: TextAlign.right, italic: true);
+          text('D.S. al Fine', end, y, TextRole.text, e._textSz, align: TextAlign.right, italic: true);
         case Direction.dalSegnoAlCoda:
-          text('D.S. al Coda', end, y, TextRole.text, _textSize, align: TextAlign.right, italic: true);
+          text('D.S. al Coda', end, y, TextRole.text, e._textSz, align: TextAlign.right, italic: true);
         case Direction.toCoda:
-          text('To Coda', end - 2.6, y, TextRole.text, _textSize, align: TextAlign.right, italic: true);
+          text('To Coda', end - 2.6, y, TextRole.text, e._textSz, align: TextAlign.right, italic: true);
           glyph('coda', end - 2.3, y + 0.2, scale: 0.6);
       }
     }
@@ -2868,12 +2931,36 @@ class _SystemBuilder {
     final lyricEvs = voice0.where((ev) => ev.beat.lyrics.isNotEmpty).toList();
     if (lyricEvs.isNotEmpty) {
       final lines = lyricEvs.map((ev) => ev.beat.lyrics.length).reduce(math.max);
-      for (var l = 0; l < lines; l++) {
-        final y = rowBottom + 2.0 + l * 1.8;
-        for (final ev in lyricEvs) {
-          if (l >= ev.beat.lyrics.length || ev.beat.lyrics[l].isEmpty) continue;
-          text(ev.beat.lyrics[l], ev.x + ev.headW / 2, y, TextRole.lyrics, _lyricsSize, align: TextAlign.center);
+      for (final ev in lyricEvs) {
+        final n = ev.beat.nudges['lyrics'] ?? Nudge.zero;
+        final cx = ev.x + ev.headW / 2 + n.dx;
+        var w = 0.0;
+        var last = -1;
+        _nudge = n;
+        for (var l = 0; l < lines && l < ev.beat.lyrics.length; l++) {
+          final t = ev.beat.lyrics[l];
+          if (t.isEmpty) continue;
+          final y = rowBottom + 0.6 + e._lyricsSz * (1 + l * 1.3) + n.dy;
+          text(t, cx, y, TextRole.lyrics, e._lyricsSz, align: TextAlign.center);
+          w = math.max(w, tw(t, TextRole.lyrics, e._lyricsSz));
+          last = l;
         }
+        _nudge = Nudge.zero;
+        if (last < 0) continue;
+        final top = rowBottom + 0.6 + e._lyricsSz * 0.2 + n.dy;
+        handles.add(
+          Engraver.handleFor(
+            _beatRef(ev, 'lyrics'),
+            '${_de ? 'Liedtext' : 'Lyrics'} ${ev.beat.lyrics.firstWhere((t) => t.isNotEmpty, orElse: () => '')}',
+            cx - w / 2,
+            top,
+            cx + w / 2,
+            rowBottom + 0.6 + e._lyricsSz * (1.25 + last * 1.3) + n.dy,
+            ev.x,
+            _lineBottom,
+            n,
+          ),
+        );
       }
     }
   }

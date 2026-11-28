@@ -296,4 +296,66 @@ void main() {
     final back = ScriviFormat.decode(ScriviFormat.encode(e.score));
     expect(back.masterBars[sys[1].firstBar].nudges['system'], const Nudge(0, 3));
   });
+
+  test('Schriften und Textgrössen: auf der Seite, gemessen, gespeichert', () {
+    final e = ScoreEditor(ScoreEditor.newScore(kind: NewPieceKind.leadSheet, title: 'Schrift', bars: 4));
+    e.setChordLine('C | G7 | Am | F');
+    final widths = <String>[];
+    final measurer = _Recording(widths);
+    final setup = PageSetup.standard.withFont('chord', 'kalam').withFont('title', 'garamond').withScale('title', 1.5);
+    e.setPageSetup(setup);
+    final page = Engraver(e.score, measurer: measurer).layout().pages.first;
+    expect(page.fontFor(TextRole.chord), 'kalam');
+    expect(page.fontFor(TextRole.title), 'garamond');
+    expect(page.fontFor(TextRole.lyrics), 'plex'); // Grundwert
+    expect(widths, contains('chord:kalam'));
+    final title = page.items.whereType<TextItem>().firstWhere((t) => t.role == TextRole.title);
+    expect(title.size, closeTo(3.2 * 1.5, 0.001));
+    // Grundwerte fallen aus der Datei
+    expect(setup.withFont('chord', 'sora').fonts.containsKey('chord'), isFalse);
+    final back = ScriviFormat.decode(ScriviFormat.encode(e.score)).pageSetup;
+    expect(back.fontOf('chord'), 'kalam');
+    expect(back.scaleOf('title'), 1.5);
+    expect(back.scaleOf('lyrics'), 1.0);
+  });
+
+  test('Layout: Liedtext, Fingersatz und Griffbilder verschieben', () {
+    final e = ScoreEditor(ScoreEditor.newScore(title: 'Lied', bars: 2));
+    e.duration = const NoteDuration(NoteValue.quarter);
+    e.cursor = const EditCursor(string: 3);
+    e.inputFret(2);
+    e.setFinger(right: 2);
+    e.moveBeat(1);
+    e.inputFret(4);
+    e.cursor = const EditCursor();
+    e.setLyricsText('Hal-lo');
+    e.setChordLine('C | G');
+    LayoutHandle handle(String key) =>
+        Engraver(e.score).layout().pages.first.handles.firstWhere((h) => h.ref.key == key);
+    double lyricY() =>
+        Engraver(e.score).layout().pages.first.items.whereType<TextItem>().firstWhere((t) => t.text == 'Hal-').y;
+    final y0 = lyricY();
+    final staff0 = Engraver(e.score).layout().pages.first.systems.first.top;
+    e.setNudge(handle('lyrics').ref, const Nudge(0, 2));
+    expect(lyricY(), closeTo(y0 + 2, 0.01));
+    expect(Engraver(e.score).layout().pages.first.systems.first.top, closeTo(staff0, 0.01));
+    final f = handle('finger');
+    e.setNudge(f.ref, const Nudge(1, -1));
+    expect(handle('finger').left, closeTo(f.left + 1, 0.01));
+    final d = handle('diagrams');
+    e.setNudge(d.ref, const Nudge(5, 0));
+    expect(handle('diagrams').left, closeTo(d.left + 5, 0.01));
+    final back = ScriviFormat.decode(ScriviFormat.encode(e.score));
+    expect(back.nudges['diagrams'], const Nudge(5, 0));
+  });
+}
+
+class _Recording implements TextMeasurer {
+  _Recording(this.seen);
+  final List<String> seen;
+  @override
+  double width(String text, TextRole role, double size, {bool bold = false, bool italic = false, String? font}) {
+    seen.add('${role.name}:$font');
+    return text.length * size * 0.56;
+  }
 }

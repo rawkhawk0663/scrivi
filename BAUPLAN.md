@@ -437,11 +437,14 @@ Anfassern; jedes Element hängt an einem Anker, angezeigt werden die Abstände w
 - Schritt 1 ✅: Elemente ausserhalb der Notenlinien verschieben (Kopf, Fuss, Akkorde, Text, Dynamik,
   Formteile, Tempo), Pfeiltasten, zurücksetzen.
 - Schritt 2 ✅: Seite einrichten (Papier, quer, Ränder, Notengrösse, Zeilenabstand, Noten-Dichte, Takte
-  pro Zeile, Taktnummern, Seitenzahlen), sofort sichtbar, auch im PDF. Offen: Schriften, Vorlage für
-  neue Stücke.
+  pro Zeile, Taktnummern, Seitenzahlen), sofort sichtbar, auch im PDF.
 - Schritt 3 ✅: Zeilen- und Seitenumbrüche (auch „nie hier“ und Zeile zusammenhalten), Zeilen einzeln
   hoch und runter ziehen.
-- Später: weitere Elemente (Fingersätze, Griffbilder, Liedtext, Hinweise).
+- Schritt 4 ✅ (28. November 2026): Schriften und Grössen für Titel, Akkorde, Liedtext und übrige
+  Texte (Modern = Sora, Schlicht = IBM Plex Sans, Klassisch = EB Garamond, Handschrift = Kalam; alle
+  OFL, auf Latein gekürzt); Vorlage für neue Stücke (Seite, Schriften, Akkordsymbole); Liedtext,
+  Fingersätze und das Feld der Griffbilder lassen sich verschieben.
+- Später: Hinweise (P.M., let ring …) und Spieltechniken verschieben.
 
 ### Mischpult in den Spuren, Menü „Ansicht“ (27. November 2026)
 

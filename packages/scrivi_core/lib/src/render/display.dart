@@ -9,6 +9,29 @@ enum TextRole { title, subtitle, credit, chord, section, tab, text, lyrics, barN
 
 enum TextAlign { left, center, right }
 
+/// Schriften auf dem Blatt (wählbar unter „Seite einrichten“): zu welcher Gruppe eine Textrolle gehört.
+/// Gruppen: 'title' (Titel, Untertitel, Formteile), 'chord', 'lyrics', 'text' (alle übrigen), 'tab' (fest).
+String fontGroup(TextRole role) => switch (role) {
+  TextRole.title || TextRole.subtitle || TextRole.section => 'title',
+  TextRole.chord => 'chord',
+  TextRole.lyrics => 'lyrics',
+  TextRole.tab => 'tab',
+  _ => 'text',
+};
+
+/// Wählbare Schriften (Schlüssel wie in der Datei): 'sora' modern, 'plex' schlicht,
+/// 'garamond' klassisch mit Serifen, 'kalam' von Hand geschrieben.
+const textFonts = ['sora', 'plex', 'garamond', 'kalam'];
+
+/// Schrift pro Gruppe, wenn nichts gewählt ist.
+const defaultTextFonts = {'title': 'sora', 'chord': 'sora', 'lyrics': 'plex', 'text': 'plex', 'tab': 'plex'};
+
+/// Schrift für eine Textrolle nach der Wahl [fonts] (Gruppe → Schrift).
+String textFontFor(TextRole role, Map<String, String> fonts) {
+  final g = fontGroup(role);
+  return fonts[g] ?? defaultTextFonts[g]!;
+}
+
 sealed class DisplayItem {
   const DisplayItem();
 }
@@ -84,7 +107,13 @@ class TextItem extends DisplayItem {
 
 /// Eine Seite: Grösse und Inhalt.
 class PageDisplay {
-  PageDisplay(this.width, this.height, {this.spaceMm = 1.75});
+  PageDisplay(this.width, this.height, {this.spaceMm = 1.75, this.fonts = const {}});
+
+  /// Gewählte Schriften (Gruppe → Schrift, siehe [fontGroup]); fehlt eine, gilt [defaultTextFonts].
+  final Map<String, String> fonts;
+
+  /// Schrift für einen Text dieser Seite.
+  String fontFor(TextRole role) => textFontFor(role, fonts);
   final double width;
   final double height;
 
@@ -266,12 +295,29 @@ class BarSpan {
 /// Misst Texte, damit der Notensatz Platz lassen kann. Die App misst genau,
 /// Tests und Werkzeuge schätzen.
 abstract class TextMeasurer {
-  double width(String text, TextRole role, double size, {bool bold = false, bool italic = false});
+  /// [font]: Schrift (siehe [textFonts]); null = Grundschrift der Rolle.
+  double width(String text, TextRole role, double size, {bool bold = false, bool italic = false, String? font});
 }
 
 class ApproxTextMeasurer implements TextMeasurer {
   const ApproxTextMeasurer();
   @override
-  double width(String text, TextRole role, double size, {bool bold = false, bool italic = false}) =>
+  double width(String text, TextRole role, double size, {bool bold = false, bool italic = false, String? font}) =>
       text.length * size * (bold ? 0.62 : 0.56);
+}
+
+/// Misst mit den Schriften, die für das Stück gewählt sind.
+class FontMeasurer implements TextMeasurer {
+  FontMeasurer._(this.base, this.fonts);
+
+  /// Legt die Wahl [fonts] um [measurer] (ein schon umgelegter wird ausgepackt).
+  factory FontMeasurer.of(TextMeasurer measurer, Map<String, String> fonts) =>
+      FontMeasurer._(measurer is FontMeasurer ? measurer.base : measurer, fonts);
+
+  final TextMeasurer base;
+  final Map<String, String> fonts;
+
+  @override
+  double width(String text, TextRole role, double size, {bool bold = false, bool italic = false, String? font}) =>
+      base.width(text, role, size, bold: bold, italic: italic, font: font ?? textFontFor(role, fonts));
 }

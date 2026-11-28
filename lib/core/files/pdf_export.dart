@@ -67,7 +67,7 @@ class PdfExport {
               g.strokePath();
             }
           case core.TextItem t:
-            final f = await font(_fontFor(t.role, t.bold));
+            final f = await font(_fontFor(t.role, t.bold, t.italic, page.fontFor(t.role)));
             final text = _printable(t.text, f);
             if (text.isEmpty) continue;
             final size = t.size * k;
@@ -110,13 +110,19 @@ class PdfExport {
     }
   }
 
-  /// Schrift wie in der App (siehe score_painter): Sora für Titel, Formteile und Akkorde, sonst Plex.
-  static String _fontFor(core.TextRole role, bool bold) => switch (role) {
-    core.TextRole.title => 'Sora-Bold.ttf',
-    core.TextRole.section || core.TextRole.chord => 'Sora-SemiBold.ttf',
-    core.TextRole.tab => bold ? 'IBMPlexSans-SemiBold.ttf' : 'IBMPlexSans-Medium.ttf',
-    _ => bold ? 'IBMPlexSans-SemiBold.ttf' : 'IBMPlexSans-Regular.ttf',
-  };
+  /// Schrift wie in der App (siehe score_painter): gewählte Schrift [font], Schnitt nach Rolle.
+  static String _fontFor(core.TextRole role, bool bold, bool italic, String font) {
+    final heavy = bold || role == core.TextRole.title || role == core.TextRole.section || role == core.TextRole.chord;
+    return switch (font) {
+      'sora' => role == core.TextRole.title ? 'Sora-Bold.ttf' : 'Sora-SemiBold.ttf',
+      'garamond' => heavy ? 'EBGaramond-SemiBold.ttf' : (italic ? 'EBGaramond-Italic.ttf' : 'EBGaramond-Regular.ttf'),
+      'kalam' => heavy ? 'Kalam-Bold.ttf' : 'Kalam-Regular.ttf',
+      _ =>
+        role == core.TextRole.tab
+            ? (bold ? 'IBMPlexSans-SemiBold.ttf' : 'IBMPlexSans-Medium.ttf')
+            : (heavy ? 'IBMPlexSans-SemiBold.ttf' : 'IBMPlexSans-Regular.ttf'),
+    };
+  }
 
   /// Zeichen, die die Schrift nicht hat, durch lesbare ersetzen (♯ → #, ♭ → b).
   static String _printable(String s, PdfTtfFont f) {

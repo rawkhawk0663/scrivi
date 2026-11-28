@@ -3,14 +3,17 @@ import 'package:scrivi_core/scrivi_core.dart' as core;
 
 import '../../app/l10n.dart';
 import '../../app/theme.dart';
+import 'score_painter.dart';
 
 /// Seite einrichten: rechts am Rand, jede Änderung erscheint sofort auf dem Blatt
 /// ([onChanged]; alle Änderungen zusammen sind ein Schritt zum Rückgängigmachen).
 Future<void> showPageSetup(
   BuildContext context,
   core.PageSetup start,
-  void Function(core.PageSetup setup, bool first) onChanged,
-) {
+  void Function(core.PageSetup setup, bool first) onChanged, {
+  core.PageSetup? template,
+  Future<void> Function(core.PageSetup setup)? onSaveTemplate,
+}) {
   return showGeneralDialog<void>(
     context: context,
     barrierDismissible: true,
@@ -20,16 +23,20 @@ Future<void> showPageSetup(
       alignment: Alignment.centerRight,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(0, 64, 12, 12),
-        child: _PageSetupPanel(start: start, onChanged: onChanged),
+        child: _PageSetupPanel(start: start, onChanged: onChanged, template: template, onSaveTemplate: onSaveTemplate),
       ),
     ),
   );
 }
 
 class _PageSetupPanel extends StatefulWidget {
-  const _PageSetupPanel({required this.start, required this.onChanged});
+  const _PageSetupPanel({required this.start, required this.onChanged, this.template, this.onSaveTemplate});
   final core.PageSetup start;
   final void Function(core.PageSetup setup, bool first) onChanged;
+
+  /// Gespeicherte Vorlage für neue Stücke (null = keine).
+  final core.PageSetup? template;
+  final Future<void> Function(core.PageSetup setup)? onSaveTemplate;
 
   @override
   State<_PageSetupPanel> createState() => _PageSetupPanelState();
@@ -38,11 +45,90 @@ class _PageSetupPanel extends StatefulWidget {
 class _PageSetupPanelState extends State<_PageSetupPanel> {
   late core.PageSetup s = widget.start;
   bool _changed = false;
+  late core.PageSetup? _template = widget.template;
+
+  static String _fontName(String f) => switch (f) {
+    'sora' => tr('Modern', 'Modern'),
+    'garamond' => tr('Klassisch', 'Classic'),
+    'kalam' => tr('Handschrift', 'Handwritten'),
+    _ => tr('Schlicht', 'Plain'),
+  };
+
+  static String _groupName(String g) => switch (g) {
+    'title' => tr('Titel', 'Title'),
+    'chord' => tr('Akkorde', 'Chords'),
+    'lyrics' => tr('Liedtext', 'Lyrics'),
+    _ => tr('Übrige Texte', 'Other text'),
+  };
 
   void _set(core.PageSetup v) {
     setState(() => s = v);
     widget.onChanged(v, !_changed);
     _changed = true;
+  }
+
+  /// Schrift und Grösse einer Gruppe (Titel, Akkorde, Liedtext, übrige Texte).
+  Widget _fontRow(String g, ScriviColors c) {
+    final font = s.fontOf(g);
+    final scale = s.scaleOf(g);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 1),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 92,
+            child: Text(_groupName(g), style: TextStyle(fontSize: 13, color: c.muted)),
+          ),
+          Expanded(
+            child: DropdownButton<String>(
+              value: font,
+              isExpanded: true,
+              isDense: true,
+              underline: const SizedBox.shrink(),
+              items: [
+                for (final f in core.PageSetup.fontKeys)
+                  DropdownMenuItem(
+                    value: f,
+                    child: Text(
+                      _fontName(f),
+                      style: TextStyle(
+                        fontFamily: fontFamilyOf(f),
+                        fontSize: f == 'garamond' ? 15.5 : 14,
+                        fontWeight: f == 'sora' ? FontWeight.w600 : FontWeight.w400,
+                      ),
+                    ),
+                  ),
+              ],
+              onChanged: (v) {
+                if (v != null) _set(s.withFont(g, v));
+              },
+            ),
+          ),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            iconSize: 16,
+            tooltip: tr('Kleiner', 'Smaller'),
+            onPressed: scale > 0.61 ? () => _set(s.withScale(g, ((scale - 0.1) * 10).round() / 10)) : null,
+            icon: const Icon(Icons.text_decrease_rounded),
+          ),
+          SizedBox(
+            width: 40,
+            child: Text(
+              '${(scale * 100).round()} %',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 12),
+            ),
+          ),
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            iconSize: 16,
+            tooltip: tr('Grösser', 'Larger'),
+            onPressed: scale < 1.79 ? () => _set(s.withScale(g, ((scale + 0.1) * 10).round() / 10)) : null,
+            icon: const Icon(Icons.text_increase_rounded),
+          ),
+        ],
+      ),
+    );
   }
 
   String _mm(double v) {
@@ -239,6 +325,50 @@ class _PageSetupPanelState extends State<_PageSetupPanel> {
                       ],
                       s.pageNumbers,
                       (v) => _set(s.copyWith(pageNumbers: v)),
+                    ),
+                    label(tr('Schriften', 'Fonts')),
+                    for (final g in core.PageSetup.fontGroups) _fontRow(g, c),
+                    label(tr('Vorlage für neue Stücke', 'Template for new pieces')),
+                    Text(
+                      tr(
+                        'Diese Seite, die Schriften und die Akkordsymbole gelten dann für jedes neue Stück.',
+                        'This page, the fonts and the chord symbols are then used for every new piece.',
+                      ),
+                      style: TextStyle(fontSize: 12, color: c.muted),
+                    ),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: widget.onSaveTemplate == null
+                              ? null
+                              : () async {
+                                  final messenger = ScaffoldMessenger.maybeOf(context);
+                                  await widget.onSaveTemplate!(s);
+                                  if (!mounted) return;
+                                  setState(() => _template = s);
+                                  messenger?.showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        tr(
+                                          'Als Vorlage für neue Stücke gespeichert.',
+                                          'Saved as template for new pieces.',
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
+                          icon: const Icon(Icons.bookmark_add_outlined, size: 18),
+                          label: Text(tr('Als Vorlage speichern', 'Save as template')),
+                        ),
+                        if (_template != null)
+                          TextButton(
+                            onPressed: () => _set(_template!),
+                            child: Text(tr('Vorlage übernehmen', 'Use template')),
+                          ),
+                      ],
                     ),
                   ],
                 ),

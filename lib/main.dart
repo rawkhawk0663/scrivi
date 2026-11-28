@@ -77,7 +77,13 @@ class ScriviApp extends StatelessWidget {
 
 /// Lizenzen der Schriften, die Scrivi mitbringt (Über Scrivi → Lizenzen).
 void _registerFontLicenses() {
-  const fonts = {'Bravura': 'OFL-Bravura.txt', 'IBM Plex Sans': 'OFL-IBMPlexSans.txt', 'Sora': 'OFL-Sora.txt'};
+  const fonts = {
+    'Bravura': 'OFL-Bravura.txt',
+    'IBM Plex Sans': 'OFL-IBMPlexSans.txt',
+    'Sora': 'OFL-Sora.txt',
+    'EB Garamond': 'OFL-EBGaramond.txt',
+    'Kalam': 'OFL-Kalam.txt',
+  };
   LicenseRegistry.addLicense(() async* {
     for (final e in fonts.entries) {
       try {

@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:scrivi_core/scrivi_core.dart' as core;
 
+import '../../app/device_settings.dart';
 import '../../app/error_log.dart';
 import '../../app/l10n.dart';
 import '../../app/theme.dart';
@@ -82,7 +83,11 @@ class _StartScreenState extends State<StartScreen> {
     }
   }
 
-  void _preset(core.NewPieceKind kind) => _new(core.ScoreEditor.newScore(kind: kind));
+  void _preset(core.NewPieceKind kind) => _new(_template(core.ScoreEditor.newScore(kind: kind)));
+
+  /// Vorlage für neue Stücke (Seite einrichten, Schriften, Akkordsymbole), falls gespeichert.
+  core.Score _template(core.Score score) =>
+      context.getInheritedWidgetOfExactType<SettingsScope>()?.settings.applyTemplate(score) ?? score;
 
   /// Beispielstück öffnen: als neuer Entwurf, damit das Beispiel selbst unverändert bleibt.
   Future<void> _example(String asset) async {
@@ -99,14 +104,16 @@ class _StartScreenState extends State<StartScreen> {
     final s = await askNewPiece(context);
     if (s == null || !mounted) return;
     await _new(
-      core.ScoreEditor.newScore(
-        title: s.title,
-        artist: s.artist,
-        kind: s.kind,
-        time: s.time,
-        key: s.key,
-        tempo: s.tempo,
-        bars: s.bars,
+      _template(
+        core.ScoreEditor.newScore(
+          title: s.title,
+          artist: s.artist,
+          kind: s.kind,
+          time: s.time,
+          key: s.key,
+          tempo: s.tempo,
+          bars: s.bars,
+        ),
       ),
     );
   }

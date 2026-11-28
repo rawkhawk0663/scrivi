@@ -22,8 +22,9 @@ class ScoreEngraver {
     this.score, {
     this.tracks,
     LayoutOptions options = const LayoutOptions(),
-    this.measurer = const ApproxTextMeasurer(),
-  }) : options = options.withPage(score.pageSetup);
+    TextMeasurer measurer = const ApproxTextMeasurer(),
+  }) : options = options.withPage(score.pageSetup),
+       measurer = FontMeasurer.of(measurer, score.pageSetup.fonts);
 
   final Score score;
 
@@ -231,7 +232,12 @@ class ScoreEngraver {
   ScoreLayout _paginate(List<(int, int, bool)> ranges) {
     final e0 = _engs.first;
     final pages = <PageDisplay>[];
-    var page = PageDisplay(options.pageWidth, options.pageHeight, spaceMm: options.spaceMm);
+    var page = PageDisplay(
+      options.pageWidth,
+      options.pageHeight,
+      spaceMm: options.spaceMm,
+      fonts: score.pageSetup.fonts,
+    );
     pages.add(page);
     var y = e0._drawHeader(page, options.marginTop);
     final perTrack = [for (final _ in _engs) <_System>[]];
@@ -263,7 +269,12 @@ class ScoreEngraver {
       var top = firstOnPage ? y : y + systemGap;
       final pageBreak = r > 0 && all[r - 1].first.measures.last.mb.breakAfter == 2;
       if ((top + height > options.pageHeight - options.marginBottom || pageBreak) && !firstOnPage) {
-        page = PageDisplay(options.pageWidth, options.pageHeight, spaceMm: options.spaceMm);
+        page = PageDisplay(
+          options.pageWidth,
+          options.pageHeight,
+          spaceMm: options.spaceMm,
+          fonts: score.pageSetup.fonts,
+        );
         pages.add(page);
         top = options.marginTop;
       }

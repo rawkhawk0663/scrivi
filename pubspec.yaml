@@ -43,6 +43,8 @@ flutter:
     - assets/fonts/OFL-Bravura.txt
     - assets/fonts/OFL-IBMPlexSans.txt
     - assets/fonts/OFL-Sora.txt
+    - assets/fonts/OFL-EBGaramond.txt
+    - assets/fonts/OFL-Kalam.txt
     # Klangsammlung (gebaut mit tool/make_sounds.py) und ihre Lizenzen
     - assets/sounds/scrivi.sf2
     - assets/sounds/LIZENZEN.txt
@@ -65,6 +67,22 @@ flutter:
         - asset: assets/fonts/Sora-SemiBold.ttf
           weight: 600
         - asset: assets/fonts/Sora-Bold.ttf
+          weight: 700
+    # Schriften für Texte auf dem Blatt (wählbar unter „Schriften“, OFL)
+    - family: Garamond
+      fonts:
+        - asset: assets/fonts/EBGaramond-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/EBGaramond-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/EBGaramond-Italic.ttf
+          weight: 400
+          style: italic
+    - family: Kalam
+      fonts:
+        - asset: assets/fonts/Kalam-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Kalam-Bold.ttf
           weight: 700
     # Notenschrift (SMuFL, OFL)
     - family: Bravura

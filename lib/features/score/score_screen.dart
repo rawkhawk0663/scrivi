@@ -960,12 +960,25 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
   }
 
   @override
-  Future<void> editPageSetup() =>
-      showPageSetup(context, editor.score.pageSetup, (s, first) => apply((e) => e.setPageSetup(s, joinUndo: !first)));
+  Future<void> editPageSetup() {
+    final settings = _settings;
+    return showPageSetup(
+      context,
+      editor.score.pageSetup,
+      (s, first) => apply((e) => e.setPageSetup(s, joinUndo: !first)),
+      template: settings != null && settings.hasTemplate ? settings.pageTemplate : null,
+      onSaveTemplate: settings == null ? null : (s) => settings.setTemplate(s, editor.score.chordStyle),
+    );
+  }
 
   @override
   Future<void> editChordStyle() async {
-    final r = await askChordStyle(context, editor.score.chordStyle, germanNames: !L10n.isEnglish);
+    final r = await askChordStyle(
+      context,
+      editor.score.chordStyle,
+      germanNames: !L10n.isEnglish,
+      fonts: editor.score.pageSetup.fonts,
+    );
     if (r != null) apply((e) => e.setChordStyle(r));
   }
 

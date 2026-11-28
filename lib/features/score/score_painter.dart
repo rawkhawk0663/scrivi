@@ -7,12 +7,17 @@ import 'package:scrivi_core/scrivi_core.dart' as core;
 /// Sehr kleine Schriftgrössen (1–3 Einheiten) werden sonst ungenau gemessen.
 const double _textScale = 20;
 
-/// Schrift und Schnitt pro Textrolle.
-TextStyle _styleFor(core.TextRole role, double size, {bool bold = false, bool italic = false}) {
-  final family = switch (role) {
-    core.TextRole.title || core.TextRole.section || core.TextRole.chord => 'Sora',
-    _ => 'Plex',
-  };
+/// Schriftfamilie der App zu einer Schrift auf dem Blatt (siehe `core.textFonts`).
+String fontFamilyOf(String font) => switch (font) {
+  'sora' => 'Sora',
+  'garamond' => 'Garamond',
+  'kalam' => 'Kalam',
+  _ => 'Plex',
+};
+
+/// Schrift und Schnitt pro Textrolle; [font] = gewählte Schrift (null: Grundschrift der Rolle).
+TextStyle _styleFor(core.TextRole role, double size, {bool bold = false, bool italic = false, String? font}) {
+  final f = font ?? core.textFontFor(role, const {});
   var weight = switch (role) {
     core.TextRole.title => FontWeight.w700,
     core.TextRole.chord || core.TextRole.section => FontWeight.w600,
@@ -20,8 +25,10 @@ TextStyle _styleFor(core.TextRole role, double size, {bool bold = false, bool it
     _ => FontWeight.w400,
   };
   if (bold && weight.value < 600) weight = FontWeight.w600;
+  // Sora gibt es nur fett; die übrigen Texte bleiben in den vorhandenen Schnitten.
+  if (f == 'sora' && weight.value < 600) weight = FontWeight.w600;
   return TextStyle(
-    fontFamily: family,
+    fontFamily: fontFamilyOf(f),
     fontSize: size * _textScale,
     fontWeight: weight,
     fontStyle: italic ? FontStyle.italic : FontStyle.normal,
@@ -35,13 +42,13 @@ class FlutterTextMeasurer implements core.TextMeasurer {
   final _cache = <String, double>{};
 
   @override
-  double width(String text, core.TextRole role, double size, {bool bold = false, bool italic = false}) {
-    final key = '${role.index}|$size|$bold|$italic|$text';
+  double width(String text, core.TextRole role, double size, {bool bold = false, bool italic = false, String? font}) {
+    final key = '${role.index}|$size|$bold|$italic|$font|$text';
     return _cache.putIfAbsent(key, () {
       final tp = TextPainter(
         text: TextSpan(
           text: text,
-          style: _styleFor(role, size, bold: bold, italic: italic),
+          style: _styleFor(role, size, bold: bold, italic: italic, font: font),
         ),
         textDirection: TextDirection.ltr,
       )..layout();
@@ -167,7 +174,7 @@ class PagePictures {
           final tp = TextPainter(
             text: TextSpan(
               text: t.text,
-              style: _styleFor(t.role, t.size, bold: t.bold, italic: t.italic),
+              style: _styleFor(t.role, t.size, bold: t.bold, italic: t.italic, font: page.fontFor(t.role)),
             ),
             textDirection: TextDirection.ltr,
           )..layout();

@@ -27,17 +27,25 @@ const _examples = [
 ];
 
 /// Schreibweise der Akkordsymbole für das Stück wählen, mit Vorschau (so, wie der Notensatz sie zeichnet).
-Future<core.ChordStyle?> askChordStyle(BuildContext context, core.ChordStyle start, {bool germanNames = false}) {
+Future<core.ChordStyle?> askChordStyle(
+  BuildContext context,
+  core.ChordStyle start, {
+  bool germanNames = false,
+  Map<String, String> fonts = const {},
+}) {
   return showDialog<core.ChordStyle>(
     context: context,
-    builder: (context) => _ChordStyleDialog(start: start, germanNames: germanNames),
+    builder: (context) => _ChordStyleDialog(start: start, germanNames: germanNames, fonts: fonts),
   );
 }
 
 class _ChordStyleDialog extends StatefulWidget {
-  const _ChordStyleDialog({required this.start, required this.germanNames});
+  const _ChordStyleDialog({required this.start, required this.germanNames, required this.fonts});
   final core.ChordStyle start;
   final bool germanNames;
+
+  /// Gewählte Schriften des Stücks (die Vorschau zeigt die Akkorde in ihrer Schrift).
+  final Map<String, String> fonts;
 
   @override
   State<_ChordStyleDialog> createState() => _ChordStyleDialogState();
@@ -45,7 +53,7 @@ class _ChordStyleDialog extends StatefulWidget {
 
 class _ChordStyleDialogState extends State<_ChordStyleDialog> {
   late core.ChordStyle s = widget.start;
-  final _measurer = FlutterTextMeasurer();
+  late final core.TextMeasurer _measurer = core.FontMeasurer.of(FlutterTextMeasurer(), widget.fonts);
 
   void _set(core.ChordStyle v) => setState(() => s = v);
 
@@ -347,7 +355,7 @@ class _ChordStyleDialogState extends State<_ChordStyleDialog> {
               decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(10),
-                child: CustomPaint(painter: _PreviewPainter(s, widget.germanNames, _measurer)),
+                child: CustomPaint(painter: _PreviewPainter(s, widget.germanNames, _measurer, widget.fonts)),
               ),
             ),
             const SizedBox(height: 10),
@@ -377,8 +385,9 @@ class _ChordStyleDialogState extends State<_ChordStyleDialog> {
 
 /// Zeichnet die Beispielakkorde mit dem Notensatz (Bravura-Zeichen, Stapel, hochgestellt).
 class _PreviewPainter extends CustomPainter {
-  _PreviewPainter(this.style, this.german, this.measurer);
+  _PreviewPainter(this.style, this.german, this.measurer, this.fonts);
   final core.ChordStyle style;
+  final Map<String, String> fonts;
   final bool german;
   final core.TextMeasurer measurer;
 
@@ -402,10 +411,10 @@ class _PreviewPainter extends CustomPainter {
     final k = size.width / width;
     canvas.save();
     canvas.scale(k, k);
-    PagePictures.paint(canvas, core.PageDisplay(width, size.height / k)..items.addAll(page.items));
+    PagePictures.paint(canvas, core.PageDisplay(width, size.height / k, fonts: fonts)..items.addAll(page.items));
     canvas.restore();
   }
 
   @override
-  bool shouldRepaint(_PreviewPainter old) => old.style != style || old.german != german;
+  bool shouldRepaint(_PreviewPainter old) => old.style != style || old.german != german || old.fonts != fonts;
 }

@@ -39,7 +39,7 @@ class Score {
   PageSetup pageSetup;
 
   /// Verschobene Angaben im Kopf und Fuss der Seite ('title', 'subtitle', 'artist', 'album', 'credits',
-  /// 'tabber', 'instructions', 'copyright').
+  /// 'tabber', 'instructions', 'copyright', 'part') und das Feld der Griffbilder ('diagrams').
   final Map<String, Nudge> nudges;
 
   /// Wie die Akkordsymbole geschrieben werden.
@@ -609,7 +609,7 @@ class Beat {
   /// Haltepedal: 1 = treten („Ped.“), 2 = loslassen („*“), 3 = wechseln (los und gleich wieder treten).
   final int pedal;
 
-  /// Von Hand verschoben: 'chord', 'text', 'dynamic'.
+  /// Von Hand verschoben: 'chord', 'text', 'dynamic', 'lyrics', 'finger'.
   final Map<String, Nudge> nudges;
 
   bool get isRest => notes.isEmpty;

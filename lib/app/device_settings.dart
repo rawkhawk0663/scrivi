@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
+import 'package:scrivi_core/scrivi_core.dart' as core;
 
 import 'error_log.dart';
 import 'l10n.dart';
@@ -112,6 +113,30 @@ class DeviceSettings {
     _data['schlagzeug_gezeigt'] = true;
     await _save();
   }
+
+  /// Vorlage für neue Stücke: Seite einrichten (mit Schriften) und Akkordsymbole
+  /// (`vorlage` in einstellungen.json, Schlüssel wie im Dateiformat).
+  core.PageSetup get pageTemplate => core.PageSetup.fromJson((_data['vorlage'] as Map?)?['page']);
+  core.ChordStyle get chordTemplate => core.ChordStyle.fromJson((_data['vorlage'] as Map?)?['chordStyle']);
+  bool get hasTemplate => _data['vorlage'] is Map;
+
+  Future<void> setTemplate(core.PageSetup page, core.ChordStyle chords) async {
+    _data['vorlage'] = {
+      if (!page.isStandard) 'page': page.toJson(),
+      if (!chords.isStandard) 'chordStyle': chords.toJson(),
+    };
+    await _save();
+  }
+
+  Future<void> clearTemplate() async {
+    _data.remove('vorlage');
+    await _save();
+  }
+
+  /// Neues Stück mit der Vorlage einrichten.
+  core.Score applyTemplate(core.Score score) => score
+    ..pageSetup = pageTemplate
+    ..chordStyle = chordTemplate;
 
   /// Sprache, die gerade gilt.
   AppLanguage get effectiveLanguage => language.value ?? AppLanguage.system;
