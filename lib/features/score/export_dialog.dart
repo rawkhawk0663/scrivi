@@ -1,5 +1,7 @@
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
@@ -10,6 +12,7 @@ import 'package:scrivi_core/scrivi_core.dart' as core;
 import '../../app/error_log.dart';
 import '../../app/l10n.dart';
 import '../../app/open_url.dart';
+import '../../app/sounds.dart';
 import '../../core/files/pdf_export.dart';
 import '../../core/files/score_files.dart';
 import 'score_painter.dart';
@@ -17,8 +20,13 @@ import 'score_painter.dart';
 /// Wohin ein Stück ausgegeben wird.
 enum ExportKind {
   pdf('pdf', Icons.picture_as_pdf_outlined),
+  png('png', Icons.image_outlined),
   musicXml('musicxml', Icons.library_music_outlined),
-  midi('mid', Icons.piano_outlined);
+  midi('mid', Icons.piano_outlined),
+  wav('wav', Icons.graphic_eq_rounded);
+
+  /// Seiten (mit Wahl: diese Spur, alle Stimmen, Partitur).
+  bool get paged => this == pdf || this == png;
 
   const ExportKind(this.extension, this.icon);
   final String extension;
@@ -26,12 +34,22 @@ enum ExportKind {
 
   String get label => switch (this) {
     pdf => tr('PDF (zum Drucken und Weitergeben)', 'PDF (to print and share)'),
+    png => tr('Bild (PNG, eine Datei pro Seite)', 'Image (PNG, one file per page)'),
     musicXml => tr('MusicXML (für andere Notenprogramme)', 'MusicXML (for other notation programs)'),
     midi => tr('MIDI (Töne, so wie sie klingen)', 'MIDI (the notes as they sound)'),
+    wav => tr('Tonspur (WAV, zum Mitspielen)', 'Audio (WAV, to play along)'),
   };
 
   String get hint => switch (this) {
     pdf => tr('Seiten wie in der Ansicht, Notenzeichen gestochen scharf.', 'Pages as shown, sharp at any size.'),
+    png => tr(
+      'Für Arbeitsblätter, Mails und Präsentationen (200 dpi).',
+      'For worksheets, e-mails and presentations (200 dpi).',
+    ),
+    wav => tr(
+      'Alle Spuren gemischt wie im Mischpult, Wiederholungen ausgespielt.',
+      'All tracks mixed as in the mixer, repeats played out.',
+    ),
     musicXml => tr(
       'Alle Spuren mit Noten, Saite und Bund, Akkorden und Liedtext.',
       'All tracks with notes, string and fret, chords and lyrics.',
@@ -93,9 +111,38 @@ class ScoreExport {
 
   Future<Uint8List> _bytes(ExportKind kind, {PdfScope scope = PdfScope.track}) async => switch (kind) {
     ExportKind.pdf => PdfExport.build(_pages(scope), title: score.info.title),
+    ExportKind.png => _png(_pages(scope).first),
     ExportKind.musicXml => core.MusicXmlWriter.write(score),
     ExportKind.midi => core.MidiWriter.write(score),
+    ExportKind.wav => _wav(),
   };
+
+  /// Eine Seite als PNG (200 dpi, nach der Notengrösse der Seite).
+  static Future<Uint8List> _png(core.PageDisplay page) async {
+    final k = page.spaceMm / 25.4 * 200; // Bildpunkte pro Linienabstand
+    final w = (page.width * k).round(), h = (page.height * k).round();
+    final rec = ui.PictureRecorder();
+    final canvas = ui.Canvas(rec, Rect.fromLTWH(0, 0, w.toDouble(), h.toDouble()));
+    canvas.scale(k);
+    PagePictures.paint(canvas, page);
+    final image = await rec.endRecording().toImage(w, h);
+    final data = await image.toByteData(format: ui.ImageByteFormat.png);
+    image.dispose();
+    return data!.buffer.asUint8List();
+  }
+
+  /// Ganzes Stück als Tonspur (im Hintergrund gerechnet, mit der mitgelieferten Klangsammlung).
+  Future<Uint8List> _wav() async {
+    final sounds = await Sounds.bytes();
+    final s = score;
+    return Isolate.run(() {
+      core.SoundFont? sf;
+      try {
+        sf = sounds == null ? null : core.SoundFont.parse(sounds);
+      } catch (_) {}
+      return core.Synth.mixdown(s, sounds: sf);
+    });
+  }
 
   /// Fenster zeigen und ausgeben.
   Future<void> show(BuildContext context) async {
@@ -107,7 +154,7 @@ class ScoreExport {
     final (kind, scope) = choice;
     final messenger = ScaffoldMessenger.of(context);
     try {
-      final suffix = kind != ExportKind.pdf || score.tracks.length < 2
+      final suffix = !kind.paged || score.tracks.length < 2
           ? ''
           : switch (scope) {
               PdfScope.track => ' – ${_trackName(track)}',
@@ -117,6 +164,31 @@ class ScoreExport {
       final name = '$_baseName$suffix.${kind.extension}';
       final target = await _target(name, kind);
       if (target == null) return;
+      if (kind == ExportKind.wav) {
+        messenger.showSnackBar(SnackBar(content: Text(tr('Die Tonspur wird gerechnet …', 'Rendering the audio …'))));
+      }
+      if (kind == ExportKind.png) {
+        // Mehrere Seiten: eine Datei pro Seite (Name-1.png, Name-2.png …)
+        final pages = _pages(scope);
+        final base = target.substring(0, target.length - 4);
+        for (var i = 0; i < pages.length; i++) {
+          final path = pages.length == 1 ? target : '$base-${i + 1}.png';
+          await ScoreFiles.writeAtomic(path, await _png(pages[i]));
+        }
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              pages.length == 1
+                  ? tr('Gespeichert: $target', 'Saved: $target')
+                  : tr(
+                      '${pages.length} Bilder gespeichert: $base-1.png …',
+                      '${pages.length} images saved: $base-1.png …',
+                    ),
+            ),
+          ),
+        );
+        return;
+      }
       final bytes = await _bytes(kind, scope: scope);
       await ScoreFiles.writeAtomic(target, bytes);
       messenger.showSnackBar(SnackBar(content: Text(tr('Gespeichert: $target', 'Saved: $target'))));
@@ -171,8 +243,10 @@ class ScoreExport {
           XTypeGroup(
             label: switch (kind) {
               ExportKind.pdf => 'PDF',
+              ExportKind.png => 'PNG',
               ExportKind.musicXml => 'MusicXML',
               ExportKind.midi => 'MIDI',
+              ExportKind.wav => 'WAV',
             },
             extensions: [kind.extension],
           ),
@@ -216,34 +290,36 @@ class _ExportDialogState extends State<_ExportDialog> {
       title: Text(tr('Exportieren', 'Export')),
       content: SizedBox(
         width: 440,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            for (final k in ExportKind.values)
-              ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                selected: k == _kind,
-                selectedTileColor: scheme.primaryContainer.withValues(alpha: 0.5),
-                leading: Icon(k.icon),
-                title: Text(k.label),
-                subtitle: Text(k.hint),
-                onTap: () => setState(() => _kind = k),
-              ),
-            if (_kind == ExportKind.pdf && widget.trackCount > 1) ...[
-              const SizedBox(height: 12),
-              SegmentedButton<PdfScope>(
-                segments: [
-                  ButtonSegment(value: PdfScope.track, label: Text(tr('Diese Spur', 'This track'))),
-                  ButtonSegment(value: PdfScope.parts, label: Text(tr('Alle Stimmen', 'All parts'))),
-                  ButtonSegment(value: PdfScope.score, label: Text(tr('Partitur', 'Full score'))),
-                ],
-                selected: {_scope},
-                onSelectionChanged: (s) => setState(() => _scope = s.first),
-              ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (final k in ExportKind.values)
+                ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  selected: k == _kind,
+                  selectedTileColor: scheme.primaryContainer.withValues(alpha: 0.5),
+                  leading: Icon(k.icon),
+                  title: Text(k.label),
+                  subtitle: Text(k.hint),
+                  onTap: () => setState(() => _kind = k),
+                ),
+              if (_kind.paged && widget.trackCount > 1) ...[
+                const SizedBox(height: 12),
+                SegmentedButton<PdfScope>(
+                  segments: [
+                    ButtonSegment(value: PdfScope.track, label: Text(tr('Diese Spur', 'This track'))),
+                    ButtonSegment(value: PdfScope.parts, label: Text(tr('Alle Stimmen', 'All parts'))),
+                    ButtonSegment(value: PdfScope.score, label: Text(tr('Partitur', 'Full score'))),
+                  ],
+                  selected: {_scope},
+                  onSelectionChanged: (s) => setState(() => _scope = s.first),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
       actions: [

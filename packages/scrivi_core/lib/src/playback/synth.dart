@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import '../model/score.dart';
 import 'plan.dart';
 import 'soundfont.dart';
 
@@ -609,6 +610,61 @@ class Synth {
       final x = out[i] * gain;
       out[i] = x.abs() < 0.8 ? x : _tanh(x);
     }
+  }
+
+  /// Ganzes Stück als Stereo-WAV (16 Bit): alle Spuren mit ihrem Mischpult (Lautstärke,
+  /// links/rechts, stumm/solo) und der Gesamtlautstärke; zu laute Stellen werden leiser gemacht.
+  static Uint8List mixdown(Score score, {SoundFont? sounds, double tempoFactor = 1}) {
+    final plan = PlaybackPlan.build(score, tempoFactor: tempoFactor);
+    final seconds = plan.duration + 2.0;
+    final n = (seconds * rate).ceil();
+    final left = Float32List(n), right = Float32List(n);
+    final anySolo = score.tracks.any((t) => t.mix.solo);
+    for (var i = 0; i < score.tracks.length && i < plan.tracks.length; i++) {
+      final mix = score.tracks[i].mix;
+      if (mix.muted || (anySolo && !mix.solo)) continue;
+      final mono = renderTrack(plan.tracks[i], seconds, sounds: sounds);
+      // Gleich laut über das Panorama (Sinus/Cosinus)
+      final a = (mix.pan.clamp(-1.0, 1.0) + 1) * math.pi / 4;
+      final gain = mix.volume * score.masterVolume;
+      final gl = math.cos(a) * gain * math.sqrt2, gr = math.sin(a) * gain * math.sqrt2;
+      for (var k = 0; k < n && k < mono.length; k++) {
+        left[k] += mono[k] * gl;
+        right[k] += mono[k] * gr;
+      }
+    }
+    var peak = 0.0;
+    for (var k = 0; k < n; k++) {
+      peak = math.max(peak, math.max(left[k].abs(), right[k].abs()));
+    }
+    final scale = peak > 0.95 ? 0.95 / peak : 1.0;
+    final dataLen = n * 4;
+    final bytes = Uint8List(44 + dataLen);
+    final b = ByteData.sublistView(bytes);
+    void str(int o, String s) {
+      for (var i = 0; i < s.length; i++) {
+        b.setUint8(o + i, s.codeUnitAt(i));
+      }
+    }
+
+    str(0, 'RIFF');
+    b.setUint32(4, 36 + dataLen, Endian.little);
+    str(8, 'WAVE');
+    str(12, 'fmt ');
+    b.setUint32(16, 16, Endian.little);
+    b.setUint16(20, 1, Endian.little);
+    b.setUint16(22, 2, Endian.little);
+    b.setUint32(24, rate, Endian.little);
+    b.setUint32(28, rate * 4, Endian.little);
+    b.setUint16(32, 4, Endian.little);
+    b.setUint16(34, 16, Endian.little);
+    str(36, 'data');
+    b.setUint32(40, dataLen, Endian.little);
+    for (var k = 0; k < n; k++) {
+      b.setInt16(44 + k * 4, (left[k] * scale * 32767).round().clamp(-32768, 32767), Endian.little);
+      b.setInt16(46 + k * 4, (right[k] * scale * 32767).round().clamp(-32768, 32767), Endian.little);
+    }
+    return bytes;
   }
 
   /// WAV-Datei (16 Bit, mono) aus Werten zwischen −1 und 1.

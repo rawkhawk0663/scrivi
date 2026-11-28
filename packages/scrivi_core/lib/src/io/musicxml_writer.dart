@@ -435,8 +435,9 @@ class MusicXmlWriter {
     if (first && beat.pickStroke > 0) tech.add('<down-bow/>');
     if (first && beat.pickStroke < 0) tech.add('<up-bow/>');
     if (n.hammerOrigin) tech.add('<hammer-on type="start">H</hammer-on>');
-    if (n.harmonic)
+    if (n.harmonic) {
       tech.add(n.harmonicType == 0 ? '<harmonic><natural/></harmonic>' : '<harmonic><artificial/></harmonic>');
+    }
     if (n.tapped) tech.add('<tap/>');
     if (n.leftFinger != 0) tech.add('<fingering>${n.leftFinger == 5 ? 0 : n.leftFinger}</fingering>');
     if (n.rightFinger != 0) tech.add('<pluck>${const ['', 'p', 'i', 'm', 'a', 'c'][n.rightFinger]}</pluck>');

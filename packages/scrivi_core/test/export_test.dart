@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -143,5 +144,31 @@ void main() {
     expect(beats[1].pedal, 1);
     expect(beats[2].arpeggio, -1);
     expect(beats[2].ottava, 1);
+  });
+
+  test('Tonspur: Stereo-WAV mit Mischpult (stumm, links/rechts)', () {
+    final e = ScoreEditor(ScoreEditor.newScore(title: 'Ton', bars: 1));
+    e.duration = const NoteDuration(NoteValue.half);
+    e.cursor = const EditCursor(string: 3);
+    e.inputFret(2);
+    final wav = Synth.mixdown(e.score);
+    final b = ByteData.sublistView(wav);
+    expect(String.fromCharCodes(wav.sublist(0, 4)), 'RIFF');
+    expect(b.getUint16(22, Endian.little), 2); // Stereo
+    expect(wav.length, greaterThan(44 + 44100 * 4));
+    var loud = 0;
+    for (var k = 44; k < wav.length; k += 2) {
+      loud = math.max(loud, b.getInt16(k, Endian.little).abs());
+    }
+    expect(loud, greaterThan(1000));
+    // Stumm: still
+    e.setMix(0, const TrackMix(muted: true));
+    final quiet = Synth.mixdown(e.score);
+    final q = ByteData.sublistView(quiet);
+    var max = 0;
+    for (var k = 44; k < quiet.length; k += 2) {
+      max = math.max(max, q.getInt16(k, Endian.little).abs());
+    }
+    expect(max, 0);
   });
 }

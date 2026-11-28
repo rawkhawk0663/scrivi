@@ -52,7 +52,7 @@ Scrivi gibt es auf **Deutsch und Englisch**. Es braucht **kein Konto**, sammelt 
 - **Abspielen ohne Warten:** Scrivi bereitet den Klang schon im Hintergrund vor, sobald ein Stück offen ist, und rechnet nach einer Änderung nur das geänderte Instrument neu. Die Wiedergabe startet sofort.
 - **Vorspielen:** Mit dem Mikrofon-Werkzeug (oder Taste M) hört Scrivi zu: Spiel Ton für Ton auf der Gitarre, dem Bass oder einem anderen Instrument, und jeder erkannte Ton wird mit dem gewählten Notenwert an den Cursor geschrieben, mit passender Saite und Bund. Oben siehst du, welchen Ton Scrivi gerade hört. Der Ton wird nur ausgewertet, nie aufgenommen oder gespeichert.
 - **Schreiben mit dem Stift:** Der Stift schreibt, der Finger blättert. *Antippen* im Notensystem setzt eine Note (auf einer vorhandenen Note kommt ein Akkordton dazu), ein *waagrechter Strich* wählt Noten und Takte aus, *Durchkritzeln* löscht, was darunter liegt, ein kurzer *Strich nach oben oder unten* auf einer Note macht sie einen Halbton höher oder tiefer. Das *Radierer-Ende* des Stifts oder die *Stift-Taste* löscht. Mit dem Werkzeug *Maus und Finger schreiben wie der Stift* (Bleistift in der Werkzeugspalte) gehen die Gesten auch mit der Maus.
-- **Exportieren und Drucken:** *Exportieren …* (Strg+E) speichert das Stück als **PDF** (diese Spur oder alle Spuren, so wie du sie siehst, gestochen scharf), als **MusicXML** für andere Notenprogramme (mit Saite und Bund, Akkorden, Liedtext, Wiederholungen) oder als **MIDI** (so, wie es klingt). *Drucken …* (Strg+P) öffnet das PDF im PDF-Programm deines Computers, von dort druckst du es; auf Android liegt das PDF danach im Ordner *Dokumente/Scrivi*.
+- **Exportieren und Drucken:** *Exportieren …* (Strg+E) speichert das Stück als **PDF** (diese Spur oder alle Spuren, so wie du sie siehst, gestochen scharf), als **MusicXML** für andere Notenprogramme (mit Saite und Bund, Akkorden, Liedtext, Wiederholungen) als **MIDI** (so, wie es klingt), als **Bild** (PNG, eine Datei pro Seite, 200 dpi, z. B. für Arbeitsblätter) oder als **Tonspur** (WAV, alle Spuren gemischt wie im Mischpult, zum Mitspielen). *Drucken …* (Strg+P) öffnet das PDF im PDF-Programm deines Computers, von dort druckst du es; auf Android liegt das PDF danach im Ordner *Dokumente/Scrivi*.
 
 Noch nicht: mehrere Instrumente gleichzeitig in einer Partitur-Ansicht. Das kommt in den nächsten Etappen.
 
@@ -62,7 +62,7 @@ Noch nicht: mehrere Instrumente gleichzeitig in einer Partitur-Ansicht. Das komm
 - **Leadsheets:** Melodie, Akkordsymbole, Liedtext, Formteile, Wiederholungen, Häuser, Segno und Coda.
 - **Partituren:** mehrere Instrumente, Stimmen-Auszüge, Transposition, Dynamik, Artikulation.
 - **Abspielen** mit mitlaufender Markierung, Tempo, Schleife, Einzähler und Metronom.
-- **Einlesen:** Guitar-Pro-Dateien, MusicXML, MIDI. **Ausgeben:** PDF, MusicXML, MIDI, direkt an Volti.
+- **Einlesen:** Guitar-Pro-Dateien, MusicXML, MIDI. **Ausgeben:** PDF, PNG, MusicXML, MIDI, WAV; später direkt an Volti.
 
 ## Installieren
 

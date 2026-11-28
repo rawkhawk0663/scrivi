@@ -52,7 +52,7 @@ Scrivi is available in **German and English**. It needs **no account**, collects
 - **Playback without waiting:** Scrivi prepares the sound in the background as soon as a piece is open, and after a change recomputes only the changed instrument. Playback starts immediately.
 - **Play in:** with the microphone tool (or the M key) Scrivi listens: play note by note on the guitar, bass or another instrument, and each recognised note is written at the cursor with the chosen note value, with a sensible string and fret. At the top you see which note Scrivi is hearing. The sound is only analysed, never recorded or stored.
 - **Writing with the pen:** the pen writes, the finger scrolls. *Tap* on the staff to place a note (on an existing note it adds a chord tone), a *horizontal stroke* selects notes and bars, *scribbling* deletes whatever is underneath, a short *stroke up or down* on a note moves it a semitone higher or lower. The pen's *eraser end* or its *barrel button* deletes. With the tool *Mouse and finger write like the pen* (pencil in the tool column) the gestures work with the mouse too.
-- **Export and print:** *Export …* (Ctrl+E) saves the piece as a **PDF** (this track or all tracks, as you see them, razor-sharp), as **MusicXML** for other notation programs (with string and fret, chords, lyrics, repeats) or as **MIDI** (the way it sounds). *Print …* (Ctrl+P) opens the PDF in your computer's PDF viewer, where you print it; on Android the PDF ends up in the folder *Documents/Scrivi*.
+- **Export and print:** *Export …* (Ctrl+E) saves the piece as a **PDF** (this track or all tracks, as you see them, razor-sharp), as **MusicXML** for other notation programs (with string and fret, chords, lyrics, repeats) as **MIDI** (the way it sounds), as an **image** (PNG, one file per page, 200 dpi, e.g. for worksheets) or as **audio** (WAV, all tracks mixed as in the mixer, to play along). *Print …* (Ctrl+P) opens the PDF in your computer's PDF viewer, where you print it; on Android the PDF ends up in the folder *Documents/Scrivi*.
 
 Not yet: several instruments at once in a full-score view. These come in the next stages.
 
@@ -62,7 +62,7 @@ Not yet: several instruments at once in a full-score view. These come in the nex
 - **Lead sheets:** melody, chord symbols, lyrics, sections, repeats, endings, segno and coda.
 - **Scores:** several instruments, parts, transposition, dynamics, articulation.
 - **Playback** with a following cursor, tempo, loop, count-in and metronome.
-- **Import:** Guitar Pro files, MusicXML, MIDI. **Export:** PDF, MusicXML, MIDI, straight to Volti.
+- **Import:** Guitar Pro files, MusicXML, MIDI. **Export:** PDF, PNG, MusicXML, MIDI, WAV; later straight to Volti.
 
 ## Install
 
