@@ -32,7 +32,56 @@ class LayoutOptions {
     this.germanNoteNames = false,
     this.endless = false,
     this.transposed = false,
+    this.spaceMm = 1.75,
+    this.spacing = 1.0,
+    this.barsPerLine = 0,
+    this.barNumbers = 0,
+    this.pageNumbers = 0,
   });
+
+  /// Seite nach den Einstellungen des Stücks (Papier, Ränder, Notengrösse, Abstände);
+  /// die übrigen Werte (Ansicht, Sprache …) bleiben.
+  LayoutOptions withPage(PageSetup p) {
+    final (w, h) = p.paperMm;
+    final s = p.spaceMm;
+    return LayoutOptions(
+      pageWidth: w / s,
+      pageHeight: h / s,
+      marginLeft: p.marginLeft / s,
+      marginRight: p.marginRight / s,
+      marginTop: p.marginTop / s,
+      marginBottom: p.marginBottom / s,
+      showTab: showTab,
+      showNotation: showNotation,
+      tabLineSpacing: tabLineSpacing,
+      systemGap: 3.0 * p.lineGap,
+      useLayoutHint: useLayoutHint,
+      showChordDiagrams: showChordDiagrams,
+      germanNoteNames: germanNoteNames,
+      endless: endless,
+      transposed: transposed,
+      spaceMm: s,
+      spacing: p.spacing,
+      barsPerLine: p.barsPerLine,
+      barNumbers: p.barNumbers,
+      pageNumbers: p.pageNumbers,
+    );
+  }
+
+  /// Abstand zweier Notenlinien auf dem Papier (mm).
+  final double spaceMm;
+
+  /// Notenabstand (1 = normal, kleiner = enger).
+  final double spacing;
+
+  /// Takte pro Zeile (0 = automatisch, sonst fest).
+  final int barsPerLine;
+
+  /// Taktnummern: 0 am Zeilenanfang, 1 alle 5 Takte, 2 bei jedem Takt, 3 keine.
+  final int barNumbers;
+
+  /// Seitenzahlen: 0 unten rechts, 1 unten in der Mitte, 2 aussen, 3 keine.
+  final int pageNumbers;
 
   final double pageWidth;
   final double pageHeight;
@@ -234,9 +283,9 @@ class Engraver {
   Engraver(
     this.score, {
     this.trackIndex = 0,
-    this.options = const LayoutOptions(),
+    LayoutOptions options = const LayoutOptions(),
     this.measurer = const ApproxTextMeasurer(),
-  });
+  }) : options = options.withPage(score.pageSetup);
 
   final Score score;
   final int trackIndex;
@@ -257,7 +306,8 @@ class Engraver {
   final _measures = <_Meas>[];
 
   ScoreLayout layout() {
-    if (score.tracks.isEmpty) return ScoreLayout([PageDisplay(options.pageWidth, options.pageHeight)]);
+    if (score.tracks.isEmpty)
+      return ScoreLayout([PageDisplay(options.pageWidth, options.pageHeight, spaceMm: options.spaceMm)]);
     _build();
     if (options.endless) return _endlessLayout();
     final systems = _breakSystems();
@@ -599,8 +649,8 @@ class Engraver {
 
   double _springFor(Fraction d) {
     final q = d.toDouble() * 4;
-    if (q <= 0) return 1.6;
-    return math.max(1.6, 3.0 * math.pow(q, 0.6).toDouble());
+    if (q <= 0) return 1.6 * options.spacing;
+    return math.max(1.6, 3.0 * math.pow(q, 0.6).toDouble()) * options.spacing;
   }
 
   void _spaceMeasure(_Meas m) {
@@ -702,7 +752,7 @@ class Engraver {
   List<_System> _breakSystems() {
     final avail = options.contentWidth;
     final systems = <_System>[];
-    final hint = options.useLayoutHint ? _track.layoutHint : null;
+    final hint = options.barsPerLine > 0 ? [options.barsPerLine] : (options.useLayoutHint ? _track.layoutHint : null);
     var i = 0;
     var hintIndex = 0;
     while (i < _measures.length) {
@@ -797,7 +847,7 @@ class Engraver {
 
   ScoreLayout _paginate(List<_System> systems) {
     final pages = <PageDisplay>[];
-    var page = PageDisplay(options.pageWidth, options.pageHeight);
+    var page = PageDisplay(options.pageWidth, options.pageHeight, spaceMm: options.spaceMm);
     pages.add(page);
     var y = options.marginTop;
     y = _drawHeader(page, y);
@@ -813,7 +863,7 @@ class Engraver {
       final height = out.bottom - out.top;
       var top = firstOnPage ? y : y + options.systemGap;
       if (top + height > options.pageHeight - options.marginBottom && !firstOnPage) {
-        page = PageDisplay(options.pageWidth, options.pageHeight);
+        page = PageDisplay(options.pageWidth, options.pageHeight, spaceMm: options.spaceMm);
         pages.add(page);
         top = options.marginTop;
       } else if (top + height > options.pageHeight - options.marginBottom && pages.length == 1 && si == 0) {
@@ -832,20 +882,7 @@ class Engraver {
     }
     // Copyright unten auf der ersten Seite, Seitenzahlen
     _drawCopyright(pages.first);
-    if (pages.length > 1) {
-      for (var p = 0; p < pages.length; p++) {
-        pages[p].items.add(
-          TextItem(
-            '${p + 1} / ${pages.length}',
-            options.pageWidth - options.marginRight,
-            options.pageHeight - options.marginBottom / 2,
-            TextRole.small,
-            _smallSize,
-            align: TextAlign.right,
-          ),
-        );
-      }
-    }
+    _pageNumbers(pages);
     return ScoreLayout(pages);
   }
 
@@ -902,7 +939,7 @@ class Engraver {
     final out = sb.build(const KeySignature(0));
     final height = out.bottom - out.top;
     const top = 4.0;
-    final page = PageDisplay(s.x1 + options.marginRight, top + height + 4);
+    final page = PageDisplay(s.x1 + options.marginRight, top + height + 4, spaceMm: options.spaceMm);
     final dy = top - out.top;
     for (final it in out.items) {
       page.items.add(shift(it, 0, dy));
@@ -1082,6 +1119,33 @@ class Engraver {
     dx: n.dx,
     dy: n.dy,
   );
+
+  /// Seitenzahlen „1 / 3“ (ab zwei Seiten): rechts, in der Mitte, aussen (abwechselnd) oder keine.
+  void _pageNumbers(List<PageDisplay> pages) {
+    final mode = options.pageNumbers;
+    if (pages.length < 2 || mode == 3) return;
+    for (var p = 0; p < pages.length; p++) {
+      final left = mode == 2 && p.isOdd;
+      pages[p].items.add(
+        TextItem(
+          '${p + 1} / ${pages.length}',
+          mode == 1 ? options.pageWidth / 2 : (left ? options.marginLeft : options.pageWidth - options.marginRight),
+          options.pageHeight - options.marginBottom / 2,
+          TextRole.small,
+          _smallSize,
+          align: mode == 1 ? TextAlign.center : (left ? TextAlign.left : TextAlign.right),
+        ),
+      );
+    }
+  }
+
+  /// Taktnummer zeigen? Am Zeilenanfang [lineStart] bzw. mitten in der Zeile.
+  bool _showBarNumber(int index, {required bool lineStart}) => switch (options.barNumbers) {
+    0 => lineStart && index > 0,
+    1 => (index + 1) % 5 == 0,
+    2 => index > 0,
+    _ => false,
+  };
 
   /// Copyright unten auf der ersten Seite (verschiebbar).
   void _drawCopyright(PageDisplay page) {
@@ -1457,7 +1521,15 @@ class _SystemBuilder {
       final m = s.measures[j];
       if (m.timeChange) _timeSig(m.mb.time, m.x + 0.3, center: mid);
     }
-    if (m0.index > 0 && e._topStaff) text('${m0.index + 1}', s.x0, _tabTop - 1.0, TextRole.barNumber, _smallSize);
+    if (e._topStaff && e._showBarNumber(m0.index, lineStart: true)) {
+      text('${m0.index + 1}', s.x0, _tabTop - 1.0, TextRole.barNumber, _smallSize);
+    }
+    for (var j = 1; j < s.measures.length; j++) {
+      final m = s.measures[j];
+      if (e._topStaff && e._showBarNumber(m.index, lineStart: false)) {
+        text('${m.index + 1}', m.x + 0.2, _tabTop - 1.0, TextRole.barNumber, _smallSize);
+      }
+    }
     final rhythmBottom = _tabRhythm();
     // Anschlag und Fermate über der Tabulatur
     final aboveY = top - 0.6;
@@ -1665,7 +1737,9 @@ class _SystemBuilder {
     x += kw + (kw > 0 ? 0.6 : 0);
     if (s.first || m.timeChange) _timeSig(m.mb.time, x);
     // Taktnummer über dem Schlüssel (ausser beim ersten Takt)
-    if (m.index > 0 && e._topStaff) text('${m.index + 1}', s.x0, -2.2, TextRole.barNumber, _smallSize);
+    if (e._topStaff && e._showBarNumber(m.index, lineStart: true)) {
+      text('${m.index + 1}', s.x0, -2.2, TextRole.barNumber, _smallSize);
+    }
   }
 
   // ── Takt: Taktlinien, Wiederholungen, Wechsel ──
@@ -1673,6 +1747,10 @@ class _SystemBuilder {
   double get _contentStart => s.x0 + s.header;
 
   void _measure(_Meas m, int j) {
+    // Taktnummer mitten in der Zeile (alle 5 bzw. jeder Takt)
+    if (j > 0 && e._topStaff && e._showBarNumber(m.index, lineStart: false)) {
+      text('${m.index + 1}', m.x + 0.2, -2.2, TextRole.barNumber, _smallSize);
+    }
     final startX = j == 0 ? _contentStart : m.x;
     var x = startX;
     if (j > 0) {

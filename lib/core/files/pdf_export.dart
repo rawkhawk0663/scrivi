@@ -9,7 +9,6 @@ class PdfExport {
   PdfExport._();
 
   /// Punkte (1/72 Zoll) pro Linienabstand: A4 ist 120 Linienabstände breit.
-  static final double _k = PdfPageFormat.a4.width / 120;
 
   static final Map<String, ByteData> _fontData = {};
 
@@ -23,12 +22,14 @@ class PdfExport {
     final fonts = <String, PdfTtfFont>{};
     Future<PdfTtfFont> font(String asset) async => fonts[asset] ??= PdfTtfFont(doc, await _font(asset));
     for (final page in pages) {
-      final fmt = PdfPageFormat(page.width * _k, page.height * _k);
+      // Punkte pro Linienabstand: nach der Notengrösse der Seite
+      final k = page.spaceMm * PdfPageFormat.mm;
+      final fmt = PdfPageFormat(page.width * k, page.height * k);
       final p = PdfPage(doc, pageFormat: fmt);
       final g = p.getGraphics();
       final h = fmt.height;
-      double X(double x) => x * _k;
-      double Y(double y) => h - y * _k;
+      double X(double x) => x * k;
+      double Y(double y) => h - y * k;
       g.setFillColor(PdfColors.black);
       g.setStrokeColor(PdfColors.black);
       for (final it in page.items) {
@@ -37,16 +38,16 @@ class PdfExport {
             _path(g, core.Glyphs.get(gl.name).path, (px, py) => (X(gl.x + px * gl.scale), Y(gl.y - py * gl.scale)));
             g.fillPath();
           case core.LineItem l:
-            g.setLineWidth(l.thickness * _k);
+            g.setLineWidth(l.thickness * k);
             g.setLineCap(l.roundCap ? PdfLineCap.round : PdfLineCap.butt);
             final dash = l.dash;
-            if (dash != null) g.setLineDashPattern([dash.$1 * _k, dash.$2 * _k]);
+            if (dash != null) g.setLineDashPattern([dash.$1 * k, dash.$2 * k]);
             g.moveTo(X(l.x1), Y(l.y1));
             g.lineTo(X(l.x2), Y(l.y2));
             g.strokePath();
             if (dash != null) g.setLineDashPattern();
           case core.RectItem r:
-            g.drawRect(X(r.x), Y(r.y + r.height), r.width * _k, r.height * _k);
+            g.drawRect(X(r.x), Y(r.y + r.height), r.width * k, r.height * k);
             if (r.background) {
               g.setFillColor(PdfColors.white);
               g.fillPath();
@@ -54,7 +55,7 @@ class PdfExport {
             } else if (r.fill) {
               g.fillPath();
             } else {
-              g.setLineWidth(r.thickness * _k);
+              g.setLineWidth(r.thickness * k);
               g.strokePath();
             }
           case core.PathItem pi:
@@ -62,14 +63,14 @@ class PdfExport {
             if (pi.fill) {
               g.fillPath();
             } else {
-              g.setLineWidth(pi.thickness * _k);
+              g.setLineWidth(pi.thickness * k);
               g.strokePath();
             }
           case core.TextItem t:
             final f = await font(_fontFor(t.role, t.bold));
             final text = _printable(t.text, f);
             if (text.isEmpty) continue;
-            final size = t.size * _k;
+            final size = t.size * k;
             final w = f.stringMetrics(text).advanceWidth * size;
             final dx = switch (t.align) {
               core.TextAlign.left => 0.0,

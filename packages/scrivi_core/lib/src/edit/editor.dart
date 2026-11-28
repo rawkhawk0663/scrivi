@@ -1610,6 +1610,14 @@ class ScoreEditor {
     _done();
   }
 
+  /// Seite einrichten. [joinUndo]: mit dem vorigen Schritt zusammen rückgängig machen
+  /// (beim Verstellen eines Reglers entsteht so nur ein Schritt).
+  void setPageSetup(PageSetup setup, {bool joinUndo = false}) {
+    if (!joinUndo || _undo.isEmpty) _begin();
+    _score.pageSetup = setup;
+    _done();
+  }
+
   /// Schreibweise der Akkordsymbole für das ganze Stück.
   void setChordStyle(ChordStyle style) {
     _begin();

@@ -84,9 +84,12 @@ class TextItem extends DisplayItem {
 
 /// Eine Seite: Grösse und Inhalt.
 class PageDisplay {
-  PageDisplay(this.width, this.height);
+  PageDisplay(this.width, this.height, {this.spaceMm = 1.75});
   final double width;
   final double height;
+
+  /// Abstand zweier Notenlinien auf dem Papier (mm): rechnet sp in mm um.
+  final double spaceMm;
   final List<DisplayItem> items = [];
   final List<SystemBox> systems = [];
 

@@ -26,6 +26,7 @@ import '../../widgets/visuals.dart';
 import '../settings/settings_screen.dart';
 
 import 'chord_style_dialog.dart';
+import 'page_setup_dialog.dart';
 import 'cursor_strip.dart';
 import 'edit_tools.dart';
 import 'export_dialog.dart';
@@ -678,6 +679,7 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
         item(tr('Drucken …', 'Print …'), Icons.print_outlined, tr('Strg+P', 'Ctrl+P'), printPiece),
         const Divider(height: 1),
         item(tr('Angaben zum Stück …', 'Piece information …'), Icons.info_outline_rounded, null, editTitle),
+        item(tr('Seite einrichten …', 'Page setup …'), Icons.description_outlined, null, editPageSetup),
         item(tr('Akkordsymbole …', 'Chord symbols …'), Icons.music_note_outlined, null, editChordStyle),
         const Divider(height: 1),
         item(
@@ -885,6 +887,10 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
     final r = await askScoreInfo(context, editor.score.info);
     if (r != null) apply((e) => e.setScoreInfo(r));
   }
+
+  @override
+  Future<void> editPageSetup() =>
+      showPageSetup(context, editor.score.pageSetup, (s, first) => apply((e) => e.setPageSetup(s, joinUndo: !first)));
 
   @override
   Future<void> editChordStyle() async {
@@ -1468,6 +1474,7 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
                   layout: _layoutMode ? _layoutControl : null,
                   onLayoutDone: () => _setLayoutMode(false),
                   onLayoutResetAll: _resetAllNudges,
+                  onPageSetup: editPageSetup,
                 ),
               ),
               if (showFretboard) ...[
@@ -1847,6 +1854,7 @@ class _PagesViewer extends StatefulWidget {
     this.layout,
     this.onLayoutDone,
     this.onLayoutResetAll,
+    this.onPageSetup,
   });
   final List<core.PageDisplay> pages;
 
@@ -1854,6 +1862,7 @@ class _PagesViewer extends StatefulWidget {
   final LayoutControl? layout;
   final VoidCallback? onLayoutDone;
   final VoidCallback? onLayoutResetAll;
+  final VoidCallback? onPageSetup;
 
   /// Eine einzige lange Zeile: waagrecht blättern.
   final bool endless;
@@ -2540,6 +2549,8 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
                         drag: widget.layout!.drag.value,
                         onReset: () => h == null ? null : widget.layout!.onNudge(h.ref, core.Nudge.zero),
                         onResetAll: () => widget.onLayoutResetAll?.call(),
+                        onPageSetup: () => widget.onPageSetup?.call(),
+                        spaceMm: widget.pages.isEmpty ? 1.75 : widget.pages.first.spaceMm,
                         onDone: () => widget.onLayoutDone?.call(),
                       );
                     },

@@ -238,4 +238,31 @@ void main() {
     e.resetAllNudges();
     expect(e.nudgeOf(chord.ref), Nudge.zero);
   });
+
+  test('Seite einrichten: Papier, Notengrösse, Takte pro Zeile, Nummern', () {
+    final e = ScoreEditor(ScoreEditor.newScore(kind: NewPieceKind.leadSheet, title: 'Seite', bars: 24));
+    final normal = Engraver(e.score).layout().pages;
+    expect(normal.first.width, closeTo(120, 0.01));
+    e.setPageSetup(e.score.pageSetup.copyWith(landscape: true));
+    expect(Engraver(e.score).layout().pages.first.width, closeTo(297 / 1.75, 0.01));
+    e.setPageSetup(e.score.pageSetup.copyWith(landscape: false, spaceMm: 2.5), joinUndo: true);
+    final big = Engraver(e.score).layout().pages;
+    expect(big.first.width, closeTo(84, 0.01)); // grössere Noten: weniger Linienabstände pro Seite
+    expect(big.first.spaceMm, 2.5);
+    e.setPageSetup(PageSetup.standard.copyWith(barsPerLine: 3, barNumbers: 2, pageNumbers: 3));
+    final pages = Engraver(e.score).layout().pages;
+    for (final sys in pages.expand((p) => p.systems)) {
+      expect(sys.lastBar - sys.firstBar + 1, lessThanOrEqualTo(3));
+    }
+    expect(pages.first.systems.first.lastBar, 2);
+    final texts = pages.expand((p) => p.items).whereType<TextItem>().map((t) => t.text).toSet();
+    expect(texts, containsAll(['2', '3', '4'])); // jede Taktnummer
+    expect(texts.any((t) => t.contains(' / ')), isFalse); // keine Seitenzahlen
+    final back = ScriviFormat.decode(ScriviFormat.encode(e.score)).pageSetup;
+    expect((back.barsPerLine, back.barNumbers, back.pageNumbers), (3, 2, 3));
+    // Ein Schritt rückgängig: Querformat und Notengrösse zusammen
+    e.undo();
+    e.undo();
+    expect(e.score.pageSetup.isStandard, isTrue);
+  });
 }

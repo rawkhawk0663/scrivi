@@ -55,6 +55,7 @@ class ScriviFormat {
     'master': s.masterVolume == 1 ? null : s.masterVolume,
     'chordStyle': s.chordStyle.isStandard ? null : s.chordStyle.toJson(),
     'nudges': _nudges(s.nudges),
+    'page': s.pageSetup.isStandard ? null : s.pageSetup.toJson(),
     'masterBars': [for (final m in s.masterBars) _masterBar(m)],
     'tracks': [for (final t in s.tracks) _track(t)],
   };
@@ -280,6 +281,7 @@ class ScriviFormat {
       masterVolume: j['master'] is num ? (j['master'] as num).toDouble().clamp(0.0, 1.0) : 1.0,
       chordStyle: ChordStyle.fromJson(j['chordStyle']),
       nudges: {..._readNudges(j['nudges'])},
+      pageSetup: PageSetup.fromJson(j['page']),
       tempos: [
         for (final t in _list(j['tempos']).map(_map))
           TempoMark(

@@ -433,8 +433,9 @@ https://claude.ai/artifact/XThBrPiw5wKSbRibbnX1Vr. Entscheid: eigener Knopf „L
 Anfassern; jedes Element hängt an einem Anker, angezeigt werden die Abstände waagrecht und senkrecht.
 - Schritt 1 ✅: Elemente ausserhalb der Notenlinien verschieben (Kopf, Fuss, Akkorde, Text, Dynamik,
   Formteile, Tempo), Pfeiltasten, zurücksetzen.
-- Schritt 2: Seite einrichten (Papier, Ränder, Notengrösse, Abstände, Takte pro Zeile, Taktnummern,
-  Seitenzahlen, Schriften).
+- Schritt 2 ✅: Seite einrichten (Papier, quer, Ränder, Notengrösse, Zeilenabstand, Noten-Dichte, Takte
+  pro Zeile, Taktnummern, Seitenzahlen), sofort sichtbar, auch im PDF. Offen: Schriften, Vorlage für
+  neue Stücke.
 - Schritt 3: Zeilen- und Seitenumbrüche, Zeilen einzeln verschieben.
 - Später: weitere Elemente (Fingersätze, Griffbilder, Liedtext, Hinweise).
 

@@ -21,9 +21,9 @@ class ScoreEngraver {
   ScoreEngraver(
     this.score, {
     this.tracks,
-    this.options = const LayoutOptions(),
+    LayoutOptions options = const LayoutOptions(),
     this.measurer = const ApproxTextMeasurer(),
-  });
+  }) : options = options.withPage(score.pageSetup);
 
   final Score score;
 
@@ -35,8 +35,8 @@ class ScoreEngraver {
   /// Abstand zwischen den Spuren einer Zeile.
   static const staffGap = 2.0;
 
-  /// Abstand zwischen zwei Zeilen der Partitur.
-  static const systemGap = 5.0;
+  /// Abstand zwischen zwei Zeilen der Partitur (grösser als bei einer Spur).
+  double get systemGap => options.systemGap * 5 / 3;
 
   static const _nameSize = 1.35;
 
@@ -49,16 +49,9 @@ class ScoreEngraver {
   ScoreLayout layout() {
     final idx = tracks ?? [for (var i = 0; i < score.tracks.length; i++) i];
     final opts = LayoutOptions(
-      pageWidth: options.pageWidth,
-      pageHeight: options.pageHeight,
-      marginLeft: options.marginLeft,
-      marginRight: options.marginRight,
-      marginTop: options.marginTop,
-      marginBottom: options.marginBottom,
       showTab: options.showTab,
       showNotation: options.showNotation,
       tabLineSpacing: options.tabLineSpacing,
-      systemGap: options.systemGap,
       useLayoutHint: false,
       showChordDiagrams: false,
       germanNoteNames: options.germanNoteNames,
@@ -159,8 +152,11 @@ class ScoreEngraver {
       final avail = options.contentWidth - _namesWidth(first);
       var w = _header(i, first);
       var count = 0;
+      final fixed = options.barsPerLine;
       while (i + count < n) {
         final add = _natural(i + count, count == 0);
+        // Feste Zahl Takte pro Zeile, solange sie Platz haben
+        if (fixed > 0 && count >= fixed) break;
         if (count > 0 && w + add > avail) break;
         w += add;
         count++;
@@ -232,7 +228,7 @@ class ScoreEngraver {
   ScoreLayout _paginate(List<(int, int, bool)> ranges) {
     final e0 = _engs.first;
     final pages = <PageDisplay>[];
-    var page = PageDisplay(options.pageWidth, options.pageHeight);
+    var page = PageDisplay(options.pageWidth, options.pageHeight, spaceMm: options.spaceMm);
     pages.add(page);
     var y = e0._drawHeader(page, options.marginTop);
     final perTrack = [for (final _ in _engs) <_System>[]];
@@ -263,7 +259,7 @@ class ScoreEngraver {
       }
       var top = firstOnPage ? y : y + systemGap;
       if (top + height > options.pageHeight - options.marginBottom && !firstOnPage) {
-        page = PageDisplay(options.pageWidth, options.pageHeight);
+        page = PageDisplay(options.pageWidth, options.pageHeight, spaceMm: options.spaceMm);
         pages.add(page);
         top = options.marginTop;
       }
@@ -311,20 +307,7 @@ class ScoreEngraver {
       firstOnPage = false;
     }
     e0._drawCopyright(pages.first);
-    if (pages.length > 1) {
-      for (var p = 0; p < pages.length; p++) {
-        pages[p].items.add(
-          TextItem(
-            '${p + 1} / ${pages.length}',
-            options.pageWidth - options.marginRight,
-            options.pageHeight - options.marginBottom / 2,
-            TextRole.small,
-            _smallSize,
-            align: TextAlign.right,
-          ),
-        );
-      }
-    }
+    e0._pageNumbers(pages);
     return ScoreLayout(pages);
   }
 }

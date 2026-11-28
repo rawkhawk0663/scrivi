@@ -21,8 +21,8 @@ class LayoutControl {
 }
 
 /// Millimeter auf dem Papier (1 sp = 1,75 mm), mit Komma auf Deutsch.
-String layoutMm(double sp) {
-  final t = (sp.abs() * 1.75).toStringAsFixed(1);
+String layoutMm(double sp, [double spaceMm = 1.75]) {
+  final t = (sp.abs() * spaceMm).toStringAsFixed(1);
   return '${L10n.isEnglish ? t : t.replaceAll('.', ',')} mm';
 }
 
@@ -85,12 +85,12 @@ class LayoutPainter extends CustomPainter {
       if ((rx - ax).abs() > 0.5) {
         canvas.drawLine(Offset(ax, ay), Offset(rx, ay), line);
         _tick(canvas, Offset(rx, ay), vertical: true, paint: line);
-        _label(canvas, Offset((ax + rx) / 2, ay + 10), '↔ ${layoutMm((rx - ax) / k)}');
+        _label(canvas, Offset((ax + rx) / 2, ay + 10), '↔ ${layoutMm((rx - ax) / k, page.spaceMm)}');
       }
       if ((ry - ay).abs() > 0.5) {
         canvas.drawLine(Offset(rx, ay), Offset(rx, ry), line);
         _tick(canvas, Offset(rx, ry), vertical: false, paint: line);
-        _label(canvas, Offset(rx + 8, (ay + ry) / 2), '↕ ${layoutMm((ry - ay) / k)}', left: true);
+        _label(canvas, Offset(rx + 8, (ay + ry) / 2), '↕ ${layoutMm((ry - ay) / k, page.spaceMm)}', left: true);
       }
     }
   }
@@ -134,7 +134,14 @@ class LayoutBar extends StatelessWidget {
     required this.onResetAll,
     required this.onDone,
     this.drag = Offset.zero,
+    this.onPageSetup,
+    this.spaceMm = 1.75,
   });
+
+  final VoidCallback? onPageSetup;
+
+  /// Linienabstand in mm (für die Anzeige der Abstände).
+  final double spaceMm;
   final core.LayoutHandle? handle;
 
   /// Laufendes Ziehen (sp): die Abstände werden schon während des Ziehens angezeigt.
@@ -174,7 +181,7 @@ class LayoutBar extends StatelessWidget {
               Text(h.label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
               const SizedBox(width: 14),
               Text(
-                '↔ ${layoutMm(h.refX + drag.dx - h.anchorX)}   ↕ ${layoutMm(h.refY + drag.dy - h.anchorY)}',
+                '↔ ${layoutMm(h.refX + drag.dx - h.anchorX, spaceMm)}   ↕ ${layoutMm(h.refY + drag.dy - h.anchorY, spaceMm)}',
                 style: style,
               ),
               const SizedBox(width: 8),
@@ -184,8 +191,14 @@ class LayoutBar extends StatelessWidget {
                 label: Text(tr('Zurück an den Platz', 'Back to its place')),
               ),
             ],
-            if (h == null)
+            if (h == null) ...[
+              TextButton.icon(
+                onPressed: onPageSetup,
+                icon: const Icon(Icons.description_outlined, size: 16),
+                label: Text(tr('Seite einrichten …', 'Page setup …')),
+              ),
               TextButton(onPressed: onResetAll, child: Text(tr('Alles zurücksetzen …', 'Reset everything …'))),
+            ],
             const SizedBox(width: 4),
             FilledButton(onPressed: onDone, child: Text(tr('Fertig', 'Done'))),
           ],

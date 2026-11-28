@@ -33,6 +33,7 @@ abstract class ToolHost {
   Future<void> editJumps();
   Future<void> editTitle();
   Future<void> editChordStyle();
+  Future<void> editPageSetup();
   Future<void> editTranspose();
 
   /// Spur: Name, Klang, Stimmung/Kapo (Spur am Cursor), neue Spur.
@@ -1103,6 +1104,30 @@ final List<ToolDef> allTools = [
       'info',
     ],
     run: (h) => h.editTitle(),
+  ),
+  ToolDef(
+    id: 'page-setup',
+    group: ToolGroup.piece,
+    look: const IconLook(Icons.description_outlined),
+    de: 'Seite einrichten …',
+    en: 'Page setup …',
+    keywords: const [
+      'seite',
+      'page',
+      'papier',
+      'paper',
+      'rand',
+      'margin',
+      'notengrösse',
+      'staff size',
+      'quer',
+      'landscape',
+      'takte pro zeile',
+      'taktnummer',
+      'seitenzahl',
+      'layout',
+    ],
+    run: (h) => h.editPageSetup(),
   ),
   ToolDef(
     id: 'chord-style',

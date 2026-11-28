@@ -1,8 +1,10 @@
 import 'chord_symbol.dart';
 import 'fraction.dart';
+import 'page_setup.dart';
 import 'pitch.dart';
 
 export 'chord_symbol.dart' show ChordStyle;
+export 'page_setup.dart';
 
 /// Von Hand verschoben (Layout): so weit gegenüber dem Platz, den der Notensatz wählt, in Linienabständen.
 class Nudge {
@@ -29,8 +31,12 @@ class Score {
     this.masterVolume = 1,
     this.chordStyle = ChordStyle.standard,
     Map<String, Nudge>? nudges,
+    this.pageSetup = PageSetup.standard,
   }) : tempos = tempos ?? [],
        nudges = nudges ?? {};
+
+  /// Seite einrichten: Papier, Ränder, Notengrösse, Abstände.
+  PageSetup pageSetup;
 
   /// Verschobene Angaben im Kopf und Fuss der Seite ('title', 'subtitle', 'artist', 'album', 'credits',
   /// 'tabber', 'instructions', 'copyright').
@@ -68,6 +74,7 @@ class Score {
     masterVolume: masterVolume,
     chordStyle: chordStyle,
     nudges: nudges,
+    pageSetup: pageSetup,
   );
 }
 
