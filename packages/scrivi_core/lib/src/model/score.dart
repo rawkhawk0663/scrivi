@@ -466,6 +466,15 @@ class Bar {
 
   /// Stimmen (meist nur eine). Leere Stimmen fehlen.
   final List<Voice> voices;
+
+  /// Gezeigte Stimmen: bis zur letzten, die Töne (oder Text) hat; mindestens eine.
+  /// Leere Zusatzstimmen (nur Pausen, z. B. während man in Stimme 2 schreibt) zählen nicht.
+  int get shownVoiceCount {
+    for (var v = voices.length - 1; v > 0; v--) {
+      if (voices[v].beats.any((b) => !b.isRest || b.text != null)) return v + 1;
+    }
+    return voices.isEmpty ? 0 : 1;
+  }
 }
 
 class Voice {

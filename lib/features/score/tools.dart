@@ -68,6 +68,7 @@ enum ToolGroup {
   duration('Notenwert', 'Note value'),
   accidental('Vorzeichen', 'Accidentals'),
   guitar('Gitarre', 'Guitar'),
+  drums('Schlagzeug', 'Drums'),
   finger('Fingersatz', 'Fingering'),
   quick('Schnell', 'Quick'),
   expression('Ausdruck', 'Expression'),
@@ -118,6 +119,7 @@ class ToolDef {
     this.active,
     this.enabled,
     this.stringedOnly = false,
+    this.drumsOnly = false,
   });
   final String id;
   final ToolGroup group;
@@ -134,6 +136,12 @@ class ToolDef {
 
   /// Nur bei Saiteninstrumenten.
   final bool stringedOnly;
+
+  /// Nur bei Schlagzeug-Spuren.
+  final bool drumsOnly;
+
+  /// Passt das Werkzeug zur Spur am Cursor?
+  bool fits(core.ScoreEditor e) => (!stringedOnly || e.stringed) && (!drumsOnly || e.percussion);
 
   String get name => tr(de, en);
   String get tooltip => shortcut == null ? name : '$name   $shortcut';
@@ -459,6 +467,45 @@ final List<ToolDef> allTools = [
     run: (h) => h.toggleMic(),
   ),
 
+  for (var v = 0; v < 4; v++)
+    ToolDef(
+      id: 'voice-${v + 1}',
+      group: ToolGroup.duration,
+      look: TextLook('${v + 1}'),
+      de: 'Stimme ${v + 1}${v == 1 ? ' (z. B. Bass mit Hälsen nach unten)' : ''}',
+      en: 'Voice ${v + 1}${v == 1 ? ' (e.g. bass with stems down)' : ''}',
+      shortcut: 'Alt+${v + 1}',
+      keywords: const ['stimme', 'voice', 'zweistimmig', 'mehrstimmig', 'bass', 'polyphon'],
+      active: (e) => e.voice == v,
+      run: (h) => h.apply((e) => e.setVoice(v)),
+    ),
+  // ── Schlagzeug ──
+  for (final (key, look, de, en) in const [
+    (36, 'BD', 'Bassdrum', 'Bass drum'),
+    (38, 'SD', 'Snare', 'Snare'),
+    (37, 'Rim', 'Rimshot (Sidestick)', 'Side stick'),
+    (39, 'Clap', 'Klatschen', 'Hand clap'),
+    (42, 'HH', 'Hi-Hat geschlossen', 'Hi-hat closed'),
+    (46, 'HH○', 'Hi-Hat offen', 'Hi-hat open'),
+    (44, 'HH↓', 'Hi-Hat mit dem Fuss', 'Hi-hat pedal'),
+    (51, 'Ride', 'Ride', 'Ride'),
+    (49, 'Crash', 'Crash', 'Crash'),
+    (50, 'T1', 'Tom hoch', 'High tom'),
+    (47, 'T2', 'Tom mittel', 'Mid tom'),
+    (43, 'T3', 'Standtom', 'Floor tom'),
+  ])
+    ToolDef(
+      id: 'drum-$key',
+      group: ToolGroup.drums,
+      look: TextLook(look),
+      de: de,
+      en: en,
+      keywords: const ['schlagzeug', 'drums', 'drum', 'perkussion', 'percussion'],
+      drumsOnly: true,
+      active: (e) => e.hasDrum(key),
+      enabled: (e) => e.currentBeat != null,
+      run: (h) => h.apply((e) => e.inputDrum(key), sound: true),
+    ),
   // ── Gitarre ──
   _tech(
     core.Technique.hammer,
@@ -1251,11 +1298,10 @@ class _ToolPanelState extends State<ToolPanel> {
   Widget build(BuildContext context) {
     final c = context.scrivi;
     final e = widget.host.editor;
-    final stringed = e.stringed;
     final q = _search.text;
     final tools = [
       for (final t in allTools)
-        if ((!t.stringedOnly || stringed) && t.matches(q)) t,
+        if (t.fits(e) && t.matches(q)) t,
     ];
     return Material(
       color: c.card,
@@ -1388,14 +1434,13 @@ class ToolButton extends StatelessWidget {
 /// Suche über alle Werkzeuge (Strg+K): tippen, Enter führt das erste aus.
 Future<void> showToolSearch(BuildContext context, ToolHost host) async {
   final ctrl = TextEditingController();
-  final stringed = host.editor.stringed;
   final chosen = await showDialog<ToolDef>(
     context: context,
     builder: (context) => StatefulBuilder(
       builder: (context, setState) {
         final list = [
           for (final t in allTools)
-            if ((!t.stringedOnly || stringed) && t.matches(ctrl.text) && (t.enabled?.call(host.editor) ?? true)) t,
+            if (t.fits(host.editor) && t.matches(ctrl.text) && (t.enabled?.call(host.editor) ?? true)) t,
         ];
         return Dialog(
           alignment: const Alignment(0, -0.6),

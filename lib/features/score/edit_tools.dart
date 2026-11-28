@@ -464,6 +464,7 @@ Future<NewPieceSettings?> askNewPiece(BuildContext context) {
           core.NewPieceKind.guitarNotation => tr('Gitarre: nur Noten', 'Guitar: notation only'),
           core.NewPieceKind.bass => tr('Bass: Noten und Tabulatur', 'Bass: notation and tab'),
           core.NewPieceKind.leadSheet => tr('Leadsheet: Melodie mit Akkorden', 'Lead sheet: melody with chords'),
+          core.NewPieceKind.drums => tr('Schlagzeug', 'Drums'),
         };
         return AlertDialog(
           title: Text(tr('Neues Stück', 'New piece')),

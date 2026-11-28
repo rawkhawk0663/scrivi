@@ -31,6 +31,7 @@ class DeviceSettings {
     // Neue Gruppe „Vorzeichen“ ebenso einmal aufklappen
     if (data['vorzeichen_gezeigt'] != true) openToolGroups.value = {...openToolGroups.value, 'accidental'};
     if (data['fingersatz_gezeigt'] != true) openToolGroups.value = {...openToolGroups.value, 'finger'};
+    if (data['schlagzeug_gezeigt'] != true) openToolGroups.value = {...openToolGroups.value, 'drums'};
   }
 
   final File? _file;
@@ -88,7 +89,7 @@ class DeviceSettings {
   }
 
   /// Offene Gruppen der Werkzeugspalte (Namen wie im Code, nie übersetzen).
-  final openToolGroups = ValueNotifier<Set<String>>({'duration', 'accidental', 'guitar', 'finger', 'quick'});
+  final openToolGroups = ValueNotifier<Set<String>>({'duration', 'accidental', 'guitar', 'drums', 'finger', 'quick'});
 
   Future<void> setShowTools(bool v) async {
     showTools.value = v;
@@ -108,6 +109,7 @@ class DeviceSettings {
     _data['schnell_gezeigt'] = true;
     _data['vorzeichen_gezeigt'] = true;
     _data['fingersatz_gezeigt'] = true;
+    _data['schlagzeug_gezeigt'] = true;
     await _save();
   }
 

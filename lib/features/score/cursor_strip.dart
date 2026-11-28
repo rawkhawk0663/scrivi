@@ -28,6 +28,7 @@ class CursorStrip extends StatefulWidget {
     ToolGroup.accidental,
     ToolGroup.expression,
     ToolGroup.guitar,
+    ToolGroup.drums,
     ToolGroup.finger,
     ToolGroup.bar,
     ToolGroup.text,
@@ -42,16 +43,22 @@ class _CursorStripState extends State<CursorStrip> {
   Widget build(BuildContext context) {
     final c = context.scrivi;
     final scheme = Theme.of(context).colorScheme;
-    final stringed = widget.host.editor.stringed;
+    final e = widget.host.editor;
     final groups = [
       for (final g in CursorStrip.groups)
-        if (g != ToolGroup.guitar || stringed) g,
+        if (switch (g) {
+          ToolGroup.guitar => e.stringed,
+          ToolGroup.drums => e.percussion,
+          ToolGroup.finger => !e.percussion,
+          _ => true,
+        })
+          g,
     ];
     var group = CursorStrip.group;
     if (!groups.contains(group)) group = groups.first;
     final tools = [
       for (final t in allTools)
-        if (t.group == group && (!t.stringedOnly || stringed)) t,
+        if (t.group == group && t.fits(e)) t,
     ];
     final arrow = Positioned(
       left: (widget.arrowX - 8).clamp(14.0, CursorStrip.width - 30),

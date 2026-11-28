@@ -588,4 +588,61 @@ void main() {
       expect(texts, contains('Swing'));
     });
   });
+
+  test('Zweite Stimme: schreiben, Hälse nach unten, leere Stimmen verschwinden', () {
+    final e = ScoreEditor(ScoreEditor.newScore(kind: NewPieceKind.guitarNotation, bars: 2));
+    e.duration = const NoteDuration(NoteValue.quarter);
+    e.cursor = const EditCursor(string: 4);
+    for (var k = 0; k < 4; k++) {
+      e.inputFret(k); // Melodie in Stimme 1
+      e.moveBeat(1);
+    }
+    e.setVoice(1);
+    e.cursor = const EditCursor(string: 0);
+    e.setDuration(NoteValue.half);
+    e.inputFret(3); // Bass in Stimme 2
+    e.moveBeat(1);
+    e.inputFret(5);
+    final bar = e.score.tracks[0].bars[0];
+    expect(bar.voices.length, 2);
+    expect(bar.voices[0].beats.where((b) => !b.isRest).length, 4);
+    expect(bar.voices[1].beats.map((b) => b.notes.single.fret).toList(), [3, 5]);
+    // Beide Stimmen klingen
+    final plan = PlaybackPlan.build(e.score);
+    expect(plan.tracks.single.notes.length, greaterThanOrEqualTo(6));
+    // Im Notensatz: Hälse der zweiten Stimme nach unten (Engraver zeichnet beide)
+    final page = Engraver(e.score).layout().pages.first;
+    expect(
+      page.items.whereType<GlyphItem>().where((g) => g.name.startsWith('notehead')).length,
+      greaterThanOrEqualTo(6),
+    );
+    // Zurück in Stimme 1, zweite Stimme leeren: sie verschwindet
+    e.setVoice(1);
+    e.cursor = const EditCursor(bar: 0, beat: 0, string: 0);
+    e.selectAll();
+    e.toRest();
+    expect(e.score.tracks[0].bars[0].shownVoiceCount, 1); // leere Stimme 2 wird nicht gezeigt
+    expect(ScriviFormat.decode(ScriviFormat.encode(e.score)).tracks[0].bars[0].voices.length, 1);
+    expect(e.score.tracks[0].bars[0].voices[0].beats.where((b) => !b.isRest).length, 4);
+    // Datei hin und zurück behält beide Stimmen
+    e.undo();
+    final back = ScriviFormat.decode(ScriviFormat.encode(e.score));
+    expect(back.tracks[0].bars[0].voices.length, 2);
+  });
+
+  test('Schlagzeug: Instrumente stapeln und wieder entfernen', () {
+    final e = ScoreEditor(ScoreEditor.newScore(kind: NewPieceKind.leadSheet, bars: 1))..addTrack(NewPieceKind.drums);
+    expect(e.percussion, isTrue);
+    e.duration = const NoteDuration(NoteValue.eighth);
+    e.cursor = const EditCursor();
+    e.inputDrum(36);
+    e.inputDrum(42);
+    expect(e.currentBeat!.notes.map((n) => n.pitch.midi).toSet(), {36, 42});
+    expect(e.currentBeat!.duration.value, NoteValue.eighth);
+    e.inputDrum(42); // nochmals = weg
+    expect(e.currentBeat!.notes.map((n) => n.pitch.midi).toList(), [36]);
+    expect(e.hasDrum(36), isTrue);
+    e.inputDrum(36);
+    expect(e.currentBeat!.isRest, isTrue);
+  });
 }

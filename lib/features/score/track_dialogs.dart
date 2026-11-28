@@ -326,6 +326,7 @@ String newTrackName(core.NewPieceKind k) => switch (k) {
   core.NewPieceKind.guitarNotation => tr('Gitarre, nur Noten', 'Guitar, notation only'),
   core.NewPieceKind.bass => tr('Bass', 'Bass'),
   core.NewPieceKind.leadSheet => tr('Melodie (Gesang, Bläser …)', 'Melody (voice, wind …)'),
+  core.NewPieceKind.drums => tr('Schlagzeug', 'Drums'),
 };
 
 /// Tonart als Name, z. B. „G-Dur“ bzw. „G major“.

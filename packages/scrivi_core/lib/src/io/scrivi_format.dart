@@ -179,7 +179,7 @@ class ScriviFormat {
     'clef': b.clef == Clef.treble ? null : b.clef.name,
     'simile': b.simile == 0 ? null : b.simile,
     'voices': [
-      for (final v in b.voices) [for (final beat in v.beats) _beat(beat)],
+      for (final v in b.voices.take(b.shownVoiceCount)) [for (final beat in v.beats) _beat(beat)],
     ],
   });
 

@@ -45,6 +45,9 @@ class ScriviColors extends ThemeExtension<ScriviColors> {
   /// Auswahl, Lasso und aktive Text-Notizen auf der (immer weissen) Notenseite.
   static const selection = Color(0xFF7A3CF0);
 
+  /// Farbe des Cursors je Stimme (Stimme 1 wie die Auswahl).
+  static const voices = [Color(0xFF7A3CF0), Color(0xFF0E9F8E), Color(0xFFE0781F), Color(0xFF2F7DE1)];
+
   static const dark = ScriviColors(
     background: Color(0xFF0D0E11),
     card: Color(0xFF18191D),

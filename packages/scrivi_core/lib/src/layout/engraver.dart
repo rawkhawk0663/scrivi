@@ -333,7 +333,8 @@ class Engraver {
       prevKey = _keyOf(mb);
       prevTime = mb.time;
       final cols = <Fraction, _Col>{};
-      for (var v = 0; v < bar.voices.length; v++) {
+      final shown = bar.shownVoiceCount;
+      for (var v = 0; v < shown; v++) {
         var onset = Fraction.zero;
         final list = <_Ev>[];
         final pendingGraces = <Beat>[];
@@ -343,7 +344,7 @@ class Engraver {
             if (b.notes.isNotEmpty) pendingGraces.add(b);
             continue;
           }
-          final e = _Ev(b, v, i, onset, bar.voices.length);
+          final e = _Ev(b, v, i, onset, shown);
           e.graces.addAll(pendingGraces);
           pendingGraces.clear();
           final col = cols.putIfAbsent(onset, () => _Col(onset));

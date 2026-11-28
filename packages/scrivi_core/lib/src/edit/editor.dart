@@ -102,6 +102,37 @@ class ScoreEditor {
   Track get _track => _score.tracks[track];
   bool get stringed => _track.staff.isStringed;
 
+  /// Schlagzeug-Spur (Instrumente statt Tonhöhen).
+  bool get percussion => _track.percussion;
+
+  /// Schlagzeug: Instrument [key] (General-MIDI-Taste, z. B. 36 Bassdrum, 38 Snare, 42 Hi-Hat) am Cursor.
+  /// Auf einer Pause wird geschrieben (Notenwert wie gewählt), zu einem Schlag kommt es dazu,
+  /// ist es dort schon, wird es entfernt. Der Cursor bleibt, damit man stapeln kann.
+  void inputDrum(int key) {
+    if (!_track.percussion) return;
+    final b = currentBeat;
+    if (b == null) return;
+    _begin();
+    final note = Note(pitch: Pitch.fromMidi(key));
+    final beats = beatsOf(cursor.bar);
+    if (b.isRest) {
+      _writeNotes([note]);
+    } else if (b.notes.any((n) => n.pitch.midi == key)) {
+      beats[cursor.beat] = b.copyWith(
+        notes: [
+          for (final n in b.notes)
+            if (n.pitch.midi != key) n,
+        ],
+      );
+    } else {
+      beats[cursor.beat] = b.copyWith(notes: [...b.notes, note]);
+    }
+    _done();
+  }
+
+  /// Steht das Schlagzeug-Instrument [key] am Cursor?
+  bool hasDrum(int key) => currentBeat?.notes.any((n) => n.pitch.midi == key) ?? false;
+
   // ───────────────────────── Rückgängig ─────────────────────────
 
   String _snapshot() => jsonEncode(ScriviFormat.toJson(_score));
@@ -118,6 +149,7 @@ class ScoreEditor {
   void _done() {
     _normalize();
     _keepSimiles();
+    _pruneVoices();
     _clampCursor();
     revision++;
   }
@@ -144,13 +176,42 @@ class ScoreEditor {
 
   Fraction barLength(int bar) => _score.masterBars[bar].time.length;
 
-  /// Schläge der Stimme 1 im Takt [bar] (bei Bedarf mit Pausen angelegt).
+  /// Stimme, in die geschrieben wird (0 = Stimme 1 … 3 = Stimme 4).
+  int voice = 0;
+
+  static const maxVoices = 4;
+
+  /// In Stimme [v] schreiben; der Cursor bleibt an derselben Stelle im Takt.
+  void setVoice(int v) {
+    final nv = v.clamp(0, maxVoices - 1).toInt();
+    if (nv == voice) return;
+    final at = cursorOnset.toDouble();
+    voice = nv;
+    _pruneVoices();
+    setCursor(cursor.bar, at, select: false);
+    revision++;
+  }
+
+  /// Schläge der gewählten Stimme im Takt [bar] (bei Bedarf mit Pausen angelegt).
   List<Beat> beatsOf(int bar) {
     final b = _track.bars[bar];
-    if (b.voices.isEmpty) b.voices.add(Voice(_rests(barLength(bar))));
-    final v = b.voices.first.beats;
+    while (b.voices.length <= voice) {
+      b.voices.add(Voice(_rests(barLength(bar))));
+    }
+    final v = b.voices[voice].beats;
     if (v.isEmpty) v.addAll(_rests(barLength(bar)));
     return v;
+  }
+
+  /// Leere Zusatzstimmen (nur Pausen) am Ende weglassen, damit keine überflüssigen Pausen erscheinen.
+  void _pruneVoices() {
+    for (final t in _score.tracks) {
+      for (final bar in t.bars) {
+        while (bar.voices.length > 1 && bar.voices.last.beats.every((b) => b.isRest && b.text == null)) {
+          bar.voices.removeLast();
+        }
+      }
+    }
   }
 
   /// Schlag unter dem Cursor (null, wenn der Takt leer ist).
@@ -1761,16 +1822,22 @@ class ScoreEditor {
   /// Bögen nachführen: Haltebogen-Anfang am Ton vor einem gebundenen Ton,
   /// gebundene Töne mit derselben Tonhöhe, Ziel von Hammer-on/Pull-off.
   void _normalize() {
+    for (var v = 0; v < maxVoices; v++) {
+      _normalizeVoice(v);
+    }
+  }
+
+  void _normalizeVoice(int v) {
     final t = _track;
     final last = <String, (int, int, int)>{}; // Saite/Ton → (Takt, Schlag, Note)
     Beat? prevBeat;
     int? prevBar, prevIdx;
     for (var bar = 0; bar < t.bars.length && bar < _score.masterBars.length; bar++) {
-      if (t.bars[bar].voices.isEmpty) {
+      if (t.bars[bar].voices.length <= v) {
         prevBeat = null;
         continue;
       }
-      final beats = t.bars[bar].voices.first.beats;
+      final beats = t.bars[bar].voices[v].beats;
       for (var i = 0; i < beats.length; i++) {
         final b = beats[i];
         if (b.grace != GraceType.none) continue;
@@ -1802,7 +1869,7 @@ class ScoreEditor {
         }
         // Haltebogen-Anfang am vorigen Schlag nachführen
         if (prevBeat != null && prevBar != null && prevIdx != null) {
-          final pb = t.bars[prevBar].voices.first.beats;
+          final pb = t.bars[prevBar].voices[v].beats;
           final pv = pb[prevIdx];
           var pChanged = false;
           final fixed = <Note>[
@@ -2294,6 +2361,7 @@ class ScoreEditor {
     NewPieceKind.guitarNotation => ('Gitarre', const [40, 45, 50, 55, 59, 64], Clef.treble8vb, 12, 25),
     NewPieceKind.bass => ('Bass', const [28, 33, 38, 43], Clef.bass, 12, 33),
     NewPieceKind.leadSheet => ('Melodie', const <int>[], Clef.treble, 0, 0),
+    NewPieceKind.drums => ('Schlagzeug', const <int>[], Clef.neutral, 0, 0),
   };
 
   // ───────────────────────── Neues Stück ─────────────────────────
@@ -2331,4 +2399,4 @@ class ScoreEditor {
 }
 
 /// Art eines neuen Stücks.
-enum NewPieceKind { guitarTab, guitarNotation, bass, leadSheet }
+enum NewPieceKind { guitarTab, guitarNotation, bass, leadSheet, drums }

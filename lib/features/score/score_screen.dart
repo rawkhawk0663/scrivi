@@ -1264,6 +1264,20 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
     final ctrl = hw.isControlPressed || hw.isMetaPressed;
     final shift = hw.isShiftPressed;
     final k = ev.logicalKey;
+    // Alt + 1 … 4: Stimme wählen
+    if (hw.isAltPressed && !ctrl) {
+      const digits = [
+        LogicalKeyboardKey.digit1,
+        LogicalKeyboardKey.digit2,
+        LogicalKeyboardKey.digit3,
+        LogicalKeyboardKey.digit4,
+      ];
+      final v = digits.indexOf(k);
+      if (v >= 0) {
+        apply((e) => e.setVoice(v));
+        return true;
+      }
+    }
     if (ctrl) {
       if (k == LogicalKeyboardKey.keyZ) {
         apply((e) => shift ? e.redo() : e.undo());
@@ -1882,7 +1896,11 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
                             child: trackLabel,
                           )
                         : trackLabel,
-                    Text('${tr('Takt', 'Bar')} ${bar + 1} / ${score.masterBars.length}', style: muted),
+                    Text(
+                      '${tr('Takt', 'Bar')} ${bar + 1} / ${score.masterBars.length}'
+                      '${(_editor?.voice ?? 0) > 0 ? ' · ${tr('Stimme', 'Voice')} ${_editor!.voice + 1}' : ''}',
+                      style: muted,
+                    ),
                   ],
                 ),
               ),
@@ -2767,7 +2785,7 @@ class _EditCursorPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final k = size.width / page.width;
-    final color = ScriviColors.selection;
+    final color = ScriviColors.voices[editor.voice.clamp(0, 3)];
     // Auswahl
     final sel = editor.selection;
     if (sel != null) {

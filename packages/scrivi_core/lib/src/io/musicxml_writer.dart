@@ -222,7 +222,7 @@ class MusicXmlWriter {
         _direction('<words>${mb.swing ? 'Swing' : 'Straight'}</words>');
       }
       // Stimmen
-      final voices = bar?.voices ?? const <Voice>[];
+      final voices = bar == null ? const <Voice>[] : bar.voices.take(bar.shownVoiceCount).toList();
       final len = _dur(mb.time.length);
       if (voices.isEmpty) {
         _line(3, '<note>');
