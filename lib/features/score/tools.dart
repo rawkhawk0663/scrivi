@@ -3,6 +3,7 @@ import 'package:scrivi_core/scrivi_core.dart' as core;
 
 import '../../app/l10n.dart';
 import '../../app/theme.dart';
+import 'tool_glyphs.g.dart';
 
 /// Was die Werkzeuge von der Notenansicht brauchen.
 abstract class ToolHost {
@@ -1386,26 +1387,22 @@ class ToolButton extends StatelessWidget {
     };
     final fg = active ? scheme.onPrimary : (enabled ? Theme.of(context).colorScheme.onSurface : c.muted.withAlpha(110));
     Widget child = switch (tool.look) {
-      GlyphLook g => Transform.translate(
-        offset: Offset(0, g.dy),
-        child: Text(
-          g.char,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontFamily: 'Bravura',
-            fontSize: g.size,
-            height: g.char.contains('\n') ? 0.62 : 1,
-            color: fg,
+      GlyphLook g => ToolGlyph(text: g.char, size: g.size, color: fg),
+      TextLook t => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 3),
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            t.text,
+            maxLines: 1,
+            softWrap: false,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              fontStyle: t.italic ? FontStyle.italic : null,
+              color: fg,
+            ),
           ),
-        ),
-      ),
-      TextLook t => Text(
-        t.text,
-        style: TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w600,
-          fontStyle: t.italic ? FontStyle.italic : null,
-          color: fg,
         ),
       ),
       IconLook i => Icon(i.icon, size: 20, color: fg),
@@ -1492,4 +1489,81 @@ Future<void> showToolSearch(BuildContext context, ToolHost host) async {
   );
   ctrl.dispose();
   if (chosen != null) chosen.run(host);
+}
+
+/// Notenzeichen auf einem Knopf: genau in der Mitte und so klein, dass es nicht übersteht.
+/// Die Ausdehnung der Tinte stammt aus [toolGlyphBoxes] (der Ursprung eines Notenzeichens liegt
+/// auf der Notenlinie, nicht in seiner Mitte). Mehrere Zeilen (mit \n) stehen übereinander.
+class ToolGlyph extends StatelessWidget {
+  const ToolGlyph({super.key, required this.text, required this.size, required this.color});
+  final String text;
+
+  /// Gewünschte Schriftgrösse (Bildpunkte); kleiner, wenn das Zeichen sonst zu gross wäre.
+  final double size;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) =>
+      CustomPaint(size: const Size(ToolButton.size, ToolButton.size), painter: _GlyphPainter(text, size, color));
+}
+
+class _GlyphPainter extends CustomPainter {
+  _GlyphPainter(this.text, this.size, this.color);
+  final String text;
+  final double size;
+  final Color color;
+
+  /// Platz für die Tinte im Knopf (Bildpunkte) und kleinste Ausdehnung (damit ein Punkt sichtbar bleibt).
+  static const _maxW = 30.0, _maxH = 28.0, _minInk = 5.5;
+
+  @override
+  void paint(Canvas canvas, Size box) {
+    // Tinte jeder Zeile in Linienabständen (y nach oben), Zeichen nebeneinander nach ihrem Vorschub
+    final lines = text.split('\n');
+    final boxes = <(double, double, double, double)>[];
+    for (final line in lines) {
+      var x = 0.0, l = double.infinity, b = double.infinity, r = -double.infinity, t = -double.infinity;
+      for (final rune in line.runes) {
+        final g = toolGlyphBoxes[rune];
+        if (g == null) continue;
+        l = l < x + g.$1 ? l : x + g.$1;
+        b = b < g.$2 ? b : g.$2;
+        r = r > x + g.$3 ? r : x + g.$3;
+        t = t > g.$4 ? t : g.$4;
+        x += g.$5;
+      }
+      boxes.add(l.isFinite ? (l, b, r, t) : (0.0, 0.0, 1.0, 1.0));
+    }
+    // Zeilenabstand (Linienabstände) und Gesamtgrösse
+    final lineH = boxes.map((e) => e.$4 - e.$2).reduce((a, c) => a > c ? a : c) + 0.25;
+    final first = boxes.first, last = boxes.last;
+    final w = boxes.map((e) => e.$3 - e.$1).reduce((a, c) => a > c ? a : c);
+    final h = (lines.length - 1) * lineH + first.$4 - last.$2;
+    // Schriftgrösse: ein Geviert = 4 Linienabstände
+    var font = size;
+    if (w * font / 4 > _maxW) font = _maxW * 4 / w;
+    if (h * font / 4 > _maxH) font = _maxH * 4 / h;
+    final ink = (w > h ? w : h) * font / 4;
+    if (ink < _minInk) font *= _minInk / ink;
+    final sp = font / 4;
+    // Grundlinie der ersten Zeile so, dass die Tinte senkrecht in der Mitte steht
+    final cy = box.height / 2, cx = box.width / 2;
+    final base0 = cy + (first.$4 + last.$2 - (lines.length - 1) * lineH) * sp / 2;
+    for (var i = 0; i < lines.length; i++) {
+      final tp = TextPainter(
+        text: TextSpan(
+          text: lines[i],
+          style: TextStyle(fontFamily: 'Bravura', fontSize: font, height: 1, color: color),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      final baseline = tp.computeDistanceToActualBaseline(TextBaseline.alphabetic);
+      final (l, _, r, _) = boxes[i];
+      tp.paint(canvas, Offset(cx - (l + r) / 2 * sp, base0 + i * lineH * sp - baseline));
+      tp.dispose();
+    }
+  }
+
+  @override
+  bool shouldRepaint(_GlyphPainter old) => old.text != text || old.size != size || old.color != color;
 }

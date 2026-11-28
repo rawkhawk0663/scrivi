@@ -1706,16 +1706,6 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
                       ),
               ),
               _titleBlock(context, compact),
-              // Nur wenn das Stück noch nicht an einem eigenen Ort gespeichert ist
-              if (_unsaved)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: FilledButton.tonalIcon(
-                    onPressed: save,
-                    icon: const Icon(Icons.save_outlined, size: 18),
-                    label: Text(tr('Speichern', 'Save')),
-                  ),
-                ),
               const SizedBox(width: 4),
               IconButton(
                 tooltip: tr('Rückgängig  (Strg+Z)', 'Undo  (Ctrl+Z)'),
@@ -1745,9 +1735,11 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
                 ),
               ],
             ];
-            final center = <Widget>[
+            // Abspielen: Knöpfe und Anzeige in einem Feld
+            final controls = <Widget>[
               IconButton(
                 tooltip: tr('Zum Anfang', 'To the start'),
+                visualDensity: VisualDensity.compact,
                 icon: const Icon(Icons.skip_previous_rounded),
                 onPressed: p == null
                     ? null
@@ -1760,21 +1752,23 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
                 ListenableBuilder(
                   listenable: p,
                   builder: (context, _) => SizedBox(
-                    width: 44,
-                    height: 44,
+                    width: 38,
+                    height: 38,
                     child: p.preparing
-                        ? const Padding(padding: EdgeInsets.all(11), child: CircularProgressIndicator(strokeWidth: 3))
+                        ? const Padding(padding: EdgeInsets.all(9), child: CircularProgressIndicator(strokeWidth: 3))
                         : IconButton.filled(
                             tooltip: p.playing
                                 ? tr('Anhalten  (Leertaste)', 'Pause  (Space)')
                                 : tr('Abspielen ab Cursor  (Leertaste)', 'Play from cursor  (Space)'),
-                            icon: Icon(p.playing ? Icons.pause_rounded : Icons.play_arrow_rounded, size: 28),
+                            padding: EdgeInsets.zero,
+                            icon: Icon(p.playing ? Icons.pause_rounded : Icons.play_arrow_rounded, size: 26),
                             onPressed: _togglePlay,
                           ),
                   ),
                 ),
-              const SizedBox(width: 8),
-              if (e != null && p != null) Flexible(child: _display(context, e, p, compact)),
+            ];
+            final center = <Widget>[
+              if (e != null && p != null) Flexible(child: _display(context, e, p, compact, controls)),
             ];
             final right = <Widget>[
               if (_mic != null)
@@ -1889,7 +1883,7 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
   }
 
   /// Anzeige: Spur (zum Wechseln antippen), Takt, Zeit, Tempo, Taktart, Tonart.
-  Widget _display(BuildContext context, core.ScoreEditor e, ScorePlayer p, bool compact) {
+  Widget _display(BuildContext context, core.ScoreEditor e, ScorePlayer p, bool compact, List<Widget> controls) {
     final c = context.scrivi;
     final score = e.score;
     return ListenableBuilder(
@@ -1917,16 +1911,18 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
           ],
         );
         return Container(
-          constraints: BoxConstraints(maxWidth: compact ? 240 : 380),
-          height: 44,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
+          constraints: BoxConstraints(maxWidth: compact ? 330 : 480),
+          height: 48,
+          padding: const EdgeInsets.fromLTRB(4, 0, 14, 0),
           decoration: BoxDecoration(
             color: c.card,
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(color: c.line),
           ),
           child: Row(
             children: [
+              ...controls,
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
