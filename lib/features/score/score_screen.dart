@@ -1293,6 +1293,15 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
         printPiece();
       } else if (k == LogicalKeyboardKey.keyK || k == LogicalKeyboardKey.keyF) {
         showToolSearch(context, this);
+      } else if (k == LogicalKeyboardKey.equal ||
+          k == LogicalKeyboardKey.add ||
+          k == LogicalKeyboardKey.numpadAdd ||
+          ev.character == '+') {
+        _viewer.currentState?.zoomBy(1.25); // Strg + Plus: grösser
+      } else if (k == LogicalKeyboardKey.minus || k == LogicalKeyboardKey.numpadSubtract) {
+        _viewer.currentState?.zoomBy(1 / 1.25);
+      } else if (k == LogicalKeyboardKey.digit0 || k == LogicalKeyboardKey.numpad0) {
+        _viewer.currentState?.reset();
       } else if (k == LogicalKeyboardKey.arrowLeft) {
         apply((e) => e.moveBar(-1, select: shift));
       } else if (k == LogicalKeyboardKey.arrowRight) {
@@ -2333,9 +2342,12 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
     if (e is PointerScrollEvent) {
       GestureBinding.instance.pointerSignalResolver.register(e, (event) {
         final s = event as PointerScrollEvent;
-        if (HardwareKeyboard.instance.isControlPressed) {
+        final hw = HardwareKeyboard.instance;
+        // Mausrad: hoch und runter; Strg (oder Umschalt) + Mausrad: seitwärts; Alt + Mausrad: zoomen.
+        // Lässt sich nichts hoch und runter schieben (ganze Seite zu sehen), blättert das Mausrad seitwärts.
+        if (hw.isAltPressed) {
           zoomBy(s.scrollDelta.dy < 0 ? 1.1 : 1 / 1.1, s.localPosition);
-        } else if (HardwareKeyboard.instance.isShiftPressed || widget.endless || !_vertical) {
+        } else if (hw.isControlPressed || hw.isShiftPressed || widget.endless || !_vertical) {
           scrollBy(0, s.scrollDelta.dy + s.scrollDelta.dx);
         } else {
           scrollBy(s.scrollDelta.dy, s.scrollDelta.dx);

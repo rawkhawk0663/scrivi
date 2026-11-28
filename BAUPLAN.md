@@ -49,7 +49,7 @@ braucht:
 ## 2. Grundsätze (wie bei Volti, Suona und Conti)
 
 1. **Kein Konto, keine Daten sammeln, keine Werbung, funktioniert ohne Internet.**
-   Internet nur für Updates und den eigenen Dropbox-Abgleich.
+   Internet nur für Updates (kein Dropbox-Abgleich: Stücke sind lokale Dateien, der Besitzer sichert sie selbst).
 2. **Deutsch und Englisch**, jeder sichtbare Text als `tr('Deutsch', 'English')`,
    Schweizer Schreibweise („ss“), Englisch britisch.
 3. **GPL-3.0**, alles öffentlich. Neue Pakete, Schriften und Klänge müssen zur GPL passen.
@@ -208,7 +208,7 @@ Jede Etappe endet mit einem Release, das man ausprobieren kann.
 | 6 | **Ausgeben** (teilweise ✅) | PDF, PNG/SVG, MusicXML, MIDI, Tonspur (WAV), „An Volti senden“, Drucken | ein PDF ist bereit für Schüler und Band | M |
 | 7 | **Partitur** | Mehrere Instrumente, Klammern, Stimmen-Auszüge, Transposition, mehrere Stimmen pro System, Dynamik, Bögen, n-tolen, Vorschläge, Schlagzeug | ein Band-Arrangement mit Auszügen ist druckreif | XL |
 | 8 | **Feinschliff Notensatz** | Kollisionen vermeiden, Abstände von Hand, Stilvorlagen, Schriften (Petaluma), Umbrüche, Kopf- und Fusszeilen | Ergebnis braucht kaum Handarbeit | L |
-| 9 | **Extras** | Dropbox-Abgleich, Mikrofon-Eingabe, MIDI-Keyboard, Übungsblatt-Generator, Lieder an Suona, macOS, iPadOS | nach Wunsch | je M |
+| 9 | **Extras** | Mikrofon-Eingabe, MIDI-Keyboard, Übungsblatt-Generator, Lieder an Suona, macOS, iPadOS | nach Wunsch | je M |
 
 **Warum Einlesen so früh?** Die eigenen Guitar-Pro-Dateien sind das beste
 Testmaterial. So sehen wir sofort an echten Stücken, wo der Notensatz noch hinkt, und Scrivi
