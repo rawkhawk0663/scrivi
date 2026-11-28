@@ -433,6 +433,22 @@ class _Parser {
     }
     final props = _props(b);
     final stroke = _text(props['PickStroke'], 'Direction');
+    // Slap und Pop stehen in neueren Dateien am Schlag
+    if (props.containsKey('Slapped') || props.containsKey('Popped')) {
+      for (var i = 0; i < notes.length; i++) {
+        notes[i] = notes[i].copyWith(slap: props.containsKey('Slapped'), pop: props.containsKey('Popped'));
+      }
+    }
+    // Tremolo-Hebel: tiefster Wert (in 1/50 Halbton) als kurzes Hinunter und Zurück
+    var whammy = 0;
+    if (props.containsKey('WhammyBar')) {
+      final values = [
+        for (final k in ['WhammyBarOriginValue', 'WhammyBarMiddleValue', 'WhammyBarDestinationValue'])
+          double.tryParse(_text(props[k], 'Float')) ?? 0,
+      ];
+      final low = values.reduce((a, c) => a < c ? a : c) / 50;
+      if (low < 0) whammy = low.round().clamp(-24, -1);
+    }
     final lyrics = _children(_child(b, 'Lyrics'), 'Line').map((l) => l.innerText.trim()).toList();
     while (lyrics.isNotEmpty && lyrics.last.isEmpty) {
       lyrics.removeLast();
@@ -464,8 +480,38 @@ class _Parser {
         '1/32' => 3,
         _ => 0,
       },
+      ottava: switch (_text(b, 'Ottavia')) {
+        '8va' => 1,
+        '15ma' => 2,
+        '8vb' => -1,
+        '15mb' => -2,
+        _ => 0,
+      },
+      arpeggio: switch (_text(b, 'Arpeggio')) {
+        'Up' => 1,
+        'Down' => -1,
+        _ => 0,
+      },
+      rasgueado: props.containsKey('Rasgueado'),
+      fade: switch (_text(b, 'Fadding')) {
+        'FadeIn' => 1,
+        'FadeOut' => 2,
+        'VolumeSwell' => 3,
+        _ => 0,
+      },
+      whammy: whammy,
     );
   }
+
+  /// Fingersatz aus der Datei: P Daumen, I Zeige-, M Mittel-, A Ring-, C kleiner Finger.
+  static int _finger(String s, {required bool left}) => switch (s.trim().toUpperCase()) {
+    'P' => left ? 5 : 1,
+    'I' => left ? 1 : 2,
+    'M' => left ? 2 : 3,
+    'A' => left ? 3 : 4,
+    'C' => left ? 4 : 5,
+    _ => 0,
+  };
 
   /// Fermaten eines Takts als Stellen im Takt (Bruchteile einer Ganzen).
   Set<Fraction> _fermatas(XmlElement masterBar) {
@@ -573,9 +619,26 @@ class _Parser {
       hammerDestination: p.containsKey('HopoDestination'),
       bend: bend,
       accent: int.tryParse(_text(n, 'Accent')) ?? 0,
-      vibrato: _child(n, 'Vibrato') != null,
+      vibrato: _child(n, 'Vibrato') != null && _text(n, 'Vibrato') != 'Wide',
+      wideVibrato: _text(n, 'Vibrato') == 'Wide',
       harmonic: p.containsKey('HarmonicType'),
+      harmonicType: switch (_text(p['HarmonicType'], 'HType')) {
+        'Artificial' || 'Tap' || 'Semi' => 1,
+        'Pinch' => 2,
+        _ => 0,
+      },
       tapped: p.containsKey('Tapped'),
+      slap: p.containsKey('Slapped'),
+      pop: p.containsKey('Popped'),
+      trill: () {
+        final v = int.tryParse(_text(n, 'Trill'));
+        if (v == null) return 0;
+        // Ton des Trillers: als Tonhöhe (gross) oder als Bund gespeichert
+        final d = v > (fret ?? 0) + 12 ? v - midi! : v - (fret ?? 0);
+        return d >= 1 && d <= 12 ? d : 2;
+      }(),
+      leftFinger: _finger(_text(n, 'LeftFingering'), left: true),
+      rightFinger: _finger(_text(n, 'RightFingering'), left: false),
     );
   }
 }

@@ -137,6 +137,9 @@ class _Ev {
   bool fermata = false;
   GraceType grace = GraceType.none;
   int tremolo = 0;
+  int arpeggio = 0;
+  int pedal = 0;
+  int ottava = 0;
 }
 
 class _N {
@@ -156,6 +159,13 @@ class _N {
   Bend? bend;
   int accent = 0;
   bool harmonic = false;
+  int harmonicType = 0;
+  bool courtesy = false;
+  int leftFinger = 0;
+  int rightFinger = 0;
+  int trill = 0;
+  bool tapped = false;
+  bool vibrato = false;
 }
 
 /// Angaben pro Notenzeile (Schlüssel, Stimmung …).
@@ -271,6 +281,8 @@ class _Parser {
     // Pro Notenzeile und Stimme: Takte mit Ereignissen
     final events = <int, Map<int, Map<String, List<_Ev>>>>{}; // staff → bar → voice → events
     final clefPerBar = <int, Map<int, Clef>>{};
+    // Oktavierung pro Notenzeile (8va = 1 … 15mb = −2), gilt bis zum Ende der Linie
+    final ottava = <int, int>{};
     var barIndex = 0;
     final measures = _children(part, 'measure').toList();
     for (final m in measures) {
@@ -378,7 +390,8 @@ class _Parser {
               ev = list.last;
             } else {
               final start = isChord ? lastPos : pos;
-              ev = _Ev(Fraction(start, divisions * 4), _duration(el, dur, divisions, time), dur);
+              final shift = ottava[staff] ?? 0;
+              ev = _Ev(Fraction(start, divisions * 4), _duration(el, dur, divisions, time), dur)..ottava = shift;
               list.add(ev);
               lastPos = start;
               if (!isChord) pos += dur;
@@ -402,6 +415,8 @@ class _Parser {
             }
             final notations = _child(el, 'notations');
             if (notations != null && _child(notations, 'fermata') != null) ev.fermata = true;
+            final arp = _child(notations, 'arpeggiate');
+            if (arp != null) ev.arpeggio = arp.getAttribute('direction') == 'down' ? -1 : 1;
             final trem = _child(_child(notations, 'ornaments'), 'tremolo');
             if (trem != null && trem.getAttribute('type') != 'start' && trem.getAttribute('type') != 'stop') {
               ev.tremolo = int.tryParse(trem.innerText.trim()) ?? 1;
@@ -445,6 +460,22 @@ class _Parser {
                   case 'dynamics':
                     final d = c.childElements.isEmpty ? null : _dynamic(c.childElements.first.name.local);
                     if (d != null) attach((ev) => ev.dynamic = d);
+                  case 'pedal':
+                    final p = switch (c.getAttribute('type')) {
+                      'start' => 1,
+                      'stop' => 2,
+                      'change' => 3,
+                      _ => 0,
+                    };
+                    if (p != 0) attach((ev) => ev.pedal = p);
+                  case 'octave-shift':
+                    final size = int.tryParse(c.getAttribute('size') ?? '8') ?? 8;
+                    final n = size >= 15 ? 2 : 1;
+                    ottava[staff] = switch (c.getAttribute('type')) {
+                      'down' => n, // Noten tiefer geschrieben, als sie klingen: 8va
+                      'up' => -n,
+                      _ => 0,
+                    };
                   case 'wedge':
                     final type = c.getAttribute('type');
                     if (type == 'crescendo' || type == 'diminuendo') {
@@ -736,6 +767,13 @@ class _Parser {
             bend: n.bend,
             accent: n.accent,
             harmonic: n.harmonic,
+            harmonicType: n.harmonic ? n.harmonicType : 0,
+            courtesy: n.courtesy,
+            leftFinger: n.leftFinger,
+            rightFinger: n.rightFinger,
+            trill: n.trill,
+            tapped: n.tapped,
+            vibrato: n.vibrato,
           ),
         );
       }
@@ -756,6 +794,9 @@ class _Parser {
         fermata: ev.fermata,
         grace: ev.grace,
         tremolo: ev.tremolo,
+        arpeggio: ev.arpeggio,
+        pedal: ev.pedal,
+        ottava: ev.ottava,
       );
       if (ev.chord != null) _pendingChordNames[beat] = ev.chord!;
       out.add(beat);
@@ -841,6 +882,7 @@ class _Parser {
     }
     final head = _text(el, 'notehead');
     if (head == 'x' || head == 'cross') n.dead = true;
+    if (_child(el, 'accidental')?.getAttribute('parentheses') == 'yes') n.courtesy = true;
     final notations = _child(el, 'notations');
     if (notations != null) {
       for (final t in _children(notations, 'tied')) {
@@ -857,7 +899,22 @@ class _Parser {
         for (final h in [..._children(tech, 'hammer-on'), ..._children(tech, 'pull-off')]) {
           if (h.getAttribute('type') == 'start') n.hammer = true;
         }
-        if (_child(tech, 'harmonic') != null) n.harmonic = true;
+        final harm = _child(tech, 'harmonic');
+        if (harm != null) {
+          n.harmonic = true;
+          if (_child(harm, 'artificial') != null) n.harmonicType = 1;
+        }
+        if (_child(tech, 'tap') != null) n.tapped = true;
+        final finger = int.tryParse(_text(tech, 'fingering'));
+        if (finger != null) n.leftFinger = finger == 0 ? 5 : finger.clamp(0, 5);
+        n.rightFinger = switch (_text(tech, 'pluck').toLowerCase()) {
+          'p' => 1,
+          'i' => 2,
+          'm' => 3,
+          'a' => 4,
+          'c' || 'ch' || 'e' || 'x' => 5,
+          _ => 0,
+        };
         final bend = _child(tech, 'bend');
         if (bend != null) {
           final alter = double.tryParse(_text(bend, 'bend-alter')) ?? 2;
@@ -869,6 +926,11 @@ class _Parser {
             if (release) const BendPoint(1, 0) else BendPoint(1, alter.abs()),
           ]);
         }
+      }
+      final orn = _child(notations, 'ornaments');
+      if (orn != null) {
+        if (_child(orn, 'trill-mark') != null) n.trill = 2;
+        if (_children(orn, 'wavy-line').any((w) => w.getAttribute('type') == 'start') && n.trill == 0) n.vibrato = true;
       }
       final art = _child(notations, 'articulations');
       if (art != null) {

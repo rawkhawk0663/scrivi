@@ -5,7 +5,7 @@ import 'package:archive/archive.dart';
 import 'package:scrivi_core/scrivi_core.dart';
 import 'package:test/test.dart';
 
-import 'core_test.dart' show gpif;
+import 'core_test.dart' show gpif, zipped;
 
 /// Schreibt Binärdaten (Little Endian) für selbst gebaute Testdateien.
 class _W {
@@ -345,5 +345,26 @@ void main() {
     expect(bar1.first.notes.single.tieDestination, isTrue);
     expect(bar1[1].duration.value, NoteValue.eighth);
     expect(Engraver(s).layout().pages, isNotEmpty);
+  });
+
+  test('Guitar Pro (neu): Fingersätze, Flageolett-Art, weites Vibrato, Arpeggio, Ein-/Ausblenden, 8va', () {
+    var xml = gpif();
+    xml = xml.replaceFirst(
+      '<Beat id="4"><Rhythm ref="3"/>',
+      '<Beat id="4"><Rhythm ref="3"/><Arpeggio>Down</Arpeggio><Fadding>FadeIn</Fadding><Ottavia>8va</Ottavia>'
+          '<Properties><Property name="Rasgueado"><Rasgueado>ii_1</Rasgueado></Property></Properties>',
+    );
+    xml = xml.replaceFirst(
+      '<Note id="4"><Properties>',
+      '<Note id="4"><Vibrato>Wide</Vibrato><LeftFingering>M</LeftFingering><RightFingering>I</RightFingering>'
+          '<Properties><Property name="HarmonicType"><HType>Pinch</HType></Property>'
+          '<Property name="Slapped"><Enable/></Property>',
+    );
+    final s = GpReader.read(zipped(xml));
+    final beat = s.tracks[0].bars[1].voices[0].beats.first;
+    expect((beat.arpeggio, beat.fade, beat.ottava, beat.rasgueado), (-1, 1, 1, true));
+    final n = beat.notes.single;
+    expect((n.wideVibrato, n.vibrato, n.leftFinger, n.rightFinger), (true, false, 2, 2));
+    expect((n.harmonic, n.harmonicType, n.slap), (true, 2, true));
   });
 }

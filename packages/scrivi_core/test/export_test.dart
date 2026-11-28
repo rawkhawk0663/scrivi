@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:scrivi_core/scrivi_core.dart';
 import 'package:test/test.dart';
@@ -106,4 +107,41 @@ void main() {
       }
     });
   }
+
+  test('MusicXML: Fingersätze, Flageolett, Triller, Arpeggio, Pedal, 8va hin und zurück', () {
+    final e = ScoreEditor(ScoreEditor.newScore(title: 'Zeichen', bars: 2));
+    e.duration = const NoteDuration(NoteValue.quarter);
+    e.cursor = const EditCursor(string: 3);
+    e.inputFret(2);
+    e.setFinger(left: 2);
+    e.setFinger(right: 3);
+    e.toggleTechnique(Technique.artificialHarmonic);
+    e.moveBeat(1);
+    e.inputFret(4);
+    e.toggleTechnique(Technique.trill);
+    e.setPedal(1);
+    e.moveBeat(1);
+    e.cursor = e.cursor.copyWith(string: 1);
+    e.inputFret(2);
+    e.cursor = e.cursor.copyWith(string: 2);
+    e.inputFret(2);
+    e.setArpeggio(-1);
+    e.setOttava(1);
+    final bytes = MusicXmlWriter.write(e.score);
+    final xml = utf8.decode(bytes);
+    expect(xml, contains('<fingering>2</fingering>'));
+    expect(xml, contains('<pluck>m</pluck>'));
+    expect(xml, contains('<artificial/>'));
+    expect(xml, contains('<trill-mark/>'));
+    expect(xml, contains('<pedal type="start"'));
+    expect(xml, contains('<octave-shift type="down"'));
+    final back = GpReader.read(Uint8List.fromList(bytes));
+    final beats = back.tracks[0].bars[0].voices[0].beats;
+    final n0 = beats[0].notes.single;
+    expect((n0.leftFinger, n0.rightFinger, n0.harmonic, n0.harmonicType), (2, 3, true, 1));
+    expect(beats[1].notes.single.trill, isNot(0));
+    expect(beats[1].pedal, 1);
+    expect(beats[2].arpeggio, -1);
+    expect(beats[2].ottava, 1);
+  });
 }

@@ -414,7 +414,10 @@ oder zwei Takte. Neue Werkzeuggruppe „Vorzeichen“. Paket 2 (Gitarre) ✅: Sl
 künstliche und Pinch-Flageoletts, weites Vibrato, Tremolo-Picking, Whammy-Dip, Ein-/Ausblenden,
 Anschwellen, Slap/Pop, Triller, Arpeggio, Rasgueado (mit Klang; noch nicht aus Guitar-Pro-Dateien
 gelesen). Paket 3 ✅: Fingersätze beider Hände, Saitennummern im Kreis, Pedal (klingt mit). Offen:
-Oktavierung, Wiederholungszeichen und Fingersätze noch nicht aus/in MusicXML und Guitar-Pro-Dateien.
+Wiederholungszeichen (%) noch nicht in MusicXML; Pinch-Flageolett, Slides hinein/hinaus und Ein-/
+Ausblenden gibt es in MusicXML nicht (bleiben nur in .scrivi). Gelesen aus Guitar-Pro-Dateien und
+MusicXML (28. November 2026): Fingersätze, Flageolett-Arten, weites Vibrato, Triller, Slap/Pop,
+Arpeggio, Rasgueado, Ein-/Ausblenden, Tremolo-Hebel, 8va/15ma, Pedal, Erinnerungs-Vorzeichen.
 
 ### Akkordsymbole einstellen (27. November 2026)
 

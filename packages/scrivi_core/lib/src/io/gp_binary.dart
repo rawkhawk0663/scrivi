@@ -449,9 +449,16 @@ class GpBinaryReader {
   bool _beatEffects(_Beat beat) {
     if (_gp3) {
       final f1 = r.u8();
+      beat.vibrato = (f1 & 0x01) != 0;
+      beat.wideVibrato = (f1 & 0x02) != 0;
+      beat.fadeIn = (f1 & 0x10) != 0;
       if ((f1 & 0x20) != 0) {
-        r.u8();
+        final type = r.u8();
         r.i32();
+        if (type == 0) beat.tapType = 0; // Hebel (nicht übernommen)
+        if (type == 1) beat.tapType = 1;
+        if (type == 2) beat.tapType = 2;
+        if (type == 3) beat.tapType = 3;
       }
       if ((f1 & 0x40) != 0) {
         final down = r.i8(), up = r.i8();
@@ -461,8 +468,19 @@ class GpBinaryReader {
     }
     final f1 = r.i8();
     final f2 = r.i8();
-    if ((f1 & 0x20) != 0) r.i8();
-    if ((f2 & 0x04) != 0) _bend();
+    beat.vibrato = (f1 & 0x01) != 0;
+    beat.wideVibrato = (f1 & 0x02) != 0;
+    beat.fadeIn = (f1 & 0x10) != 0;
+    beat.rasgueado = (f2 & 0x01) != 0;
+    if ((f1 & 0x20) != 0) beat.tapType = r.i8(); // 1 Tapping, 2 Slap, 3 Pop
+    if ((f2 & 0x04) != 0) {
+      // Tremolo-Hebel: tiefster Wert als kurzes Hinunter und Zurück
+      final b = _bend();
+      if (b != null) {
+        final low = b.points.map((p) => p.semitones).reduce((a, c) => a < c ? a : c);
+        if (low < 0) beat.whammy = low.round().clamp(-24, -1);
+      }
+    }
     if ((f1 & 0x40) != 0) {
       final down = r.i8(), up = r.i8();
       // In GP5 sind die Richtungen vertauscht gespeichert.
@@ -531,8 +549,10 @@ class GpBinaryReader {
     if ((flags & 0x10) != 0) r.i8(); // Lautstärke
     if ((flags & 0x20) != 0) n.fret = r.i8();
     if ((flags & 0x80) != 0) {
-      r.i8();
-      r.i8();
+      // Fingersatz: −1 keiner, 0 Daumen, 1 Zeige-, 2 Mittel-, 3 Ring-, 4 kleiner Finger
+      final left = r.i8(), right = r.i8();
+      n.leftFinger = left == 0 ? 5 : (left >= 1 && left <= 4 ? left : 0);
+      n.rightFinger = right >= 0 && right <= 4 ? right + 1 : 0;
     }
     if (_gp5) {
       if ((flags & 0x01) != 0) r.f64();
@@ -580,6 +600,12 @@ class GpBinaryReader {
     if ((f2 & 0x10) != 0) {
       final type = r.i8();
       n.harmonic = true;
+      // 1 natürlich, 2/15/17/22 künstlich, 3 getappt, 4 Pinch, 5 halb
+      n.harmonicType = switch (type) {
+        4 => 2,
+        1 => 0,
+        _ => 1,
+      };
       if (_gp5) {
         if (type == 2) {
           r.u8();
@@ -591,8 +617,9 @@ class GpBinaryReader {
       }
     }
     if ((f2 & 0x20) != 0) {
-      r.i8();
-      r.i8();
+      final fret = r.i8();
+      r.i8(); // Tempo des Trillers
+      n.trillFret = fret;
     }
   }
 
@@ -696,6 +723,10 @@ class _Note {
   int? graceFret;
   bool graceDead = false;
   int tremolo = 0;
+  int harmonicType = 0;
+  int? trillFret;
+  int leftFinger = 0;
+  int rightFinger = 0;
 }
 
 class _Beat {
@@ -711,6 +742,12 @@ class _Beat {
   int? tempo;
   int stroke = 0;
   int key = 0;
+  bool vibrato = false;
+  bool wideVibrato = false;
+  bool fadeIn = false;
+  bool rasgueado = false;
+  int tapType = 0;
+  int whammy = 0;
 }
 
 /// Griffbild aus einer älteren Datei: Bünde von der höchsten Saite an, −1 = nicht gespielt.
@@ -805,8 +842,16 @@ class _Track {
                 hammerOrigin: n.hammer,
                 bend: n.bend,
                 accent: n.accent,
-                vibrato: n.vibrato,
+                vibrato: (n.vibrato || b.vibrato) && !b.wideVibrato,
+                wideVibrato: b.wideVibrato,
                 harmonic: n.harmonic,
+                harmonicType: n.harmonic ? n.harmonicType : 0,
+                tapped: b.tapType == 1,
+                slap: b.tapType == 2,
+                pop: b.tapType == 3,
+                trill: n.trillFret != null && n.trillFret! > n.fret ? (n.trillFret! - n.fret).clamp(1, 12) : 0,
+                leftFinger: n.leftFinger,
+                rightFinger: n.rightFinger,
               ),
             );
           }
@@ -845,6 +890,9 @@ class _Track {
               lyrics: b.lyrics,
               pickStroke: b.stroke,
               tremolo: b.notes.fold(0, (m, n) => n.tremolo > m ? n.tremolo : m),
+              fade: b.fadeIn ? 1 : 0,
+              rasgueado: b.rasgueado,
+              whammy: b.whammy,
             ),
           );
         }

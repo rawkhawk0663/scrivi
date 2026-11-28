@@ -134,6 +134,7 @@ class MusicXmlWriter {
   void _part(int ti) {
     final t = score.tracks[ti];
     _line(1, '<part id="P${ti + 1}">');
+    _ottava = 0;
     KeySignature? prevKey;
     TimeSignature? prevTime;
     Clef? prevClef;
@@ -291,6 +292,9 @@ class MusicXmlWriter {
     _line(4, '</clef>');
   }
 
+  /// Oktavierung der ersten Stimme bis hierher (für Anfang und Ende der Linie).
+  int _ottava = 0;
+
   void _direction(String content) {
     _line(3, '<direction placement="above">');
     _line(4, '<direction-type>');
@@ -309,6 +313,29 @@ class MusicXmlWriter {
       if (chord != null) _harmony(chord.name);
       if (beat.text != null && beat.text!.trim().isNotEmpty) {
         _direction('<words>${_esc(beat.text!)}</words>');
+      }
+      if (beat.pedal != 0) {
+        final types = switch (beat.pedal) {
+          1 => ['start'],
+          2 => ['stop'],
+          _ => ['change'],
+        };
+        for (final ty in types) {
+          _line(3, '<direction placement="below">');
+          _line(4, '<direction-type>');
+          _line(5, '<pedal type="$ty" line="no"/>');
+          _line(4, '</direction-type>');
+          _line(3, '</direction>');
+        }
+      }
+      if (beat.grace == GraceType.none && beat.ottava != _ottava) {
+        if (_ottava != 0) _direction('<octave-shift type="stop" size="${_ottava.abs() == 2 ? 15 : 8}"/>');
+        if (beat.ottava != 0) {
+          _direction(
+            '<octave-shift type="${beat.ottava > 0 ? 'down' : 'up'}" size="${beat.ottava.abs() == 2 ? 15 : 8}"/>',
+          );
+        }
+        _ottava = beat.ottava;
       }
       final dyn = beat.dynamic;
       if (dyn != null) {
@@ -363,6 +390,10 @@ class MusicXmlWriter {
       for (var d = 0; d < beat.duration.dots; d++) {
         _line(4, '<dot/>');
       }
+      if (n.courtesy && !t.percussion) {
+        final p = n.shownFor(t.transposeSemitones);
+        _line(4, '<accidental parentheses="yes">${_accidentalName(p.alter)}</accidental>');
+      }
       _timeMod(beat);
       if (n.dead) _el(4, 'notehead', 'x');
       _notations(t, beat, n, k == 0);
@@ -375,6 +406,14 @@ class MusicXmlWriter {
     }
     return dur;
   }
+
+  static String _accidentalName(int alter) => switch (alter) {
+    2 => 'double-sharp',
+    1 => 'sharp',
+    -1 => 'flat',
+    -2 => 'flat-flat',
+    _ => 'natural',
+  };
 
   void _timeMod(Beat beat) {
     final tu = beat.duration.tuplet;
@@ -390,12 +429,17 @@ class MusicXmlWriter {
     if (n.tieDestination) parts.add('<tied type="stop"/>');
     if (n.tieOrigin) parts.add('<tied type="start"/>');
     if (first && beat.fermata) parts.add('<fermata/>');
-    if (n.slide != 0) parts.add('<slide type="start"/>');
+    if (n.slide & 3 != 0) parts.add('<slide type="start"/>');
+    if (beat.arpeggio != 0) parts.add(beat.arpeggio < 0 ? '<arpeggiate direction="down"/>' : '<arpeggiate/>');
     final tech = <String>[];
     if (first && beat.pickStroke > 0) tech.add('<down-bow/>');
     if (first && beat.pickStroke < 0) tech.add('<up-bow/>');
     if (n.hammerOrigin) tech.add('<hammer-on type="start">H</hammer-on>');
-    if (n.harmonic) tech.add('<harmonic/>');
+    if (n.harmonic)
+      tech.add(n.harmonicType == 0 ? '<harmonic><natural/></harmonic>' : '<harmonic><artificial/></harmonic>');
+    if (n.tapped) tech.add('<tap/>');
+    if (n.leftFinger != 0) tech.add('<fingering>${n.leftFinger == 5 ? 0 : n.leftFinger}</fingering>');
+    if (n.rightFinger != 0) tech.add('<pluck>${const ['', 'p', 'i', 'm', 'a', 'c'][n.rightFinger]}</pluck>');
     final bend = n.bend;
     if (bend != null && bend.maxSemitones > 0) {
       tech.add(
@@ -413,7 +457,12 @@ class MusicXmlWriter {
     if (n.accent & 4 != 0) arts.add('<strong-accent/>');
     if (n.accent & 16 != 0) arts.add('<tenuto/>');
     if (arts.isNotEmpty) parts.add('<articulations>${arts.join()}</articulations>');
-    if (n.vibrato) parts.add('<ornaments><wavy-line type="start"/></ornaments>');
+    final orn = <String>[
+      if (n.trill != 0) '<trill-mark/>',
+      if ((n.vibrato || n.wideVibrato) && n.trill == 0) '<wavy-line type="start"/>',
+      if (first && beat.tremolo > 0) '<tremolo type="single">${beat.tremolo}</tremolo>',
+    ];
+    if (orn.isNotEmpty) parts.add('<ornaments>${orn.join()}</ornaments>');
     if (parts.isEmpty) return;
     _line(4, '<notations>${parts.join()}</notations>');
   }
