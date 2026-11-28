@@ -425,8 +425,15 @@ Scrivi zerlegt die getippten Namen und schreibt sie einheitlich; unbekannte blei
 
 ### Seitenlayout (Wunsch vom 27. November 2026, geplant)
 
-Der Besitzer will die ganze Seite selbst gestalten können. Erst ein Entwurf zum Anschauen, dann
-umsetzen (wie bei der Leiste am Cursor).
+Der Besitzer will die ganze Seite selbst gestalten können. Entwurf:
+https://claude.ai/artifact/XThBrPiw5wKSbRibbnX1Vr. Entscheid: eigener Knopf „Layout“ (Modus), mit
+Anfassern; jedes Element hängt an einem Anker, angezeigt werden die Abstände waagrecht und senkrecht.
+- Schritt 1 ✅: Elemente ausserhalb der Notenlinien verschieben (Kopf, Fuss, Akkorde, Text, Dynamik,
+  Formteile, Tempo), Pfeiltasten, zurücksetzen.
+- Schritt 2: Seite einrichten (Papier, Ränder, Notengrösse, Abstände, Takte pro Zeile, Taktnummern,
+  Seitenzahlen, Schriften).
+- Schritt 3: Zeilen- und Seitenumbrüche, Zeilen einzeln verschieben.
+- Später: weitere Elemente (Fingersätze, Griffbilder, Liedtext, Hinweise).
 
 ### Mischpult in den Spuren, Menü „Ansicht“ (27. November 2026)
 

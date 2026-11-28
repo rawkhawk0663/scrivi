@@ -89,6 +89,79 @@ class PageDisplay {
   final double height;
   final List<DisplayItem> items = [];
   final List<SystemBox> systems = [];
+
+  /// Was sich im Layout verschieben lässt (Anfasser).
+  final List<LayoutHandle> handles = [];
+}
+
+/// Welches Element verschoben wird: im Kopf der Seite ([key] allein), an einem Takt ([bar])
+/// oder an einem Schlag ([track], [bar], [voice], [beat]).
+class LayoutRef {
+  const LayoutRef(this.key, {this.track, this.bar, this.voice, this.beat});
+  final String key;
+  final int? track;
+  final int? bar;
+  final int? voice;
+  final int? beat;
+
+  @override
+  bool operator ==(Object other) =>
+      other is LayoutRef &&
+      other.key == key &&
+      other.track == track &&
+      other.bar == bar &&
+      other.voice == voice &&
+      other.beat == beat;
+
+  @override
+  int get hashCode => Object.hash(key, track, bar, voice, beat);
+}
+
+/// Anfasser eines verschiebbaren Elements: Umriss (wie gezeichnet), Anker (woran es hängt)
+/// und Bezugspunkt (von wo aus der Abstand zum Anker gemessen wird). Alles in sp auf der Seite.
+class LayoutHandle {
+  const LayoutHandle({
+    required this.ref,
+    required this.label,
+    required this.left,
+    required this.top,
+    required this.right,
+    required this.bottom,
+    required this.anchorX,
+    required this.anchorY,
+    required this.refX,
+    required this.refY,
+    required this.dx,
+    required this.dy,
+  });
+  final LayoutRef ref;
+
+  /// Kurzer Name (z. B. „Titel“, „Akkord G“), Sprache nach den LayoutOptions.
+  final String label;
+  final double left, top, right, bottom;
+  final double anchorX, anchorY;
+  final double refX, refY;
+
+  /// Aktuelle Verschiebung.
+  final double dx, dy;
+
+  LayoutHandle shifted(double ox, double oy) => LayoutHandle(
+    ref: ref,
+    label: label,
+    left: left + ox,
+    top: top + oy,
+    right: right + ox,
+    bottom: bottom + oy,
+    anchorX: anchorX + ox,
+    anchorY: anchorY + oy,
+    refX: refX + ox,
+    refY: refY + oy,
+    dx: dx,
+    dy: dy,
+  );
+
+  bool contains(double x, double y, {double slop = 0.4}) =>
+      x >= left - slop && x <= right + slop && y >= top - slop && y <= bottom + slop;
 }
 
 /// Wo eine Zeile (System) auf der Seite liegt und welche Takte sie zeigt.

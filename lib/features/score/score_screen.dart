@@ -30,6 +30,7 @@ import 'edit_tools.dart';
 import 'export_dialog.dart';
 import 'fretboard.dart';
 import 'inspector.dart';
+import 'layout_mode.dart';
 import 'note_preview.dart';
 import 'pen_gestures.dart';
 import 'quick_input.dart';
@@ -105,6 +106,40 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
   // Schreiben
   core.ScoreEditor? _editor;
   bool _penNotes = false;
+
+  /// Layout-Modus: Titel, Akkorde, Texte … verschieben statt schreiben.
+  bool _layoutMode = false;
+  final _layoutSel = ValueNotifier<core.LayoutRef?>(null);
+  late final _layoutControl = LayoutControl(
+    selected: _layoutSel,
+    onNudge: (ref, n) => apply((e) => e.setNudge(ref, n)),
+  );
+
+  void _setLayoutMode(bool on) {
+    setState(() => _layoutMode = on);
+    _layoutSel.value = null;
+  }
+
+  Future<void> _resetAllNudges() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(tr('Alles zurücksetzen?', 'Reset everything?')),
+        content: Text(
+          tr(
+            'Alle von Hand verschobenen Elemente kommen zurück an den Platz, den Scrivi wählt.',
+            'All elements you moved go back to the place Scrivi chooses.',
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text(tr('Abbrechen', 'Cancel'))),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: Text(tr('Zurücksetzen', 'Reset'))),
+        ],
+      ),
+    );
+    if (ok == true) apply((e) => e.resetAllNudges());
+  }
+
   int _savedRevision = 0;
   Timer? _saveTimer;
   Future<void>? _saving;
@@ -1424,11 +1459,14 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
                   player: _player,
                   editor: e,
                   cursorTick: _cursorTick,
-                  onEditTap: _onEditTap,
+                  onEditTap: _layoutMode ? null : _onEditTap,
                   onEditKey: _onEditKey,
-                  onPen: _onPen,
-                  penWrites: _penNotes,
-                  stripHost: (_settings?.cursorStrip.value ?? true) ? this : null,
+                  onPen: _layoutMode ? null : _onPen,
+                  penWrites: _penNotes && !_layoutMode,
+                  stripHost: (_settings?.cursorStrip.value ?? true) && !_layoutMode ? this : null,
+                  layout: _layoutMode ? _layoutControl : null,
+                  onLayoutDone: () => _setLayoutMode(false),
+                  onLayoutResetAll: _resetAllNudges,
                 ),
               ),
               if (showFretboard) ...[
@@ -1502,6 +1540,20 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
               ),
               _fileMenu(context),
               _viewMenu(context),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: _layoutMode
+                    ? FilledButton.icon(
+                        onPressed: () => _setLayoutMode(false),
+                        icon: const Icon(Icons.open_with_rounded, size: 18),
+                        label: Text(tr('Layout', 'Layout')),
+                      )
+                    : OutlinedButton.icon(
+                        onPressed: () => _setLayoutMode(true),
+                        icon: const Icon(Icons.open_with_rounded, size: 18),
+                        label: Text(tr('Layout', 'Layout')),
+                      ),
+              ),
               _titleBlock(context, compact),
               // Nur wenn das Stück noch nicht an einem eigenen Ort gespeichert ist
               if (_unsaved)
@@ -1791,8 +1843,16 @@ class _PagesViewer extends StatefulWidget {
     this.penWrites = false,
     this.stripHost,
     this.endless = false,
+    this.layout,
+    this.onLayoutDone,
+    this.onLayoutResetAll,
   });
   final List<core.PageDisplay> pages;
+
+  /// Layout-Modus (null = aus): Elemente antippen und ziehen.
+  final LayoutControl? layout;
+  final VoidCallback? onLayoutDone;
+  final VoidCallback? onLayoutResetAll;
 
   /// Eine einzige lange Zeile: waagrecht blättern.
   final bool endless;
@@ -1923,7 +1983,125 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
     };
   }
 
+  // ───────────────────────── Layout ─────────────────────────
+
+  int? _layoutPointer;
+  core.LayoutHandle? _layoutHandle;
+
+  /// Diese Geste zieht ein Element: kein Verschieben der Seiten, kein Schwung danach.
+  bool _layoutGesture = false;
+  Offset _layoutStart = Offset.zero;
+
+  /// Fensterpunkt → Seite und Stelle darauf (sp).
+  (int, Offset)? _pagePoint(Offset local) {
+    final p = (local - _offset) / _scale;
+    for (var i = 0; i < widget.pages.length && i < _pageTops.length; i++) {
+      final page = widget.pages[i];
+      final k = _pageW / page.width;
+      if (p.dy < _pageTops[i] || p.dy > _pageTops[i] + page.height * k) continue;
+      return (i, Offset((p.dx - _pageLeft) / k, (p.dy - _pageTops[i]) / k));
+    }
+    return null;
+  }
+
+  core.LayoutHandle? _handleOf(core.LayoutRef? ref) {
+    if (ref == null) return null;
+    for (final page in widget.pages) {
+      for (final h in page.handles) {
+        if (h.ref == ref) return h;
+      }
+    }
+    return null;
+  }
+
+  void _layoutDown(PointerDownEvent e) {
+    final layout = widget.layout!;
+    _focus.requestFocus();
+    if (e.buttons & kSecondaryMouseButton != 0) return;
+    final at = _pagePoint(e.localPosition);
+    if (at == null) return;
+    final (i, p) = at;
+    core.LayoutHandle? best;
+    for (final h in widget.pages[i].handles) {
+      if (!h.contains(p.dx, p.dy)) continue;
+      if (h.ref == layout.selected.value) {
+        best = h;
+        break;
+      }
+      final area = (h.right - h.left) * (h.bottom - h.top);
+      if (best == null || area < (best.right - best.left) * (best.bottom - best.top)) best = h;
+    }
+    layout.selected.value = best?.ref;
+    _layoutGesture = best != null;
+    if (best == null) return;
+    _fling.stop();
+    _layoutPointer = e.pointer;
+    _layoutHandle = best;
+    _layoutStart = p;
+    layout.drag.value = Offset.zero;
+  }
+
+  void _layoutMove(PointerMoveEvent e) {
+    if (e.pointer != _layoutPointer) return;
+    final at = _pagePoint(e.localPosition);
+    if (at == null) return;
+    widget.layout!.drag.value = at.$2 - _layoutStart;
+  }
+
+  void _layoutUp() {
+    final h = _layoutHandle, layout = widget.layout;
+    _layoutPointer = null;
+    _layoutHandle = null;
+    if (h == null || layout == null) return;
+    final d = layout.drag.value;
+    if (d.distance > 0.05) {
+      // Bleibt bis zum neuen Satz an der neuen Stelle stehen
+      layout.onNudge(h.ref, core.Nudge(h.dx + d.dx, h.dy + d.dy));
+    }
+    layout.drag.value = Offset.zero;
+  }
+
+  /// Pfeiltasten schieben das gewählte Element (Umschalt: grösser), Entf bringt es zurück.
+  bool _layoutKey(KeyEvent e) {
+    final layout = widget.layout;
+    if (layout == null || (e is! KeyDownEvent && e is! KeyRepeatEvent)) return false;
+    final k = e.logicalKey;
+    if (k == LogicalKeyboardKey.escape) {
+      if (layout.selected.value == null) {
+        widget.onLayoutDone?.call();
+      } else {
+        layout.selected.value = null;
+      }
+      return true;
+    }
+    final h = _handleOf(layout.selected.value);
+    if (h == null) return false;
+    final step = HardwareKeyboard.instance.isShiftPressed ? 1.0 : 0.2;
+    final d = switch (k) {
+      LogicalKeyboardKey.arrowLeft => Offset(-step, 0),
+      LogicalKeyboardKey.arrowRight => Offset(step, 0),
+      LogicalKeyboardKey.arrowUp => Offset(0, -step),
+      LogicalKeyboardKey.arrowDown => Offset(0, step),
+      _ => null,
+    };
+    if (d != null) {
+      // Der Stand im Stück (der Notensatz kommt bei schnellem Tippen erst danach nach)
+      final now = widget.editor?.nudgeOf(h.ref) ?? core.Nudge(h.dx, h.dy);
+      layout.onNudge(h.ref, core.Nudge(now.dx + d.dx, now.dy + d.dy));
+      return true;
+    }
+    if (k == LogicalKeyboardKey.delete || k == LogicalKeyboardKey.backspace) {
+      layout.onNudge(h.ref, core.Nudge.zero);
+      return true;
+    }
+    return false;
+  }
+
   void _onPointerDown(PointerDownEvent e) {
+    if (widget.layout != null) {
+      _layoutDown(e);
+      return;
+    }
     if (_penPointer != null || !_isPen(e)) return;
     _fling.stop();
     _focus.requestFocus();
@@ -1936,6 +2114,10 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
   }
 
   void _onPointerMove(PointerMoveEvent e) {
+    if (e.pointer == _layoutPointer) {
+      _layoutMove(e);
+      return;
+    }
     if (e.pointer != _penPointer) return;
     if (e.buttons & kSecondaryStylusButton != 0) _eraser = true;
     _ink.add(e.localPosition);
@@ -1943,6 +2125,10 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
   }
 
   void _onPointerUp(PointerUpEvent e) {
+    if (e.pointer == _layoutPointer) {
+      _layoutUp();
+      return;
+    }
     if (e.pointer != _penPointer) return;
     _penPointer = null;
     final pts = List.of(_ink);
@@ -1979,6 +2165,12 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
   }
 
   void _onPointerCancel(PointerCancelEvent e) {
+    if (e.pointer == _layoutPointer) {
+      _layoutPointer = null;
+      _layoutHandle = null;
+      widget.layout?.drag.value = Offset.zero;
+      return;
+    }
     if (e.pointer != _penPointer) return;
     _penPointer = null;
     _ink.clear();
@@ -1988,6 +2180,7 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
   /// Angetippter Takt: Fensterpunkt → Seite → Zeile → Takt.
   void _onTapUp(TapUpDetails d) {
     _focus.requestFocus();
+    if (widget.layout != null) return;
     final hit = _hitAt(d.localPosition);
     if (hit != null) widget.onEditTap?.call(hit);
   }
@@ -2050,6 +2243,7 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
   }
 
   void _onScaleUpdate(ScaleUpdateDetails d) {
+    if (_layoutGesture) return; // ein Element wird gezogen
     // Zuerst verschieben, dann um den Mittelpunkt der Finger zoomen.
     _set(_scale, _offset + d.focalPointDelta);
     if (d.pointerCount >= 2 || d.scale != 1.0) {
@@ -2058,6 +2252,10 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
   }
 
   void _onScaleEnd(ScaleEndDetails d) {
+    if (_layoutGesture) {
+      _layoutGesture = false;
+      return;
+    }
     // Schwung nach dem Wischen (nur beim Verschieben, nicht beim Zoomen)
     final v = d.velocity.pixelsPerSecond;
     if (d.pointerCount > 0 || v.distance < 200) return;
@@ -2188,7 +2386,11 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
   }
 
   KeyEventResult _onKey(FocusNode node, KeyEvent e) {
-    if (widget.onEditKey?.call(e) ?? false) return KeyEventResult.handled;
+    if (widget.layout != null) {
+      if (_layoutKey(e)) return KeyEventResult.handled;
+    } else if (widget.onEditKey?.call(e) ?? false) {
+      return KeyEventResult.handled;
+    }
     if (e is! KeyDownEvent && e is! KeyRepeatEvent) return KeyEventResult.ignored;
     final page = _viewport.height * 0.85;
     final k = e.logicalKey;
@@ -2294,7 +2496,12 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
                                   foregroundPainter: widget.editor == null
                                       ? null
                                       : _EditCursorPainter(widget.editor!, widget.pages[i], widget.cursorTick!),
-                                  child: ScorePageView(picture: widget.pictures[i], page: widget.pages[i]),
+                                  child: CustomPaint(
+                                    foregroundPainter: widget.layout == null
+                                        ? null
+                                        : LayoutPainter(widget.pages[i], widget.layout!),
+                                    child: ScorePageView(picture: widget.pictures[i], page: widget.pages[i]),
+                                  ),
                                 ),
                               ),
                             ),
@@ -2317,6 +2524,27 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
                 child: CustomPaint(painter: _InkPainter(_ink, _inkTick, () => _eraser, Theme.of(context).colorScheme)),
               ),
             ),
+            if (widget.layout != null)
+              Positioned(
+                top: 10,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: ListenableBuilder(
+                    listenable: Listenable.merge([widget.layout!.selected, widget.layout!.drag]),
+                    builder: (context, _) {
+                      final h = _handleOf(widget.layout!.selected.value);
+                      return LayoutBar(
+                        handle: h,
+                        drag: widget.layout!.drag.value,
+                        onReset: () => h == null ? null : widget.layout!.onNudge(h.ref, core.Nudge.zero),
+                        onResetAll: () => widget.onLayoutResetAll?.call(),
+                        onDone: () => widget.onLayoutDone?.call(),
+                      );
+                    },
+                  ),
+                ),
+              ),
             if (widget.stripHost != null && widget.editor != null)
               Positioned.fill(
                 child: ListenableBuilder(

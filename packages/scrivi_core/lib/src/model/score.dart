@@ -4,6 +4,20 @@ import 'pitch.dart';
 
 export 'chord_symbol.dart' show ChordStyle;
 
+/// Von Hand verschoben (Layout): so weit gegenüber dem Platz, den der Notensatz wählt, in Linienabständen.
+class Nudge {
+  const Nudge(this.dx, this.dy);
+  final double dx;
+  final double dy;
+  static const zero = Nudge(0, 0);
+  bool get isZero => dx.abs() < 0.005 && dy.abs() < 0.005;
+  Nudge operator +(Nudge o) => Nudge(dx + o.dx, dy + o.dy);
+  @override
+  bool operator ==(Object other) => other is Nudge && other.dx == dx && other.dy == dy;
+  @override
+  int get hashCode => Object.hash(dx, dy);
+}
+
 /// Ein ganzes Stück: Angaben, Taktfolge (für alle Instrumente gleich) und Spuren.
 class Score {
   Score({
@@ -14,7 +28,13 @@ class Score {
     this.reverb = defaultReverb,
     this.masterVolume = 1,
     this.chordStyle = ChordStyle.standard,
-  }) : tempos = tempos ?? [];
+    Map<String, Nudge>? nudges,
+  }) : tempos = tempos ?? [],
+       nudges = nudges ?? {};
+
+  /// Verschobene Angaben im Kopf und Fuss der Seite ('title', 'subtitle', 'artist', 'album', 'credits',
+  /// 'tabber', 'instructions', 'copyright').
+  final Map<String, Nudge> nudges;
 
   /// Wie die Akkordsymbole geschrieben werden.
   ChordStyle chordStyle;
@@ -47,6 +67,7 @@ class Score {
     reverb: reverb,
     masterVolume: masterVolume,
     chordStyle: chordStyle,
+    nudges: nudges,
   );
 }
 
@@ -226,8 +247,12 @@ class MasterBar {
     this.freeTime = false,
     Set<Direction>? directions,
     this.swing = false,
+    this.nudges = const {},
   }) : endings = endings ?? {},
        directions = directions ?? {};
+
+  /// Von Hand verschoben: 'section' (Formteil), 'tempo'.
+  final Map<String, Nudge> nudges;
 
   final TimeSignature time;
   final KeySignature key;
@@ -259,6 +284,7 @@ class MasterBar {
     bool? doubleBar,
     Set<Direction>? directions,
     bool? swing,
+    Map<String, Nudge>? nudges,
   }) => MasterBar(
     time: time ?? this.time,
     key: key ?? this.key,
@@ -270,6 +296,7 @@ class MasterBar {
     freeTime: freeTime,
     directions: directions ?? {...this.directions},
     swing: swing ?? this.swing,
+    nudges: nudges ?? this.nudges,
   );
 }
 
@@ -511,6 +538,7 @@ class Beat {
     this.fade = 0,
     this.whammy = 0,
     this.pedal = 0,
+    this.nudges = const {},
   }) : notes = notes ?? [],
        lyrics = lyrics ?? [];
 
@@ -559,6 +587,9 @@ class Beat {
   /// Haltepedal: 1 = treten („Ped.“), 2 = loslassen („*“), 3 = wechseln (los und gleich wieder treten).
   final int pedal;
 
+  /// Von Hand verschoben: 'chord', 'text', 'dynamic'.
+  final Map<String, Nudge> nudges;
+
   bool get isRest => notes.isEmpty;
 
   /// Kopie mit Änderungen. Für null-fähige Felder: [clearChord], [clearText], [clearDynamic].
@@ -585,6 +616,7 @@ class Beat {
     int? fade,
     int? whammy,
     int? pedal,
+    Map<String, Nudge>? nudges,
   }) => Beat(
     duration: duration ?? this.duration,
     notes: notes ?? [...this.notes],
@@ -605,6 +637,7 @@ class Beat {
     fade: fade ?? this.fade,
     whammy: whammy ?? this.whammy,
     pedal: pedal ?? this.pedal,
+    nudges: nudges ?? this.nudges,
   );
 }
 

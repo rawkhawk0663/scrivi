@@ -54,6 +54,7 @@ class ScriviFormat {
     'reverb': s.reverb == Score.defaultReverb ? null : s.reverb,
     'master': s.masterVolume == 1 ? null : s.masterVolume,
     'chordStyle': s.chordStyle.isStandard ? null : s.chordStyle.toJson(),
+    'nudges': _nudges(s.nudges),
     'masterBars': [for (final m in s.masterBars) _masterBar(m)],
     'tracks': [for (final t in s.tracks) _track(t)],
   };
@@ -99,7 +100,28 @@ class ScriviFormat {
     'freeTime': m.freeTime,
     'directions': [for (final d in m.directions) d.name],
     'swing': m.swing,
+    'nudges': _nudges(m.nudges),
   });
+
+  static double _r(double v) => (v * 100).roundToDouble() / 100;
+
+  /// Verschiebungen: {"chord": [dx, dy]}; leere weglassen.
+  static Map<String, dynamic>? _nudges(Map<String, Nudge> n) {
+    final out = {
+      for (final e in n.entries)
+        if (!e.value.isZero) e.key: [_r(e.value.dx), _r(e.value.dy)],
+    };
+    return out.isEmpty ? null : out;
+  }
+
+  static Map<String, Nudge> _readNudges(Object? v) {
+    if (v is! Map) return const {};
+    return {
+      for (final e in v.entries)
+        if (e.value is List && (e.value as List).length == 2)
+          '${e.key}': Nudge(_double((e.value as List)[0]), _double((e.value as List)[1])),
+    };
+  }
 
   static Map<String, dynamic> _track(Track t) => _compact({
     'name': t.name,
@@ -183,6 +205,7 @@ class ScriviFormat {
       'fade': b.fade == 0 ? null : b.fade,
       'whammy': b.whammy == 0 ? null : b.whammy,
       'pedal': b.pedal == 0 ? null : b.pedal,
+      'nudges': _nudges(b.nudges),
     });
   }
 
@@ -256,6 +279,7 @@ class ScriviFormat {
       reverb: j['reverb'] is num ? (j['reverb'] as num).toDouble().clamp(0.0, 1.0) : Score.defaultReverb,
       masterVolume: j['master'] is num ? (j['master'] as num).toDouble().clamp(0.0, 1.0) : 1.0,
       chordStyle: ChordStyle.fromJson(j['chordStyle']),
+      nudges: {..._readNudges(j['nudges'])},
       tempos: [
         for (final t in _list(j['tempos']).map(_map))
           TempoMark(
@@ -288,6 +312,7 @@ class ScriviFormat {
       doubleBar: _bool(m['doubleBar']),
       freeTime: _bool(m['freeTime']),
       swing: _bool(m['swing']),
+      nudges: _readNudges(m['nudges']),
       directions: {
         for (final d in _list(m['directions']))
           if (Direction.values.any((x) => x.name == d)) _enum(Direction.values, d, Direction.fine),
@@ -382,6 +407,7 @@ class ScriviFormat {
       fade: _int(b['fade']).clamp(0, 3),
       whammy: _int(b['whammy']).clamp(-24, 0),
       pedal: _int(b['pedal']).clamp(0, 3),
+      nudges: _readNudges(b['nudges']),
     );
   }
 

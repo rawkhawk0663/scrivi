@@ -277,6 +277,9 @@ class ScoreEngraver {
         for (final it in out.items) {
           page.items.add(shift(it, 0, dy));
         }
+        for (final hd in sb.handles) {
+          page.handles.add(hd.shifted(0, dy));
+        }
         final h = out.bottom - out.top;
         page.systems.add(e._box(s, sb, cursor, h, out.top));
         // Lage der Linien dieser Spur (Noten bzw. Tabulatur)
@@ -307,19 +310,7 @@ class ScoreEngraver {
       y = cursor;
       firstOnPage = false;
     }
-    final cr = score.info.copyrightLine;
-    if (cr.isNotEmpty) {
-      pages.first.items.add(
-        TextItem(
-          cr,
-          options.pageWidth / 2,
-          options.pageHeight - options.marginBottom / 2,
-          TextRole.small,
-          _smallSize,
-          align: TextAlign.center,
-        ),
-      );
-    }
+    e0._drawCopyright(pages.first);
     if (pages.length > 1) {
       for (var p = 0; p < pages.length; p++) {
         pages[p].items.add(

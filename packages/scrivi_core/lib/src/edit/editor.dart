@@ -6,6 +6,7 @@ import '../model/fraction.dart';
 import '../model/pitch.dart';
 import '../model/chord_library.dart';
 import '../model/score.dart';
+import '../render/display.dart' show LayoutRef;
 import 'patterns.dart';
 
 /// Stelle, an der geschrieben wird: Takt, Schlag (in Stimme 1) und Saite.
@@ -1537,6 +1538,75 @@ class ScoreEditor {
   void setScoreInfo(ScoreInfo info) {
     _begin();
     _score = _score.copyWith(info: info);
+    _done();
+  }
+
+  // ───────────────────────── Layout: Verschieben ─────────────────────────
+
+  /// Wie weit ein Element von Hand verschoben ist.
+  Nudge nudgeOf(LayoutRef ref) {
+    if (ref.bar == null) return _score.nudges[ref.key] ?? Nudge.zero;
+    if (ref.beat == null) return _score.masterBars[ref.bar!].nudges[ref.key] ?? Nudge.zero;
+    final b = _beatAt(ref);
+    return b?.nudges[ref.key] ?? Nudge.zero;
+  }
+
+  Beat? _beatAt(LayoutRef ref) {
+    final t = ref.track ?? track, bar = ref.bar!, v = ref.voice ?? 0, i = ref.beat!;
+    if (t >= _score.tracks.length || bar >= _score.tracks[t].bars.length) return null;
+    final voices = _score.tracks[t].bars[bar].voices;
+    if (v >= voices.length || i < 0 || i >= voices[v].beats.length) return null;
+    return voices[v].beats[i];
+  }
+
+  /// Element verschieben (Nudge.zero = zurück an den Platz, den der Notensatz wählt).
+  void setNudge(LayoutRef ref, Nudge n) {
+    if (nudgeOf(ref) == n) return;
+    Map<String, Nudge> put(Map<String, Nudge> m) {
+      final out = {...m};
+      if (n.isZero) {
+        out.remove(ref.key);
+      } else {
+        out[ref.key] = n;
+      }
+      return out;
+    }
+
+    if (ref.bar != null && ref.beat != null && _beatAt(ref) == null) return;
+    _begin();
+    if (ref.bar == null) {
+      final m = put(_score.nudges);
+      _score.nudges
+        ..clear()
+        ..addAll(m);
+    } else if (ref.beat == null) {
+      final mb = _score.masterBars[ref.bar!];
+      _score.masterBars[ref.bar!] = mb.copyWith(nudges: put(mb.nudges));
+    } else {
+      final beats = _score.tracks[ref.track ?? track].bars[ref.bar!].voices[ref.voice ?? 0].beats;
+      beats[ref.beat!] = beats[ref.beat!].copyWith(nudges: put(beats[ref.beat!].nudges));
+    }
+    _done();
+  }
+
+  /// Alle Verschiebungen im Stück zurücksetzen.
+  void resetAllNudges() {
+    _begin();
+    _score.nudges.clear();
+    for (var i = 0; i < _score.masterBars.length; i++) {
+      if (_score.masterBars[i].nudges.isNotEmpty) {
+        _score.masterBars[i] = _score.masterBars[i].copyWith(nudges: const {});
+      }
+    }
+    for (final t in _score.tracks) {
+      for (final bar in t.bars) {
+        for (final v in bar.voices) {
+          for (var i = 0; i < v.beats.length; i++) {
+            if (v.beats[i].nudges.isNotEmpty) v.beats[i] = v.beats[i].copyWith(nudges: const {});
+          }
+        }
+      }
+    }
     _done();
   }
 

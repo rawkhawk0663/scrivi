@@ -213,4 +213,29 @@ void main() {
     expect(first.end, closeTo(second.end, 0.01)); // beide bis zum Loslassen
     expect(ScriviFormat.decode(ScriviFormat.encode(m.score)).tracks[0].bars[0].voices[0].beats[0].pedal, 1);
   });
+
+  test('Layout: Elemente verschieben, Anfasser mit Anker', () {
+    final e = ScoreEditor(ScoreEditor.newScore(kind: NewPieceKind.leadSheet, title: 'Lied', bars: 2));
+    e.setChordLine('G | C');
+    LayoutHandle find(String key) => Engraver(e.score).layout().pages.first.handles.firstWhere((h) => h.ref.key == key);
+    final title = find('title');
+    final chord = find('chord');
+    expect(chord.label, contains('G'));
+    // Akkord hängt an seiner Note über der obersten Linie
+    expect(chord.bottom, lessThan(chord.anchorY));
+    e.setNudge(chord.ref, const Nudge(1, -2));
+    final moved = find('chord');
+    expect(moved.left, closeTo(chord.left + 1, 0.01));
+    expect(moved.top, closeTo(chord.top - 2, 0.01));
+    e.setNudge(title.ref, const Nudge(0, 3));
+    expect(find('title').top, closeTo(title.top + 3, 0.01));
+    // In der Datei und zurück
+    final back = ScriviFormat.decode(ScriviFormat.encode(e.score));
+    expect(back.nudges['title'], const Nudge(0, 3));
+    expect(back.tracks[0].bars[0].voices[0].beats[0].nudges['chord'], const Nudge(1, -2));
+    e.undo();
+    expect(e.nudgeOf(title.ref), Nudge.zero);
+    e.resetAllNudges();
+    expect(e.nudgeOf(chord.ref), Nudge.zero);
+  });
 }
