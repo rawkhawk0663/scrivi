@@ -436,7 +436,8 @@ Anfassern; jedes Element hängt an einem Anker, angezeigt werden die Abstände w
 - Schritt 2 ✅: Seite einrichten (Papier, quer, Ränder, Notengrösse, Zeilenabstand, Noten-Dichte, Takte
   pro Zeile, Taktnummern, Seitenzahlen), sofort sichtbar, auch im PDF. Offen: Schriften, Vorlage für
   neue Stücke.
-- Schritt 3: Zeilen- und Seitenumbrüche, Zeilen einzeln verschieben.
+- Schritt 3 ✅: Zeilen- und Seitenumbrüche (auch „nie hier“ und Zeile zusammenhalten), Zeilen einzeln
+  hoch und runter ziehen.
 - Später: weitere Elemente (Fingersätze, Griffbilder, Liedtext, Hinweise).
 
 ### Mischpult in den Spuren, Menü „Ansicht“ (27. November 2026)

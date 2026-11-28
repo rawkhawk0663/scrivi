@@ -40,6 +40,23 @@ class LayoutPainter extends CustomPainter {
       ..color = color.withAlpha(90)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1;
+    // Von Hand gesetzte Umbrüche: kleine Zeichen am Zeilenende (nur am Bildschirm)
+    for (final (x, y, kind) in page.breakMarks) {
+      final r = Rect.fromCenter(center: Offset(x * k, y * k), width: 18, height: 18);
+      canvas.drawRRect(RRect.fromRectAndRadius(r, const Radius.circular(4)), Paint()..color = color);
+      final tp = TextPainter(
+        text: TextSpan(
+          text: switch (kind) {
+            2 => '⤓',
+            -1 => '⊟',
+            _ => '↵',
+          },
+          style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      tp.paint(canvas, r.center - Offset(tp.width / 2, tp.height / 2));
+    }
     final sel = control.selected.value;
     for (final h in page.handles) {
       if (h.ref == sel) continue;

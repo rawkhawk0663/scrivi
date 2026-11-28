@@ -122,6 +122,76 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
     _layoutSel.value = null;
   }
 
+  /// Umbrüche am Takt [bar] (Zeile [first]..[last]).
+  Future<void> _breakMenu(int bar, int first, int last, Offset at) async {
+    final e = _editor;
+    if (e == null) return;
+    final mbs = e.score.masterBars;
+    final n = bar + 1;
+    final isLast = bar == last && bar + 1 < mbs.length;
+    final lineNudged = !(mbs[first].nudges['system']?.isZero ?? true);
+    final hasBreaks = [for (var b = first; b <= last; b++) mbs[b].breakAfter].any((k) => k != 0);
+    PopupMenuItem<VoidCallback> item(IconData icon, String text, VoidCallback run, {bool checked = false}) =>
+        PopupMenuItem(
+          value: run,
+          child: Row(
+            children: [Icon(checked ? Icons.check_rounded : icon, size: 18), const SizedBox(width: 12), Text(text)],
+          ),
+        );
+    final run = await showMenu<VoidCallback>(
+      context: context,
+      position: RelativeRect.fromLTRB(at.dx, at.dy, at.dx + 1, at.dy + 1),
+      items: [
+        item(
+          Icons.keyboard_return_rounded,
+          tr('Neue Zeile nach Takt $n', 'New line after bar $n'),
+          () => apply((e) => e.setBreak(bar, mbs[bar].breakAfter == 1 ? 0 : 1)),
+          checked: mbs[bar].breakAfter == 1,
+        ),
+        item(
+          Icons.vertical_align_bottom_rounded,
+          tr('Neue Seite nach Takt $n', 'New page after bar $n'),
+          () => apply((e) => e.setBreak(bar, mbs[bar].breakAfter == 2 ? 0 : 2)),
+          checked: mbs[bar].breakAfter == 2,
+        ),
+        if (isLast)
+          item(
+            Icons.keyboard_tab_rounded,
+            tr('Takt ${n + 1} in diese Zeile holen', 'Pull bar ${n + 1} into this line'),
+            () => apply((e) => e.setBreak(bar, -1)),
+          ),
+        if (bar + 1 < mbs.length && bar < last)
+          item(
+            Icons.link_off_rounded,
+            tr('Hier nie umbrechen', 'Never break here'),
+            () => apply((e) => e.setBreak(bar, mbs[bar].breakAfter == -1 ? 0 : -1)),
+            checked: mbs[bar].breakAfter == -1,
+          ),
+        item(
+          Icons.view_week_outlined,
+          tr(
+            'Zeile zusammenhalten (Takt ${first + 1}–${last + 1})',
+            'Keep line together (bars ${first + 1}–${last + 1})',
+          ),
+          () => apply((e) => e.keepTogether(first, last)),
+        ),
+        if (hasBreaks)
+          item(
+            Icons.layers_clear_outlined,
+            tr('Umbrüche in dieser Zeile aufheben', 'Clear breaks in this line'),
+            () => apply((e) => e.clearBreaks(first, last)),
+          ),
+        if (lineNudged)
+          item(
+            Icons.undo_rounded,
+            tr('Zeile zurück an ihren Platz', 'Line back to its place'),
+            () => apply((e) => e.setNudge(core.LayoutRef('system', bar: first), core.Nudge.zero)),
+          ),
+      ],
+    );
+    run?.call();
+  }
+
   Future<void> _resetAllNudges() async {
     final ok = await showDialog<bool>(
       context: context,
@@ -129,8 +199,9 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
         title: Text(tr('Alles zurücksetzen?', 'Reset everything?')),
         content: Text(
           tr(
-            'Alle von Hand verschobenen Elemente kommen zurück an den Platz, den Scrivi wählt.',
-            'All elements you moved go back to the place Scrivi chooses.',
+            'Alle von Hand verschobenen Elemente und Zeilen kommen zurück an den Platz, den Scrivi wählt; '
+                'gesetzte Umbrüche werden aufgehoben.',
+            'All elements and lines you moved go back to the place Scrivi chooses; manual breaks are removed.',
           ),
         ),
         actions: [
@@ -1475,6 +1546,7 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
                   onLayoutDone: () => _setLayoutMode(false),
                   onLayoutResetAll: _resetAllNudges,
                   onPageSetup: editPageSetup,
+                  onLayoutMenu: _breakMenu,
                 ),
               ),
               if (showFretboard) ...[
@@ -1855,6 +1927,7 @@ class _PagesViewer extends StatefulWidget {
     this.onLayoutDone,
     this.onLayoutResetAll,
     this.onPageSetup,
+    this.onLayoutMenu,
   });
   final List<core.PageDisplay> pages;
 
@@ -1863,6 +1936,9 @@ class _PagesViewer extends StatefulWidget {
   final VoidCallback? onLayoutDone;
   final VoidCallback? onLayoutResetAll;
   final VoidCallback? onPageSetup;
+
+  /// Menü für Umbrüche: Takt, erster und letzter Takt seiner Zeile, Stelle auf dem Bildschirm.
+  final void Function(int bar, int first, int last, Offset global)? onLayoutMenu;
 
   /// Eine einzige lange Zeile: waagrecht blättern.
   final bool endless;
@@ -2055,7 +2131,22 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
     if (e.pointer != _layoutPointer) return;
     final at = _pagePoint(e.localPosition);
     if (at == null) return;
-    widget.layout!.drag.value = at.$2 - _layoutStart;
+    final d = at.$2 - _layoutStart;
+    // Zeilen nur hoch und runter
+    widget.layout!.drag.value = _layoutHandle?.ref.key == 'system' ? Offset(0, d.dy) : d;
+  }
+
+  /// Rechtsklick bzw. langes Drücken auf einen Takt im Layout: Umbrüche.
+  void _layoutMenu(Offset local, Offset global) {
+    final hit = _hitAt(local);
+    if (hit == null) return;
+    core.SystemBox? sys;
+    for (final page in widget.pages) {
+      for (final s in page.systems) {
+        if (hit.bar >= s.firstBar && hit.bar <= s.lastBar) sys = s;
+      }
+    }
+    widget.onLayoutMenu?.call(hit.bar, sys?.firstBar ?? hit.bar, sys?.lastBar ?? hit.bar, global);
   }
 
   void _layoutUp() {
@@ -2480,6 +2571,8 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
               onScaleUpdate: _onScaleUpdate,
               onScaleEnd: _onScaleEnd,
               onTapUp: _onTapUp,
+              onSecondaryTapUp: widget.layout == null ? null : (d) => _layoutMenu(d.localPosition, d.globalPosition),
+              onLongPressStart: widget.layout == null ? null : (d) => _layoutMenu(d.localPosition, d.globalPosition),
               child: ClipRect(
                 child: OverflowBox(
                   alignment: Alignment.topLeft,

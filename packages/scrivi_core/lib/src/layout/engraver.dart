@@ -769,8 +769,18 @@ class Engraver {
       }
       if (count > 0) {
         count = math.min(count, _measures.length - i);
+        // Von Hand gesetzte Umbrüche gehen vor
+        for (var k = 0; k < count; k++) {
+          if (_measures[i + k].mb.breakAfter >= 1) {
+            count = k + 1;
+            break;
+          }
+        }
+        while (i + count < _measures.length && _measures[i + count - 1].mb.breakAfter == -1) {
+          count++;
+        }
         // Passt die Vorgabe nicht, weniger Takte nehmen.
-        while (count > 1) {
+        while (count > 1 && _measures[i + count - 2].mb.breakAfter != -1) {
           var w = header;
           for (var k = 0; k < count; k++) {
             w += _measureNatural(_measures[i + k], k == 0);
@@ -783,9 +793,12 @@ class Engraver {
         count = 0;
         while (i + count < _measures.length) {
           final add = _measureNatural(_measures[i + count], count == 0);
-          if (count > 0 && w + add > avail) break;
+          // Zusammengehaltene Takte bleiben in der Zeile, auch wenn es eng wird
+          final keep = count > 0 && _measures[i + count - 1].mb.breakAfter == -1;
+          if (count > 0 && w + add > avail && !keep) break;
           w += add;
           count++;
+          if (_measures[i + count - 1].mb.breakAfter >= 1) break; // neue Zeile von Hand
         }
       }
       final s = _System(_measures.sublist(i, i + count))
@@ -863,13 +876,13 @@ class Engraver {
       prevKey = _keyOf(s.measures.last.mb);
       final height = out.bottom - out.top;
       var top = firstOnPage ? y : y + options.systemGap;
-      if (top + height > options.pageHeight - options.marginBottom && !firstOnPage) {
+      final pageBreak = si > 0 && systems[si - 1].measures.last.mb.breakAfter == 2;
+      if ((top + height > options.pageHeight - options.marginBottom || pageBreak) && !firstOnPage) {
         page = PageDisplay(options.pageWidth, options.pageHeight, spaceMm: options.spaceMm);
         pages.add(page);
         top = options.marginTop;
-      } else if (top + height > options.pageHeight - options.marginBottom && pages.length == 1 && si == 0) {
-        // passt nicht einmal auf die erste Seite: trotzdem setzen
       }
+      top = _systemNudge(page, s, top, height);
       final dy = top - out.top;
       for (final it in out.items) {
         page.items.add(shift(it, 0, dy));
@@ -1120,6 +1133,31 @@ class Engraver {
     dx: n.dx,
     dy: n.dy,
   );
+
+  /// Zeile von Hand verschoben (nur senkrecht): neue Oberkante; dazu Anfasser am linken Rand
+  /// und die Zeichen für Umbrüche am Ende der Zeile.
+  double _systemNudge(PageDisplay page, _System s, double top, double height, {double? x0}) {
+    final first = s.measures.first.index;
+    final n = score.masterBars[first].nudges['system'] ?? Nudge.zero;
+    final left = (x0 ?? s.x0) - 3.0;
+    page.handles.add(
+      handleFor(
+        LayoutRef('system', bar: first),
+        '${options.germanNoteNames ? 'Zeile ab Takt' : 'Line from bar'} ${first + 1}',
+        left,
+        top + n.dy,
+        left + 2.0,
+        top + n.dy + height,
+        left + 1.0,
+        top,
+        n,
+        refX: left + 1.0,
+      ),
+    );
+    final kind = s.measures.last.mb.breakAfter;
+    if (kind != 0) page.breakMarks.add((s.x1 + 1.2, top + n.dy + 1.0, kind));
+    return top + n.dy;
+  }
 
   /// Seitenzahlen „1 / 3“ (ab zwei Seiten): rechts, in der Mitte, aussen (abwechselnd) oder keine.
   void _pageNumbers(List<PageDisplay> pages) {

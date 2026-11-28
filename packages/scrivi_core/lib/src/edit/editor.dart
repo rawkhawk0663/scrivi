@@ -1561,6 +1561,7 @@ class ScoreEditor {
 
   /// Element verschieben (Nudge.zero = zurück an den Platz, den der Notensatz wählt).
   void setNudge(LayoutRef ref, Nudge n) {
+    if (ref.key == 'system') n = Nudge(0, n.dy); // Zeilen nur hoch und runter
     if (nudgeOf(ref) == n) return;
     Map<String, Nudge> put(Map<String, Nudge> m) {
       final out = {...m};
@@ -1589,13 +1590,39 @@ class ScoreEditor {
     _done();
   }
 
-  /// Alle Verschiebungen im Stück zurücksetzen.
+  /// Umbruch nach Takt [bar] setzen (0 automatisch, 1 neue Zeile, 2 neue Seite, −1 mit dem nächsten zusammen).
+  void setBreak(int bar, int kind) {
+    if (bar < 0 || bar >= _score.masterBars.length || _score.masterBars[bar].breakAfter == kind) return;
+    _begin();
+    _score.masterBars[bar] = _score.masterBars[bar].copyWith(breakAfter: kind);
+    _done();
+  }
+
+  /// Takte [from]..[to] in einer Zeile zusammenhalten (kein Umbruch dazwischen).
+  void keepTogether(int from, int to) {
+    _begin();
+    for (var b = from; b < to && b < _score.masterBars.length; b++) {
+      _score.masterBars[b] = _score.masterBars[b].copyWith(breakAfter: -1);
+    }
+    _done();
+  }
+
+  /// Umbrüche und Zusammenhalten in Takten [from]..[to] aufheben.
+  void clearBreaks(int from, int to) {
+    _begin();
+    for (var b = from; b <= to && b < _score.masterBars.length; b++) {
+      if (_score.masterBars[b].breakAfter != 0) _score.masterBars[b] = _score.masterBars[b].copyWith(breakAfter: 0);
+    }
+    _done();
+  }
+
+  /// Alle Verschiebungen und von Hand gesetzten Umbrüche im Stück zurücksetzen.
   void resetAllNudges() {
     _begin();
     _score.nudges.clear();
     for (var i = 0; i < _score.masterBars.length; i++) {
-      if (_score.masterBars[i].nudges.isNotEmpty) {
-        _score.masterBars[i] = _score.masterBars[i].copyWith(nudges: const {});
+      if (_score.masterBars[i].nudges.isNotEmpty || _score.masterBars[i].breakAfter != 0) {
+        _score.masterBars[i] = _score.masterBars[i].copyWith(nudges: const {}, breakAfter: 0);
       }
     }
     for (final t in _score.tracks) {

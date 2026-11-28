@@ -102,6 +102,7 @@ class ScriviFormat {
     'directions': [for (final d in m.directions) d.name],
     'swing': m.swing,
     'nudges': _nudges(m.nudges),
+    'break': m.breakAfter == 0 ? null : m.breakAfter,
   });
 
   static double _r(double v) => (v * 100).roundToDouble() / 100;
@@ -315,6 +316,7 @@ class ScriviFormat {
       freeTime: _bool(m['freeTime']),
       swing: _bool(m['swing']),
       nudges: _readNudges(m['nudges']),
+      breakAfter: _int(m['break']).clamp(-1, 2),
       directions: {
         for (final d in _list(m['directions']))
           if (Direction.values.any((x) => x.name == d)) _enum(Direction.values, d, Direction.fine),

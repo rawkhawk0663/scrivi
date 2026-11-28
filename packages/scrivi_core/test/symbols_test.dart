@@ -265,4 +265,35 @@ void main() {
     e.undo();
     expect(e.score.pageSetup.isStandard, isTrue);
   });
+
+  test('Umbrüche: neue Zeile, neue Seite, zusammenhalten; Zeile verschieben', () {
+    final e = ScoreEditor(ScoreEditor.newScore(kind: NewPieceKind.leadSheet, title: 'Umbruch', bars: 16));
+    List<PageDisplay> pages() => Engraver(e.score).layout().pages;
+    final before = pages().first.systems.first.lastBar;
+    expect(before, greaterThan(2));
+    e.setBreak(1, 1); // neue Zeile nach Takt 2
+    expect(pages().first.systems.first.lastBar, 1);
+    expect(pages().first.breakMarks.single.$3, 1);
+    e.setBreak(1, 2); // neue Seite nach Takt 2
+    final p = pages();
+    expect(p.length, greaterThanOrEqualTo(2));
+    expect(p.first.systems.last.lastBar, 1);
+    expect(p[1].systems.first.firstBar, 2);
+    e.clearBreaks(0, 15);
+    expect(pages().first.systems.first.lastBar, before);
+    // Zusammenhalten: auch über die Breite hinaus
+    e.keepTogether(0, before + 1);
+    expect(pages().first.systems.first.lastBar, before + 1);
+    e.clearBreaks(0, 15);
+    // Zeile verschieben: nur senkrecht, die folgenden rutschen mit
+    final sys = pages().first.systems;
+    final h = pages().first.handles.firstWhere((h) => h.ref.key == 'system' && h.ref.bar == sys[1].firstBar);
+    e.setNudge(h.ref, const Nudge(5, 3));
+    expect(e.nudgeOf(h.ref), const Nudge(0, 3));
+    final moved = pages().first.systems;
+    expect(moved[1].top, closeTo(sys[1].top + 3, 0.01));
+    expect(moved[0].top, closeTo(sys[0].top, 0.01));
+    final back = ScriviFormat.decode(ScriviFormat.encode(e.score));
+    expect(back.masterBars[sys[1].firstBar].nudges['system'], const Nudge(0, 3));
+  });
 }

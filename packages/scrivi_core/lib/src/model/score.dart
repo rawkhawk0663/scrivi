@@ -255,11 +255,15 @@ class MasterBar {
     Set<Direction>? directions,
     this.swing = false,
     this.nudges = const {},
+    this.breakAfter = 0,
   }) : endings = endings ?? {},
        directions = directions ?? {};
 
-  /// Von Hand verschoben: 'section' (Formteil), 'tempo'.
+  /// Von Hand verschoben: 'section' (Formteil), 'tempo', 'system' (die Zeile, die mit diesem Takt beginnt).
   final Map<String, Nudge> nudges;
+
+  /// Umbruch nach diesem Takt: 0 automatisch, 1 neue Zeile, 2 neue Seite, −1 nie (mit dem nächsten zusammen).
+  final int breakAfter;
 
   final TimeSignature time;
   final KeySignature key;
@@ -292,6 +296,7 @@ class MasterBar {
     Set<Direction>? directions,
     bool? swing,
     Map<String, Nudge>? nudges,
+    int? breakAfter,
   }) => MasterBar(
     time: time ?? this.time,
     key: key ?? this.key,
@@ -304,6 +309,7 @@ class MasterBar {
     directions: directions ?? {...this.directions},
     swing: swing ?? this.swing,
     nudges: nudges ?? this.nudges,
+    breakAfter: breakAfter ?? this.breakAfter,
   );
 }
 

@@ -153,13 +153,16 @@ class ScoreEngraver {
       var w = _header(i, first);
       var count = 0;
       final fixed = options.barsPerLine;
+      final mbs = score.masterBars;
       while (i + count < n) {
         final add = _natural(i + count, count == 0);
+        final keep = count > 0 && mbs[i + count - 1].breakAfter == -1;
         // Feste Zahl Takte pro Zeile, solange sie Platz haben
-        if (fixed > 0 && count >= fixed) break;
-        if (count > 0 && w + add > avail) break;
+        if (fixed > 0 && count >= fixed && !keep) break;
+        if (count > 0 && w + add > avail && !keep) break;
         w += add;
         count++;
+        if (mbs[i + count - 1].breakAfter >= 1) break; // neue Zeile von Hand
       }
       out.add((i, i + count, first));
       i += count;
@@ -258,12 +261,14 @@ class ScoreEngraver {
         height += outs[k].bottom - outs[k].top + (k > 0 ? staffGap : 0);
       }
       var top = firstOnPage ? y : y + systemGap;
-      if (top + height > options.pageHeight - options.marginBottom && !firstOnPage) {
+      final pageBreak = r > 0 && all[r - 1].first.measures.last.mb.breakAfter == 2;
+      if ((top + height > options.pageHeight - options.marginBottom || pageBreak) && !firstOnPage) {
         page = PageDisplay(options.pageWidth, options.pageHeight, spaceMm: options.spaceMm);
         pages.add(page);
         top = options.marginTop;
       }
       final s0 = all[r].first;
+      top = e0._systemNudge(page, s0, top, height, x0: options.marginLeft);
       var cursor = top;
       double? lineTop, lineBottom;
       for (var k = 0; k < outs.length; k++) {
