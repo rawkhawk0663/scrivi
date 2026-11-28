@@ -234,6 +234,21 @@ class SystemBox {
   final double tabSpacing;
   final int strings;
 
+  /// Dieselbe Zeile [dy] tiefer.
+  SystemBox shifted(double dy) => SystemBox(
+    top: top + dy,
+    bottom: bottom + dy,
+    firstBar: firstBar,
+    lastBar: lastBar,
+    bars: bars,
+    staffTop: staffTop == null ? null : staffTop! + dy,
+    topDiatonic: topDiatonic,
+    tabTop: tabTop == null ? null : tabTop! + dy,
+    tabSpacing: tabSpacing,
+    strings: strings,
+    track: track,
+  );
+
   /// y einer Saite (0 = tiefste).
   double? stringY(int string) => tabTop == null ? null : tabTop! + (strings - 1 - string) * tabSpacing;
 

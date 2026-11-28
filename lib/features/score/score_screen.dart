@@ -115,11 +115,26 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
   late final _layoutControl = LayoutControl(
     selected: _layoutSel,
     onNudge: (ref, n) => apply((e) => e.setNudge(ref, n)),
+    lineGap: () => 3.0 * editor.score.pageSetup.lineGap,
+    fillPages: () => editor.score.pageSetup.fillPages,
+    onLineGap: (d) => apply((e) {
+      final ps = e.score.pageSetup;
+      e.setPageSetup(ps.copyWith(lineGap: ((3.0 * ps.lineGap + d) / 3.0).clamp(0.3, 4.0)));
+    }),
+    onFillPages: (v) => apply((e) => e.setPageSetup(e.score.pageSetup.copyWith(fillPages: v))),
+    onResetLines: () => apply((e) {
+      e.setPageSetup(e.score.pageSetup.copyWith(lineGap: 1.0, fillPages: false));
+      e.clearSystemNudges();
+    }),
   );
 
   void _setLayoutMode(bool on) {
     setState(() => _layoutMode = on);
     _layoutSel.value = null;
+    // Mit Strg+A alles markiert: im Layout gleich alle Zeilen gewählt
+    final sel = _editor?.selection;
+    _layoutControl.allLines.value =
+        on && sel != null && sel.$1.bar == 0 && sel.$1.beat == 0 && sel.$2.bar == editor.score.masterBars.length - 1;
   }
 
   /// Umbrüche am Takt [bar] (Zeile [first]..[last]).
@@ -809,6 +824,18 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
           check(tr('Leiste am Cursor', 'Strip at the cursor'), s.cursorStrip.value, () {
             s.setCursorStrip(!s.cursorStrip.value);
           }),
+          if (s.cursorStrip.value) ...[
+            radio(
+              tr('Leiste unter dem Cursor', 'Strip below the cursor'),
+              !s.stripBeside.value,
+              () => s.setStripBeside(false),
+            ),
+            radio(
+              tr('Leiste neben dem Cursor', 'Strip beside the cursor'),
+              s.stripBeside.value,
+              () => s.setStripBeside(true),
+            ),
+          ],
           if (_stringed)
             check(tr('Griffbrett unten', 'Fretboard at the bottom'), s.showFretboard.value, () {
               s.setShowFretboard(!s.showFretboard.value);
@@ -838,10 +865,10 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
     final score = _editor?.score ?? _score;
     final title = score != null && score.info.title.isNotEmpty ? score.info.title : p.basenameWithoutExtension(_path);
     final state = _unsaved ? tr('nicht gespeichert', 'not saved') : p.basename(_path);
-    return ConstrainedBox(
+    final block = ConstrainedBox(
       constraints: BoxConstraints(maxWidth: compact ? 130 : 210),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -861,6 +888,12 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
           ],
         ),
       ),
+    );
+    if (_editor == null) return block;
+    // Antippen: Angaben zum Stück (Titel, Interpret, Text und Musik, Copyright …)
+    return Tooltip(
+      message: tr('Angaben zum Stück …', 'Piece information …'),
+      child: InkWell(borderRadius: BorderRadius.circular(8), onTap: editTitle, child: block),
     );
   }
 
@@ -1495,6 +1528,7 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
       ?settings?.openToolGroups,
       ?settings?.showTracks,
       ?settings?.cursorStrip,
+      ?settings?.stripBeside,
       ?settings?.showInspector,
       ?settings?.tracksHeight,
     ];
@@ -1537,7 +1571,7 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
     final showFretboard = (s?.showFretboard.value ?? true) && e.stringed;
     final open = {
       for (final g in ToolGroup.values)
-        if ((s?.openToolGroups.value ?? const {'duration', 'guitar', 'quick'}).contains(g.name)) g,
+        if ((s?.openToolGroups.value ?? const {'notes', 'guitar', 'quick'}).contains(g.name)) g,
     };
     final showTracks = s?.showTracks.value ?? true;
     final showInspector = s?.showInspector.value ?? true;
@@ -1574,6 +1608,7 @@ class _ScoreScreenState extends State<ScoreScreen> implements ToolHost, ScoreTab
                   editor: e,
                   cursorTick: _cursorTick,
                   onEditTap: _layoutMode ? null : _onEditTap,
+                  onEditInfo: _layoutMode || _editor == null ? null : editTitle,
                   onEditKey: _onEditKey,
                   onPen: _layoutMode ? null : _onPen,
                   penWrites: _penNotes && !_layoutMode,
@@ -1958,6 +1993,7 @@ class _PagesViewer extends StatefulWidget {
     this.editor,
     this.cursorTick,
     this.onEditTap,
+    this.onEditInfo,
     this.onEditKey,
     this.onPen,
     this.penWrites = false,
@@ -1989,6 +2025,9 @@ class _PagesViewer extends StatefulWidget {
   final core.ScoreEditor? editor;
   final ValueNotifier<int>? cursorTick;
   final ValueChanged<_PageHit>? onEditTap;
+
+  /// Titel, Interpret, Copyright … auf dem Blatt angetippt: Angaben zum Stück ändern.
+  final VoidCallback? onEditInfo;
   final bool Function(KeyEvent)? onEditKey;
 
   /// Strich mit dem Stift (Radierer = Durchkritzeln); [to] beim Bereich.
@@ -2150,6 +2189,9 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
     return null;
   }
 
+  /// Ziehen bei „alle Zeilen“: die wievielte Zeile der Seite gezogen wird (0 = kein solches Ziehen).
+  int _allLinesDrag = 0;
+
   void _layoutDown(PointerDownEvent e) {
     final layout = widget.layout!;
     _focus.requestFocus();
@@ -2167,7 +2209,18 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
       final area = (h.right - h.left) * (h.bottom - h.top);
       if (best == null || area < (best.right - best.left) * (best.bottom - best.top)) best = h;
     }
-    layout.selected.value = best?.ref;
+    // Alle Zeilen gewählt: an einer Zeile ziehen ändert den Abstand zwischen allen
+    _allLinesDrag = 0;
+    if (layout.allLines.value && best?.ref.key == 'system') {
+      final b = best!;
+      _allLinesDrag = math.max(
+        1,
+        widget.pages[i].handles.where((h) => h.ref.key == 'system' && h.top < b.top - 0.01).length,
+      );
+    } else {
+      layout.allLines.value = false;
+      layout.selected.value = best?.ref;
+    }
     _layoutGesture = best != null;
     if (best == null) return;
     _fling.stop();
@@ -2205,7 +2258,11 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
     _layoutHandle = null;
     if (h == null || layout == null) return;
     final d = layout.drag.value;
-    if (d.distance > 0.05) {
+    if (_allLinesDrag > 0) {
+      // Die gezogene Zeile ist die n-te auf ihrer Seite: jeder Abstand darüber wächst um ein n-tel
+      if (d.dy.abs() > 0.05) layout.onLineGap?.call(d.dy / _allLinesDrag);
+      _allLinesDrag = 0;
+    } else if (d.distance > 0.05) {
       // Bleibt bis zum neuen Satz an der neuen Stelle stehen
       layout.onNudge(h.ref, core.Nudge(h.dx + d.dx, h.dy + d.dy));
     }
@@ -2217,12 +2274,26 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
     final layout = widget.layout;
     if (layout == null || (e is! KeyDownEvent && e is! KeyRepeatEvent)) return false;
     final k = e.logicalKey;
+    final hw = HardwareKeyboard.instance;
     if (k == LogicalKeyboardKey.escape) {
-      if (layout.selected.value == null) {
+      if (layout.allLines.value) {
+        layout.allLines.value = false;
+      } else if (layout.selected.value == null) {
         widget.onLayoutDone?.call();
       } else {
         layout.selected.value = null;
       }
+      return true;
+    }
+    // Strg+A: alle Zeilen wählen (Abstand zwischen allen Zeilen ändern)
+    if (k == LogicalKeyboardKey.keyA && (hw.isControlPressed || hw.isMetaPressed)) {
+      layout.selected.value = null;
+      layout.allLines.value = true;
+      return true;
+    }
+    if (layout.allLines.value && (k == LogicalKeyboardKey.arrowUp || k == LogicalKeyboardKey.arrowDown)) {
+      final step = hw.isShiftPressed ? 1.0 : 0.2;
+      layout.onLineGap?.call(k == LogicalKeyboardKey.arrowUp ? -step : step);
       return true;
     }
     final h = _handleOf(layout.selected.value);
@@ -2329,9 +2400,22 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
   }
 
   /// Angetippter Takt: Fensterpunkt → Seite → Zeile → Takt.
+  /// Texte im Kopf und Fuss der Seite (aus den Angaben zum Stück).
+  static const _infoKeys = {'title', 'subtitle', 'artist', 'album', 'credits', 'tabber', 'instructions', 'copyright'};
+
   void _onTapUp(TapUpDetails d) {
     _focus.requestFocus();
     if (widget.layout != null) return;
+    final pp = _pagePoint(d.localPosition);
+    if (pp != null && widget.onEditInfo != null) {
+      final (i, pt) = pp;
+      for (final h in widget.pages[i].handles) {
+        if (h.ref.bar == null && _infoKeys.contains(h.ref.key) && h.contains(pt.dx, pt.dy, slop: 0.2)) {
+          widget.onEditInfo!();
+          return;
+        }
+      }
+    }
     final hit = _hitAt(d.localPosition);
     if (hit != null) widget.onEditTap?.call(hit);
   }
@@ -2479,29 +2563,74 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
     return null;
   }
 
-  /// Leiste unter (bzw. über) der Zeile am Cursor; beim Abspielen und wenn der
-  /// Cursor nicht zu sehen ist, verschwindet sie.
+  /// Leiste unter (bzw. über) dem Cursor oder daneben (Menü „Ansicht“); beim Abspielen und
+  /// wenn der Cursor nicht zu sehen ist, verschwindet sie.
   Widget _strip() {
     final host = widget.stripHost;
     final r = _cursorRect();
     if (host == null || r == null || (widget.player?.playing ?? false)) return const SizedBox.shrink();
-    const w = CursorStrip.width, h = CursorStrip.height;
     final vw = _viewport.width, vh = _viewport.height;
-    if (r.right < 0 || r.left > vw || r.bottom < 0 || r.top > vh || vw < w + 16) return const SizedBox.shrink();
-    final left = (r.center.dx - w / 2).clamp(8.0, vw - w - 8);
-    var above = false;
-    var top = r.bottom + 12;
-    if (top + h > vh - 4) {
-      above = true;
-      top = r.top - h - 12;
+    if (r.right < 0 || r.left > vw || r.bottom < 0 || r.top > vh) return const SizedBox.shrink();
+    final beside = context.getInheritedWidgetOfExactType<SettingsScope>()?.settings.stripBeside.value ?? false;
+    const gap = 12.0;
+    if (beside) {
+      const w = CursorStrip.narrowWidth;
+      if (vw < w + 16) return const SizedBox.shrink();
+      // Rechts vom Cursor, sonst links; oben etwas über dem Cursor beginnen
+      var side = StripSide.right;
+      var left = r.right + gap;
+      if (left + w > vw - 4) {
+        side = StripSide.left;
+        left = r.left - gap - w;
+      }
+      left = left.clamp(4.0, math.max(4.0, vw - w - 4));
+      final top = (r.top - 24).clamp(4.0, math.max(4.0, vh - 160)).toDouble();
+      final maxH = vh - top - 4;
+      return Stack(
+        children: [
+          Positioned(
+            left: left,
+            top: top,
+            child: CursorStrip(host: host, side: side, arrowAt: r.center.dy - top, maxHeight: maxH, width: w),
+          ),
+        ],
+      );
     }
-    top = top.clamp(4.0, math.max(4.0, vh - h - 4));
+    const w = CursorStrip.wideWidth;
+    if (vw < w + 16) return const SizedBox.shrink();
+    final left = (r.center.dx - w / 2).clamp(8.0, vw - w - 8);
+    final below = vh - (r.bottom + gap) - 4, above = r.top - gap - 4;
+    // Darunter, wenn dort genug Platz ist (oder mehr als darüber)
+    if (below >= 160 || below >= above) {
+      final top = r.bottom + gap;
+      return Stack(
+        children: [
+          Positioned(
+            left: left,
+            top: top,
+            child: CursorStrip(
+              host: host,
+              side: StripSide.below,
+              arrowAt: r.center.dx - left,
+              maxHeight: math.max(80.0, below),
+              width: w,
+            ),
+          ),
+        ],
+      );
+    }
     return Stack(
       children: [
         Positioned(
           left: left,
-          top: top,
-          child: CursorStrip(host: host, arrowX: r.center.dx - left, above: above),
+          bottom: vh - (r.top - gap),
+          child: CursorStrip(
+            host: host,
+            side: StripSide.above,
+            arrowAt: r.center.dx - left,
+            maxHeight: math.max(80.0, above),
+            width: w,
+          ),
         ),
       ],
     );
@@ -2702,11 +2831,16 @@ class _PagesViewerState extends State<_PagesViewer> with SingleTickerProviderSta
                 right: 0,
                 child: Center(
                   child: ListenableBuilder(
-                    listenable: Listenable.merge([widget.layout!.selected, widget.layout!.drag]),
+                    listenable: Listenable.merge([
+                      widget.layout!.selected,
+                      widget.layout!.drag,
+                      widget.layout!.allLines,
+                    ]),
                     builder: (context, _) {
                       final h = _handleOf(widget.layout!.selected.value);
                       return LayoutBar(
                         handle: h,
+                        allLines: widget.layout!.allLines.value ? widget.layout : null,
                         drag: widget.layout!.drag.value,
                         onReset: () => h == null ? null : widget.layout!.onNudge(h.ref, core.Nudge.zero),
                         onResetAll: () => widget.onLayoutResetAll?.call(),

@@ -269,6 +269,14 @@ class _Meas {
   bool get empty => cols.isEmpty;
 }
 
+/// Eine Zeile auf ihrer Seite: wo ihre Zeichen in den Listen der Seite beginnen (für „Seiten füllen“).
+class _Placed {
+  _Placed(this.page, this.items, this.handles, this.marks, this.boxes);
+  final PageDisplay page;
+  final int items, handles, marks, boxes;
+  double bottom = 0;
+}
+
 class _System {
   _System(this.measures);
   final List<_Meas> measures;
@@ -881,6 +889,7 @@ class Engraver {
     y = _drawDiagrams(page, y);
     var prevKey = const KeySignature(0);
     var firstOnPage = true;
+    final placed = <_Placed>[];
     for (var si = 0; si < systems.length; si++) {
       final s = systems[si];
       final sb = _SystemBuilder(this, s, si, systems);
@@ -894,6 +903,7 @@ class Engraver {
         pages.add(page);
         top = options.marginTop;
       }
+      placed.add(_Placed(page, page.items.length, page.handles.length, page.breakMarks.length, page.systems.length));
       top = _systemNudge(page, s, top, height);
       final dy = top - out.top;
       for (final it in out.items) {
@@ -904,12 +914,51 @@ class Engraver {
       }
       page.systems.add(_box(s, sb, top, height, out.top));
       y = top + height;
+      placed.last.bottom = y;
       firstOnPage = false;
     }
+    if (score.pageSetup.fillPages) _fillPages(placed);
     // Copyright unten auf der ersten Seite, Seitenzahlen
     _drawCopyright(pages.first);
     _pageNumbers(pages);
     return ScoreLayout(pages);
+  }
+
+  /// Seiten füllen: auf jeder Seite ausser der letzten rutschen die Zeilen auseinander, bis die
+  /// unterste den unteren Rand erreicht (die erste bleibt stehen).
+  void _fillPages(List<_Placed> placed) {
+    final groups = <List<_Placed>>[];
+    for (final p in placed) {
+      if (groups.isEmpty || groups.last.first.page != p.page) {
+        groups.add([p]);
+      } else {
+        groups.last.add(p);
+      }
+    }
+    for (var g = 0; g < groups.length - 1; g++) {
+      final list = groups[g];
+      final page = list.first.page;
+      final extra = options.pageHeight - options.marginBottom - list.last.bottom;
+      if (list.length < 2 || extra <= 0.01) continue;
+      for (var j = 1; j < list.length; j++) {
+        final dy = extra * j / (list.length - 1);
+        final a = list[j];
+        final b = j + 1 < list.length ? list[j + 1] : null;
+        for (var i = a.items; i < (b?.items ?? page.items.length); i++) {
+          page.items[i] = shift(page.items[i], 0, dy);
+        }
+        for (var i = a.handles; i < (b?.handles ?? page.handles.length); i++) {
+          page.handles[i] = page.handles[i].shifted(0, dy);
+        }
+        for (var i = a.marks; i < (b?.marks ?? page.breakMarks.length); i++) {
+          final (x, y, k) = page.breakMarks[i];
+          page.breakMarks[i] = (x, y + dy, k);
+        }
+        for (var i = a.boxes; i < (b?.boxes ?? page.systems.length); i++) {
+          page.systems[i] = page.systems[i].shifted(dy);
+        }
+      }
+    }
   }
 
   /// Lage einer gesetzten Zeile (für Markierung, Cursor und Antippen).
@@ -1637,6 +1686,12 @@ class _SystemBuilder {
     final y0 = _tabBottom + 1.0;
     final yEnd = _tabBottom + 3.6;
     final restY = (y0 + yEnd) / 2;
+    // Pausen stehen in der Mitte der Tabulatur; ganze und halbe Pausen hängen bzw. liegen
+    // an der Linie über bzw. unter der Mitte
+    final sp = e.options.tabLineSpacing;
+    final tabMid = (_tabTop + _tabBottom) / 2;
+    final lineAbove = _tabTop + ((tabMid - _tabTop) / sp - 0.01).floor() * sp;
+    final lineBelow = _tabTop + ((tabMid - _tabTop) / sp + 0.01).ceil() * sp;
     double stemX(_Ev ev) => ev.x + ev.headW / 2;
     for (final ev in events) {
       if (ev.voice != 0) continue;
@@ -1646,7 +1701,7 @@ class _SystemBuilder {
           final m = s.measures.firstWhere((m) => m.index == ev.bar);
           final start = m == s.measures.first ? _contentStart : m.x;
           final mid = (start + m.x + m.w) / 2;
-          glyph('restWhole', mid - Glyphs.get('restWhole').right * 0.8 / 2, restY - 0.5, scale: 0.8);
+          glyph('restWhole', mid - Glyphs.get('restWhole').right / 2, lineAbove);
           continue;
         }
         final name = switch (v) {
@@ -1661,10 +1716,14 @@ class _SystemBuilder {
           NoteValue.hundredTwentyEighth => 'rest128th',
         };
         final g = Glyphs.get(name);
-        final y = v == NoteValue.whole || v == NoteValue.doubleWhole ? restY - 0.5 : restY;
-        glyph(name, ev.x + ev.headW / 2 - g.right * 0.8 / 2, y, scale: 0.8);
+        final y = switch (v) {
+          NoteValue.whole || NoteValue.doubleWhole => lineAbove,
+          NoteValue.half => lineBelow,
+          _ => tabMid,
+        };
+        glyph(name, ev.x + ev.headW / 2 - g.right / 2, y);
         for (var d = 0; d < ev.beat.duration.dots; d++) {
-          glyph('augmentationDot', ev.x + ev.headW / 2 + g.right * 0.4 + 0.3 + d * 0.5, restY - 0.5);
+          glyph('augmentationDot', ev.x + ev.headW / 2 + g.right / 2 + 0.3 + d * 0.5, tabMid - 0.5);
         }
         continue;
       }

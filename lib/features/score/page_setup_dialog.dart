@@ -295,6 +295,20 @@ class _PageSetupPanelState extends State<_PageSetupPanel> {
                         (v) => _set(s.copyWith(spacing: (v * 20).round() / 20)),
                       ),
                     ),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                      title: Text(tr('Seiten füllen', 'Fill pages'), style: const TextStyle(fontSize: 13)),
+                      subtitle: Text(
+                        tr(
+                          'Zeilen gleichmässig verteilen, bis jede volle Seite unten reicht.',
+                          'Spread the lines evenly until each full page reaches the bottom.',
+                        ),
+                        style: TextStyle(fontSize: 12, color: c.muted),
+                      ),
+                      value: s.fillPages,
+                      onChanged: (v) => _set(s.copyWith(fillPages: v)),
+                    ),
                     label(tr('Takte pro Zeile', 'Bars per line')),
                     segments(
                       [
@@ -330,7 +344,10 @@ class _PageSetupPanelState extends State<_PageSetupPanel> {
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
                       dense: true,
-                      title: Text(tr('Leere Spuren ausblenden', 'Hide empty tracks'), style: const TextStyle(fontSize: 13)),
+                      title: Text(
+                        tr('Leere Spuren ausblenden', 'Hide empty tracks'),
+                        style: const TextStyle(fontSize: 13),
+                      ),
                       subtitle: Text(
                         tr(
                           'Spuren, die in einer Zeile nichts spielen, fallen weg (nicht in der ersten Zeile).',

@@ -249,6 +249,7 @@ class ScoreEngraver {
     }
     final prevKeys = [for (final _ in _engs) const KeySignature(0)];
     var firstOnPage = true;
+    final placed = <_Placed>[];
     for (var r = 0; r < all.length; r++) {
       // Welche Spuren in dieser Zeile stehen (leere auf Wunsch weg, nie in der ersten Zeile)
       final vis = [
@@ -288,6 +289,7 @@ class ScoreEngraver {
         top = options.marginTop;
       }
       final s0 = all[r].first;
+      placed.add(_Placed(page, page.items.length, page.handles.length, page.breakMarks.length, page.systems.length));
       top = e0._systemNudge(page, s0, top, height, x0: options.marginLeft);
       var cursor = top;
       // Lage der Linien jeder gezeigten Spur (für Namen und Klammern)
@@ -311,8 +313,10 @@ class ScoreEngraver {
       }
       _drawGroups(page, vis, lines, s0.x0, s0.first);
       y = cursor;
+      placed.last.bottom = y;
       firstOnPage = false;
     }
+    if (score.pageSetup.fillPages) e0._fillPages(placed);
     e0._drawCopyright(pages.first);
     e0._pageNumbers(pages);
     return ScoreLayout(pages);

@@ -65,8 +65,7 @@ abstract class ToolHost {
 
 /// Gruppen der Werkzeugspalte (Reihenfolge = Anzeige).
 enum ToolGroup {
-  duration('Notenwert', 'Note value'),
-  accidental('Vorzeichen', 'Accidentals'),
+  notes('Noten', 'Notes'),
   guitar('Gitarre', 'Guitar'),
   drums('Schlagzeug', 'Drums'),
   finger('Fingersatz', 'Fingering'),
@@ -169,7 +168,7 @@ core.NoteValue _value(core.ScoreEditor e) => e.currentBeat?.duration.value ?? e.
 
 ToolDef _duration(core.NoteValue v, String glyph, String de, String en, String key) => ToolDef(
   id: 'd-${v.name}',
-  group: ToolGroup.duration,
+  group: ToolGroup.notes,
   look: GlyphLook(glyph, size: 24, dy: 4),
   de: de,
   en: en,
@@ -253,7 +252,7 @@ final List<ToolDef> allTools = [
   _duration(core.NoteValue.thirtySecond, '\uECAB', 'Zweiunddreissigstel', 'Thirty-second note', '+'),
   ToolDef(
     id: 'dot',
-    group: ToolGroup.duration,
+    group: ToolGroup.notes,
     look: const GlyphLook('\uECB7', size: 34, dy: 4),
     de: 'Punkt (punktiert)',
     en: 'Dot (dotted)',
@@ -263,7 +262,7 @@ final List<ToolDef> allTools = [
   ),
   ToolDef(
     id: 'double-dot',
-    group: ToolGroup.duration,
+    group: ToolGroup.notes,
     look: const GlyphLook('\uECB7\uE1E7', size: 34, dy: 4),
     de: 'Doppelpunkt',
     en: 'Double dot',
@@ -273,7 +272,7 @@ final List<ToolDef> allTools = [
   ),
   ToolDef(
     id: 'triplet',
-    group: ToolGroup.duration,
+    group: ToolGroup.notes,
     look: const GlyphLook('\uE883', size: 20),
     de: 'Triole',
     en: 'Triplet',
@@ -285,7 +284,7 @@ final List<ToolDef> allTools = [
   ),
   ToolDef(
     id: 'tuplet-5',
-    group: ToolGroup.duration,
+    group: ToolGroup.notes,
     look: const GlyphLook('\uE885', size: 20),
     de: 'Quintole',
     en: 'Quintuplet',
@@ -296,7 +295,7 @@ final List<ToolDef> allTools = [
   ),
   ToolDef(
     id: 'tuplet-6',
-    group: ToolGroup.duration,
+    group: ToolGroup.notes,
     look: const GlyphLook('\uE886', size: 20),
     de: 'Sextole',
     en: 'Sextuplet',
@@ -307,7 +306,7 @@ final List<ToolDef> allTools = [
   ),
   ToolDef(
     id: 'tuplet-7',
-    group: ToolGroup.duration,
+    group: ToolGroup.notes,
     look: const GlyphLook('\uE887', size: 20),
     de: 'Septole',
     en: 'Septuplet',
@@ -318,7 +317,7 @@ final List<ToolDef> allTools = [
   ),
   ToolDef(
     id: 'grace',
-    group: ToolGroup.duration,
+    group: ToolGroup.notes,
     look: const GlyphLook('\uE560', size: 24, dy: 2),
     de: 'Vorschlagsnote (die nächste Note) / entfernen',
     en: 'Grace note (the next note) / remove',
@@ -328,7 +327,7 @@ final List<ToolDef> allTools = [
   ),
   ToolDef(
     id: 'rest',
-    group: ToolGroup.duration,
+    group: ToolGroup.notes,
     look: const GlyphLook('\uE4E5', size: 24, dy: 4),
     de: 'Pause',
     en: 'Rest',
@@ -339,7 +338,7 @@ final List<ToolDef> allTools = [
   ),
   ToolDef(
     id: 'tie',
-    group: ToolGroup.duration,
+    group: ToolGroup.notes,
     look: const TextLook('‿'),
     de: 'Haltebogen zum vorigen Ton',
     en: 'Tie to the previous note',
@@ -351,7 +350,7 @@ final List<ToolDef> allTools = [
   ),
   ToolDef(
     id: 'up',
-    group: ToolGroup.accidental,
+    group: ToolGroup.notes,
     look: const IconLook(Icons.north_rounded),
     de: 'Halbton höher',
     en: 'Semitone up',
@@ -362,7 +361,7 @@ final List<ToolDef> allTools = [
   ),
   ToolDef(
     id: 'down',
-    group: ToolGroup.accidental,
+    group: ToolGroup.notes,
     look: const IconLook(Icons.south_rounded),
     de: 'Halbton tiefer',
     en: 'Semitone down',
@@ -373,7 +372,7 @@ final List<ToolDef> allTools = [
   ),
   ToolDef(
     id: 'acc-sharp',
-    group: ToolGroup.accidental,
+    group: ToolGroup.notes,
     look: const GlyphLook('\uE262', size: 22, dy: 2),
     de: 'Kreuz ♯',
     en: 'Sharp ♯',
@@ -384,7 +383,7 @@ final List<ToolDef> allTools = [
   ),
   ToolDef(
     id: 'acc-flat',
-    group: ToolGroup.accidental,
+    group: ToolGroup.notes,
     look: const GlyphLook('\uE260', size: 22, dy: 2),
     de: 'Be ♭',
     en: 'Flat ♭',
@@ -395,7 +394,7 @@ final List<ToolDef> allTools = [
   ),
   ToolDef(
     id: 'acc-natural',
-    group: ToolGroup.accidental,
+    group: ToolGroup.notes,
     look: const GlyphLook('\uE261', size: 22, dy: 2),
     de: 'Auflösungszeichen ♮',
     en: 'Natural ♮',
@@ -406,7 +405,7 @@ final List<ToolDef> allTools = [
   ),
   ToolDef(
     id: 'acc-dsharp',
-    group: ToolGroup.accidental,
+    group: ToolGroup.notes,
     look: const GlyphLook('\uE263', size: 22, dy: 2),
     de: 'Doppelkreuz 𝄪',
     en: 'Double sharp 𝄪',
@@ -417,7 +416,7 @@ final List<ToolDef> allTools = [
   ),
   ToolDef(
     id: 'acc-dflat',
-    group: ToolGroup.accidental,
+    group: ToolGroup.notes,
     look: const GlyphLook('\uE264', size: 22, dy: 2),
     de: 'Doppel-Be 𝄫',
     en: 'Double flat 𝄫',
@@ -428,7 +427,7 @@ final List<ToolDef> allTools = [
   ),
   ToolDef(
     id: 'acc-courtesy',
-    group: ToolGroup.accidental,
+    group: ToolGroup.notes,
     look: const GlyphLook('\uE26A\uE261\uE26B', size: 20, dy: 2),
     de: 'Vorzeichen zur Erinnerung (in Klammern)',
     en: 'Courtesy accidental (in brackets)',
@@ -439,7 +438,7 @@ final List<ToolDef> allTools = [
   ),
   ToolDef(
     id: 'next',
-    group: ToolGroup.duration,
+    group: ToolGroup.notes,
     look: const IconLook(Icons.arrow_forward_rounded),
     de: 'Weiter zum nächsten Schlag',
     en: 'Next beat',
@@ -448,7 +447,7 @@ final List<ToolDef> allTools = [
   ),
   ToolDef(
     id: 'pen',
-    group: ToolGroup.duration,
+    group: ToolGroup.notes,
     look: const IconLook(Icons.edit_outlined),
     de: 'Maus und Finger schreiben wie der Stift',
     en: 'Mouse and finger write like the pen',
@@ -458,7 +457,7 @@ final List<ToolDef> allTools = [
   ),
   ToolDef(
     id: 'mic',
-    group: ToolGroup.duration,
+    group: ToolGroup.notes,
     look: const IconLook(Icons.mic_none_rounded),
     de: 'Vorspielen: Töne über das Mikrofon schreiben',
     en: 'Play in: write notes through the microphone',
@@ -470,7 +469,7 @@ final List<ToolDef> allTools = [
   for (var v = 0; v < 4; v++)
     ToolDef(
       id: 'voice-${v + 1}',
-      group: ToolGroup.duration,
+      group: ToolGroup.notes,
       look: TextLook('${v + 1}'),
       de: 'Stimme ${v + 1}${v == 1 ? ' (z. B. Bass mit Hälsen nach unten)' : ''}',
       en: 'Voice ${v + 1}${v == 1 ? ' (e.g. bass with stems down)' : ''}',

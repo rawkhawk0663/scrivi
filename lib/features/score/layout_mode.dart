@@ -8,7 +8,31 @@ import '../../app/theme.dart';
 /// Formteile, Tempo …) antippen und ziehen. Jedes hängt an einem Anker; angezeigt wird der
 /// Abstand dazu waagrecht und senkrecht.
 class LayoutControl {
-  LayoutControl({required this.selected, required this.onNudge});
+  LayoutControl({
+    required this.selected,
+    required this.onNudge,
+    this.onLineGap,
+    this.onFillPages,
+    this.onResetLines,
+    this.lineGap,
+    this.fillPages,
+  });
+
+  /// Alle Zeilen gewählt (Strg+A): Ziehen an einer Zeile ändert den Abstand zwischen allen Zeilen.
+  final allLines = ValueNotifier<bool>(false);
+
+  /// Abstand zwischen allen Zeilen um so viele sp ändern.
+  final void Function(double delta)? onLineGap;
+
+  /// Zeilen gleichmässig über jede volle Seite verteilen (ein/aus).
+  final void Function(bool on)? onFillPages;
+
+  /// Abstände zurücksetzen (gleicher Abstand, einzeln verschobene Zeilen zurück).
+  final VoidCallback? onResetLines;
+
+  /// Jetziger Abstand zwischen den Zeilen (sp) und ob die Seiten gefüllt werden.
+  final double Function()? lineGap;
+  final bool Function()? fillPages;
 
   /// Gewähltes Element (null = keines).
   final ValueNotifier<core.LayoutRef?> selected;
@@ -28,7 +52,8 @@ String layoutMm(double sp, [double spaceMm = 1.75]) {
 
 /// Anfasser auf einer Seite: alle Elemente fein umrandet, das gewählte mit Anker und Massen.
 class LayoutPainter extends CustomPainter {
-  LayoutPainter(this.page, this.control) : super(repaint: Listenable.merge([control.selected, control.drag]));
+  LayoutPainter(this.page, this.control)
+    : super(repaint: Listenable.merge([control.selected, control.drag, control.allLines]));
   final core.PageDisplay page;
   final LayoutControl control;
 
@@ -58,9 +83,23 @@ class LayoutPainter extends CustomPainter {
       tp.paint(canvas, r.center - Offset(tp.width / 2, tp.height / 2));
     }
     final sel = control.selected.value;
+    final all = control.allLines.value;
     for (final h in page.handles) {
       if (h.ref == sel) continue;
-      canvas.drawRect(Rect.fromLTRB(h.left * k - 2, h.top * k - 2, h.right * k + 2, h.bottom * k + 2), faint);
+      final r = Rect.fromLTRB(h.left * k - 2, h.top * k - 2, h.right * k + 2, h.bottom * k + 2);
+      if (all && h.ref.key == 'system') {
+        // Alle Zeilen gewählt: jede Zeile kräftig umrandet
+        canvas.drawRect(r, Paint()..color = color.withAlpha(40));
+        canvas.drawRect(
+          r,
+          Paint()
+            ..color = color
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.6,
+        );
+      } else {
+        canvas.drawRect(r, faint);
+      }
     }
     if (sel == null) return;
     final d = control.drag.value;
@@ -153,7 +192,11 @@ class LayoutBar extends StatelessWidget {
     this.drag = Offset.zero,
     this.onPageSetup,
     this.spaceMm = 1.75,
+    this.allLines,
   });
+
+  /// Alle Zeilen gewählt (sonst null).
+  final LayoutControl? allLines;
 
   final VoidCallback? onPageSetup;
 
@@ -166,6 +209,43 @@ class LayoutBar extends StatelessWidget {
   final VoidCallback onReset;
   final VoidCallback onResetAll;
   final VoidCallback onDone;
+
+  /// Alle Zeilen: Abstand kleiner/grösser, gleichmässig verteilen, zurücksetzen.
+  List<Widget> _allLines(BuildContext context, LayoutControl l) {
+    final style = TextStyle(fontSize: 13, color: context.scrivi.muted);
+    final gap = l.lineGap?.call() ?? 3.0;
+    final fill = l.fillPages?.call() ?? false;
+    return [
+      Text(tr('Alle Zeilen', 'All lines'), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+      const SizedBox(width: 10),
+      Text(tr('Abstand', 'Spacing'), style: style),
+      IconButton(
+        visualDensity: VisualDensity.compact,
+        tooltip: tr('Weniger Abstand', 'Less spacing'),
+        onPressed: () => l.onLineGap?.call(-0.5),
+        icon: const Icon(Icons.remove_rounded, size: 18),
+      ),
+      Text(layoutMm(gap, spaceMm), style: style),
+      IconButton(
+        visualDensity: VisualDensity.compact,
+        tooltip: tr('Mehr Abstand', 'More spacing'),
+        onPressed: () => l.onLineGap?.call(0.5),
+        icon: const Icon(Icons.add_rounded, size: 18),
+      ),
+      const SizedBox(width: 6),
+      FilterChip(
+        label: Text(tr('Seiten füllen', 'Fill pages')),
+        tooltip: tr(
+          'Zeilen gleichmässig verteilen, bis jede volle Seite unten reicht',
+          'Spread the lines evenly until each full page reaches the bottom',
+        ),
+        selected: fill,
+        onSelected: (v) => l.onFillPages?.call(v),
+      ),
+      const SizedBox(width: 6),
+      TextButton(onPressed: l.onResetLines, child: Text(tr('Zurücksetzen', 'Reset'))),
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -186,11 +266,13 @@ class LayoutBar extends StatelessWidget {
           children: [
             Icon(Icons.open_with_rounded, size: 18, color: scheme.primary),
             const SizedBox(width: 10),
-            if (h == null)
+            if (allLines != null)
+              ..._allLines(context, allLines!)
+            else if (h == null)
               Text(
                 tr(
-                  'Element antippen und ziehen · Pfeiltasten schieben fein',
-                  'Tap an element and drag · arrow keys nudge',
+                  'Element antippen und ziehen · Pfeiltasten schieben fein · Strg+A alle Zeilen',
+                  'Tap an element and drag · arrow keys nudge · Ctrl+A all lines',
                 ),
                 style: style,
               )
@@ -208,7 +290,7 @@ class LayoutBar extends StatelessWidget {
                 label: Text(tr('Zurück an den Platz', 'Back to its place')),
               ),
             ],
-            if (h == null) ...[
+            if (h == null && allLines == null) ...[
               TextButton.icon(
                 onPressed: onPageSetup,
                 icon: const Icon(Icons.description_outlined, size: 16),

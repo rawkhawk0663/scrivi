@@ -380,6 +380,31 @@ void main() {
     expect(hidden.expand((p) => p.systems).length, lessThan(systemsBefore));
     expect(ScriviFormat.decode(ScriviFormat.encode(e.score)).pageSetup.hideEmpty, isTrue);
   });
+
+  test('Seiten füllen: Zeilen gleichmässig bis zum unteren Rand; Zeilen zurücksetzen', () {
+    final e = ScoreEditor(ScoreEditor.newScore(kind: NewPieceKind.leadSheet, title: 'Voll', bars: 80));
+    e.setPageSetup(e.score.pageSetup.copyWith(barsPerLine: 2));
+    final before = Engraver(e.score).layout().pages;
+    expect(before.length, greaterThan(1));
+    e.setPageSetup(e.score.pageSetup.copyWith(fillPages: true));
+    final pages = Engraver(e.score).layout().pages;
+    final o = LayoutOptions().withPage(e.score.pageSetup);
+    expect(pages.first.systems.last.bottom, closeTo(o.pageHeight - o.marginBottom, 0.01));
+    expect(pages.first.systems.first.top, closeTo(before.first.systems.first.top, 0.01));
+    // Gleiche Abstände zwischen den Zeilen (bei gleich hohen Zeilen)
+    final s = pages.first.systems;
+    final gaps = [for (var k = 1; k < s.length; k++) s[k].top - s[k - 1].bottom];
+    for (final g in gaps) {
+      expect(g, closeTo(gaps.first, 0.6));
+    }
+    // Die letzte Seite bleibt oben
+    expect(pages.last.systems.first.top, closeTo(before.last.systems.first.top, 0.01));
+    expect(ScriviFormat.decode(ScriviFormat.encode(e.score)).pageSetup.fillPages, isTrue);
+    e.setNudge(LayoutRef('system', bar: s[1].firstBar), const Nudge(0, 2));
+    expect(e.score.masterBars[s[1].firstBar].nudges['system'], isNotNull);
+    e.clearSystemNudges();
+    expect(e.score.masterBars.any((m) => m.nudges.containsKey('system')), isFalse);
+  });
 }
 
 class _Recording implements TextMeasurer {

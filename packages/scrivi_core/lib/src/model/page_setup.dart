@@ -18,7 +18,12 @@ class PageSetup {
     this.fonts = const {},
     this.fontScales = const {},
     this.hideEmpty = false,
+    this.fillPages = false,
   });
+
+  /// Zeilen gleichmässig verteilen, so dass jede volle Seite bis zum unteren Rand reicht
+  /// (die letzte Seite bleibt oben).
+  final bool fillPages;
 
   /// Partitur: Spuren, die in einer Zeile nichts zu spielen haben, weglassen (nicht in der ersten Zeile).
   final bool hideEmpty;
@@ -112,6 +117,7 @@ class PageSetup {
     Map<String, String>? fonts,
     Map<String, double>? fontScales,
     bool? hideEmpty,
+    bool? fillPages,
   }) => PageSetup(
     paper: paper ?? this.paper,
     landscape: landscape ?? this.landscape,
@@ -128,6 +134,7 @@ class PageSetup {
     fonts: fonts ?? this.fonts,
     fontScales: fontScales ?? this.fontScales,
     hideEmpty: hideEmpty ?? this.hideEmpty,
+    fillPages: fillPages ?? this.fillPages,
   );
 
   static double _r(double v) => (v * 1000).roundToDouble() / 1000;
@@ -149,6 +156,7 @@ class PageSetup {
       if (barNumbers != 0) 'barNumbers': barNumbers,
       if (pageNumbers != 0) 'pageNumbers': pageNumbers,
       if (hideEmpty) 'hideEmpty': true,
+      if (fillPages) 'fillPages': true,
       if (fonts.isNotEmpty) 'fonts': {...fonts},
       if (fontScales.isNotEmpty) 'fontSizes': {for (final e in fontScales.entries) e.key: _r(e.value)},
     };
@@ -181,6 +189,7 @@ class PageSetup {
       barNumbers: whole('barNumbers', 3),
       pageNumbers: whole('pageNumbers', 3),
       hideEmpty: j['hideEmpty'] == true,
+      fillPages: j['fillPages'] == true,
       fonts: {
         if (j['fonts'] case final Map f)
           for (final e in f.entries)

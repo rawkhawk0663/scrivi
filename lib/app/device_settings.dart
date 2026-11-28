@@ -24,13 +24,22 @@ class DeviceSettings {
     endless.value = data['endlos'] as bool? ?? false;
     fullScore.value = data['partitur'] as bool? ?? false;
     cursorStrip.value = data['cursorleiste'] as bool? ?? true;
+    stripBeside.value = data['leiste_neben'] as bool? ?? false;
+    final sg = data['leistengruppen'];
+    if (sg is List) stripGroups.value = {for (final g in sg) '$g'};
     transposed.value = data['transponiert'] as bool? ?? false;
     final groups = data['werkzeuggruppen'];
     if (groups is List) openToolGroups.value = {for (final g in groups) '$g'};
     // Neue Gruppe „Schnell“ einmal aufklappen, auch wenn schon Gruppen gemerkt sind
     if (data['schnell_gezeigt'] != true) openToolGroups.value = {...openToolGroups.value, 'quick'};
-    // Neue Gruppe „Vorzeichen“ ebenso einmal aufklappen
-    if (data['vorzeichen_gezeigt'] != true) openToolGroups.value = {...openToolGroups.value, 'accidental'};
+    // Notenwerte und Vorzeichen sind jetzt eine Gruppe „Noten“
+    final g = openToolGroups.value;
+    if (g.contains('duration') || g.contains('accidental')) {
+      openToolGroups.value = {
+        ...g.difference({'duration', 'accidental'}),
+        'notes',
+      };
+    }
     if (data['fingersatz_gezeigt'] != true) openToolGroups.value = {...openToolGroups.value, 'finger'};
     if (data['schlagzeug_gezeigt'] != true) openToolGroups.value = {...openToolGroups.value, 'drums'};
   }
@@ -79,6 +88,18 @@ class DeviceSettings {
   final cursorStrip = ValueNotifier<bool>(true);
   Future<void> setCursorStrip(bool v) => _set(cursorStrip, 'cursorleiste', v);
 
+  /// Leiste neben dem Cursor statt darunter.
+  final stripBeside = ValueNotifier<bool>(false);
+  Future<void> setStripBeside(bool v) => _set(stripBeside, 'leiste_neben', v);
+
+  /// Aufgeklappte Gruppen in der Leiste am Cursor (Namen wie im Code, nie übersetzen).
+  final stripGroups = ValueNotifier<Set<String>>({'notes'});
+  Future<void> setStripGroups(Set<String> v) async {
+    stripGroups.value = v;
+    _data['leistengruppen'] = v.toList()..sort();
+    await _save();
+  }
+
   /// Transponierende Instrumente so zeigen, wie die Musiker lesen (statt klingend).
   final transposed = ValueNotifier<bool>(false);
   Future<void> setTransposed(bool v) => _set(transposed, 'transponiert', v);
@@ -90,7 +111,7 @@ class DeviceSettings {
   }
 
   /// Offene Gruppen der Werkzeugspalte (Namen wie im Code, nie übersetzen).
-  final openToolGroups = ValueNotifier<Set<String>>({'duration', 'accidental', 'guitar', 'drums', 'finger', 'quick'});
+  final openToolGroups = ValueNotifier<Set<String>>({'notes', 'guitar', 'drums', 'finger', 'quick'});
 
   Future<void> setShowTools(bool v) async {
     showTools.value = v;
@@ -108,7 +129,6 @@ class DeviceSettings {
     openToolGroups.value = v;
     _data['werkzeuggruppen'] = v.toList()..sort();
     _data['schnell_gezeigt'] = true;
-    _data['vorzeichen_gezeigt'] = true;
     _data['fingersatz_gezeigt'] = true;
     _data['schlagzeug_gezeigt'] = true;
     await _save();

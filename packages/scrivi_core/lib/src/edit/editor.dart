@@ -1651,6 +1651,18 @@ class ScoreEditor {
     _done();
   }
 
+  /// Alle von Hand verschobenen Zeilen zurück an ihren Platz.
+  void clearSystemNudges() {
+    if (!_score.masterBars.any((m) => m.nudges.containsKey('system'))) return;
+    _begin();
+    for (var i = 0; i < _score.masterBars.length; i++) {
+      final mb = _score.masterBars[i];
+      if (!mb.nudges.containsKey('system')) continue;
+      _score.masterBars[i] = mb.copyWith(nudges: {...mb.nudges}..remove('system'));
+    }
+    _done();
+  }
+
   /// Umbruch nach Takt [bar] setzen (0 automatisch, 1 neue Zeile, 2 neue Seite, −1 mit dem nächsten zusammen).
   void setBreak(int bar, int kind) {
     if (bar < 0 || bar >= _score.masterBars.length || _score.masterBars[bar].breakAfter == kind) return;

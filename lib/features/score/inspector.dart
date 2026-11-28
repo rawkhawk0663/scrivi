@@ -129,6 +129,17 @@ class Inspector extends StatelessWidget {
       _title(context, tr('Stück', 'Piece')),
       _row(context, tr('Titel', 'Title'), info.title.isEmpty ? '–' : info.title, onTap: host.editTitle),
       _row(context, tr('Interpret', 'Artist'), info.artist.isEmpty ? '–' : info.artist, onTap: host.editTitle),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: host.editTitle,
+            icon: const Icon(Icons.edit_outlined, size: 16),
+            label: Text(tr('Angaben zum Stück …', 'Piece information …')),
+          ),
+        ),
+      ),
       _row(context, tr('Takte', 'Bars'), '${e.score.masterBars.length}'),
       if (p != null) _row(context, tr('Dauer', 'Length'), formatTime(p.plan.duration)),
       if (p != null) _slider(context, tr('Hall', 'Reverb'), p.reverb, 0, 1, p.setReverb, reverbText(p.reverb)),

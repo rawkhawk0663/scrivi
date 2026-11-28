@@ -1,31 +1,51 @@
 import 'package:flutter/material.dart';
 
-import '../../app/l10n.dart';
+import '../../app/device_settings.dart';
 import '../../app/theme.dart';
 import 'tools.dart';
 
-/// Leiste unter der Zeile, in der man schreibt: Reiter für die Gruppen
-/// (Wert, Vorzeichen, Ausdruck, Gitarre, Finger, Takt, Text) und darunter deren Werkzeuge. Ein
-/// kleiner Pfeil zeigt auf die Stelle des Cursors. So muss man mit Maus oder
-/// Stift nicht zur Werkzeugspalte am Rand.
+/// Wo die Leiste steht und wohin ihr Pfeil zeigt.
+enum StripSide {
+  /// Unter dem Cursor (Pfeil oben).
+  below,
+
+  /// Über dem Cursor (Pfeil unten).
+  above,
+
+  /// Rechts neben dem Cursor (Pfeil links).
+  right,
+
+  /// Links neben dem Cursor (Pfeil rechts).
+  left,
+}
+
+/// Leiste beim Cursor: alle Gruppen (Noten, Ausdruck, Gitarre, Finger, Takt, Text …)
+/// untereinander, jede auf- und zuklappbar. Ein kleiner Pfeil zeigt auf die Stelle des
+/// Cursors. So muss man mit Maus oder Stift nicht zur Werkzeugspalte am Rand.
 class CursorStrip extends StatefulWidget {
-  const CursorStrip({super.key, required this.host, required this.arrowX, required this.above});
+  const CursorStrip({
+    super.key,
+    required this.host,
+    required this.side,
+    required this.arrowAt,
+    required this.maxHeight,
+    required this.width,
+  });
 
   final ToolHost host;
+  final StripSide side;
 
-  /// Lage des Pfeils (waagrecht, in der Leiste) und ob die Leiste über der Zeile steht.
-  final double arrowX;
-  final bool above;
+  /// Lage des Pfeils entlang der Kante (waagrecht bei unter/über, senkrecht bei neben).
+  final double arrowAt;
+  final double maxHeight;
+  final double width;
 
-  static const width = 560.0;
-  static const height = 120.0;
-
-  /// Zuletzt gewählter Reiter (gilt für alle Stücke, solange Scrivi läuft).
-  static ToolGroup group = ToolGroup.duration;
+  /// Breite unter dem Cursor bzw. daneben.
+  static const wideWidth = 560.0;
+  static const narrowWidth = 7 * (ToolButton.size + 4) + 20;
 
   static const groups = [
-    ToolGroup.duration,
-    ToolGroup.accidental,
+    ToolGroup.notes,
     ToolGroup.expression,
     ToolGroup.guitar,
     ToolGroup.drums,
@@ -39,10 +59,28 @@ class CursorStrip extends StatefulWidget {
 }
 
 class _CursorStripState extends State<CursorStrip> {
+  /// Ohne Einstellungen (Tests): nur hier gemerkt.
+  Set<String> _local = {'notes'};
+
+  DeviceSettings? get _settings => context.getInheritedWidgetOfExactType<SettingsScope>()?.settings;
+
+  Set<String> get _open => _settings?.stripGroups.value ?? _local;
+
+  void _toggle(ToolGroup g) {
+    final open = {..._open};
+    if (!open.remove(g.name)) open.add(g.name);
+    final s = _settings;
+    if (s != null) {
+      s.setStripGroups(open);
+    } else {
+      _local = open;
+    }
+    setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = context.scrivi;
-    final scheme = Theme.of(context).colorScheme;
     final e = widget.host.editor;
     final groups = [
       for (final g in CursorStrip.groups)
@@ -54,16 +92,24 @@ class _CursorStripState extends State<CursorStrip> {
         })
           g,
     ];
-    var group = CursorStrip.group;
-    if (!groups.contains(group)) group = groups.first;
-    final tools = [
-      for (final t in allTools)
-        if (t.group == group && t.fits(e)) t,
-    ];
+    final open = _open;
+    final side = widget.side;
+    final vertical = side == StripSide.below || side == StripSide.above;
+    final length = vertical ? widget.width : widget.maxHeight;
+    final at = widget.arrowAt.clamp(18.0, length - 18);
     final arrow = Positioned(
-      left: (widget.arrowX - 8).clamp(14.0, CursorStrip.width - 30),
-      top: widget.above ? null : -8,
-      bottom: widget.above ? -8 : null,
+      left: switch (side) {
+        StripSide.right => -8,
+        StripSide.left => null,
+        _ => at - 8,
+      },
+      right: side == StripSide.left ? -8 : null,
+      top: switch (side) {
+        StripSide.below => -8,
+        StripSide.above => null,
+        _ => at - 8,
+      },
+      bottom: side == StripSide.above ? -8 : null,
       child: Transform.rotate(
         angle: 0.785398,
         child: Container(
@@ -71,69 +117,65 @@ class _CursorStripState extends State<CursorStrip> {
           height: 15,
           decoration: BoxDecoration(
             color: c.card,
-            border: widget.above
-                ? Border(
-                    right: BorderSide(color: c.line),
-                    bottom: BorderSide(color: c.line),
-                  )
-                : Border(
-                    left: BorderSide(color: c.line),
-                    top: BorderSide(color: c.line),
-                  ),
+            border: switch (side) {
+              StripSide.below => Border(
+                left: BorderSide(color: c.line),
+                top: BorderSide(color: c.line),
+              ),
+              StripSide.above => Border(
+                right: BorderSide(color: c.line),
+                bottom: BorderSide(color: c.line),
+              ),
+              StripSide.right => Border(
+                left: BorderSide(color: c.line),
+                bottom: BorderSide(color: c.line),
+              ),
+              StripSide.left => Border(
+                right: BorderSide(color: c.line),
+                top: BorderSide(color: c.line),
+              ),
+            },
           ),
         ),
       ),
     );
     return SizedBox(
-      width: CursorStrip.width,
+      width: widget.width,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          Material(
-            color: c.card,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
-              side: BorderSide(color: c.line),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      for (final g in groups)
+          ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: widget.maxHeight),
+            child: Material(
+              color: c.card,
+              clipBehavior: Clip.antiAlias,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+                side: BorderSide(color: c.line),
+              ),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (final g in groups) ...[
+                      _header(g, open.contains(g.name), c),
+                      if (open.contains(g.name))
                         Padding(
-                          padding: const EdgeInsets.only(right: 2),
-                          child: TextButton(
-                            style: TextButton.styleFrom(
-                              minimumSize: const Size(0, 30),
-                              padding: const EdgeInsets.symmetric(horizontal: 12),
-                              backgroundColor: g == group ? scheme.primary : null,
-                              foregroundColor: g == group ? scheme.onPrimary : scheme.onSurface,
-                              textStyle: TextStyle(
-                                fontSize: 13,
-                                fontWeight: g == group ? FontWeight.w600 : FontWeight.w400,
-                              ),
-                            ),
-                            onPressed: () => setState(() => CursorStrip.group = g),
-                            child: Text(switch (g) {
-                              ToolGroup.duration => tr('Wert', 'Value'),
-                              ToolGroup.finger => tr('Finger', 'Fingers'),
-                              _ => g.label,
-                            }),
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Wrap(
+                            spacing: 4,
+                            runSpacing: 4,
+                            children: [
+                              for (final t in allTools)
+                                if (t.group == g && t.fits(e)) ToolButton(tool: t, host: widget.host),
+                            ],
                           ),
                         ),
                     ],
-                  ),
-                  const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 4,
-                    runSpacing: 4,
-                    children: [for (final t in tools) ToolButton(tool: t, host: widget.host)],
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -142,4 +184,23 @@ class _CursorStripState extends State<CursorStrip> {
       ),
     );
   }
+
+  /// Name der Gruppe mit Pfeil zum Auf- und Zuklappen.
+  Widget _header(ToolGroup g, bool open, ScriviColors c) => InkWell(
+    borderRadius: BorderRadius.circular(8),
+    onTap: () => _toggle(g),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        children: [
+          Icon(open ? Icons.expand_more_rounded : Icons.chevron_right_rounded, size: 18, color: c.muted),
+          const SizedBox(width: 4),
+          Text(
+            g.label.toUpperCase(),
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 0.8, color: c.muted),
+          ),
+        ],
+      ),
+    ),
+  );
 }
