@@ -67,6 +67,11 @@ GLYPHS = [
     'fingering0', 'fingering1', 'fingering2', 'fingering3', 'fingering4', 'fingering5', 'fingering6',
     'fingeringTUpper', 'fingeringPLower', 'fingeringILower', 'fingeringMLower', 'fingeringALower',
     'fingeringCLower', 'keyboardPedalPed', 'keyboardPedalUp',
+    # Akkordsymbole
+    'csymAccidentalFlat', 'csymAccidentalSharp', 'csymAccidentalNatural', 'csymAccidentalDoubleFlat',
+    'csymAccidentalDoubleSharp', 'csymMajorSeventh', 'csymMinor', 'csymDiminished', 'csymHalfDiminished',
+    'csymAugmented', 'csymParensLeftTall', 'csymParensRightTall', 'csymParensLeftVeryTall',
+    'csymParensRightVeryTall',
 ]
 
 

@@ -422,6 +422,9 @@ Wunsch des Besitzers: die Schreibweise der Akkordsymbole selbst wählen. Pro St�
 Septime, Wörter oder Zeichen für vermindert/übermässig/halbvermindert, ♯/♭ oder +/−, Klammern,
 Zusätze hochgestellt, SUS/ADD gross, „sus4“ oder „sus“, Grundtöne B oder H, Griffbilder ein/aus.
 Scrivi zerlegt die getippten Namen und schreibt sie einheitlich; unbekannte bleiben, wie sie sind.
+Zweite Runde (28. November 2026): alle Einstellungen wie auf dem Bild des Besitzers (Darstellung mit
+Griffbildern über den Noten, Dreiklänge, grosse Septime, veränderte Töne gestapelt oder linear, Wörter,
++ ° ø, Grundton, Klammern, Sprache), Zeichen aus Bravura, hochgestellte Spannungstöne.
 
 ### Seitenlayout (Wunsch vom 27. November 2026, geplant)
 

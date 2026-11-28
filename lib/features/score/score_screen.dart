@@ -25,6 +25,7 @@ import '../../core/files/score_files.dart';
 import '../../widgets/visuals.dart';
 import '../settings/settings_screen.dart';
 
+import 'chord_style_dialog.dart';
 import 'cursor_strip.dart';
 import 'edit_tools.dart';
 import 'export_dialog.dart';

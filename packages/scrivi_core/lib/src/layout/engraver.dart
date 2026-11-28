@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import '../model/chord_library.dart';
 import '../model/chord_symbol.dart';
+import 'chord_draw.dart';
 import '../model/fraction.dart';
 import '../model/pitch.dart';
 import '../edit/editor.dart';
@@ -626,6 +627,7 @@ class Engraver {
         if (e.beat.chordId != null) {
           // Akkordnamen dürfen etwas überstehen, aber nicht zu viel.
           w = math.max(w, _chordWidth(_chordParts(e.beat.chordId!), _chordSize) * 0.85);
+          if (_inlineDiagrams) w = math.max(w, (_track.staff.stringCount - 1) * _inlineSs + 1.6);
         }
         if (e.beat.lyrics.isNotEmpty) {
           w = math.max(w, measurer.width(e.beat.lyrics.first, TextRole.lyrics, _lyricsSize) + 0.6);
@@ -1236,8 +1238,10 @@ class Engraver {
     final items = page.items;
     final n = d.stringCount;
     final gridW = (n - 1) * ss;
-    items.add(TextItem(name, gx + gridW / 2, y + 1.1, TextRole.chord, nameSize, align: TextAlign.center, bold: true));
-    final gy = y + 2.6;
+    if (name.isNotEmpty) {
+      items.add(TextItem(name, gx + gridW / 2, y + 1.1, TextRole.chord, nameSize, align: TextAlign.center, bold: true));
+    }
+    final gy = y + (name.isEmpty ? 1.1 : 2.6);
     final pressed = d.frets.where((f) => f > 0);
     final maxF = pressed.isEmpty ? 0 : pressed.reduce(math.max);
     final minF = pressed.isEmpty ? 1 : pressed.reduce(math.min);
@@ -1295,18 +1299,21 @@ class Engraver {
     return ChordSymbol.format(name, score.chordStyle, germanNames: options.germanNoteNames);
   }
 
-  String _chordName(int id) => _chordParts(id).map((p) => p.text).join();
+  String _chordName(int id) =>
+      _chordParts(id).map((p) => p.stack == null ? p.text : '(${p.stack!.reversed.join(',')})').join();
 
-  /// Breite eines Akkordsymbols (hochgestellte Teile kleiner).
-  double _chordWidth(List<ChordPart> parts, double size) {
-    var w = 0.0;
-    for (final p in parts) {
-      w += measurer.width(p.text, TextRole.chord, p.raised ? size * _raisedScale : size, bold: true);
-    }
-    return w;
+  /// Breite eines Akkordsymbols, wie es gezeichnet wird.
+  double _chordWidth(List<ChordPart> parts, double size) => drawChord(parts, 0, 0, size, measurer).width;
+
+  /// Griffbilder über den Noten (statt bzw. zusätzlich zum Namen)?
+  bool get _inlineDiagrams {
+    final st = score.chordStyle;
+    return st.show != 0 && (!st.diagramsStringedOnly || _track.staff.isStringed);
   }
 
-  static const _raisedScale = 0.7;
+  /// Masse der kleinen Griffbilder über den Noten: Saiten- und Bundabstand, Bünde, Höhe.
+  static const _inlineSs = 0.55, _inlineFs = 0.62, _inlineFrets = 4;
+  static const _inlineH = 1.1 + _inlineFrets * _inlineFs + 0.35;
 
   String _fretText(Note n, bool parens) {
     var t = n.dead ? 'x' : '${n.fret}';
@@ -2357,42 +2364,67 @@ class _SystemBuilder {
       _voltas(vy);
       rowTop = math.min(top, vy - 1.0);
     }
-    // Akkordsymbole
+    // Akkordsymbole (und auf Wunsch kleine Griffbilder darüber)
     final chordEvs = events.where((ev) => ev.voice == 0 && ev.beat.chordId != null).toList();
     if (chordEvs.isNotEmpty) {
-      final y = rowTop - 0.9;
+      final style = e.score.chordStyle;
+      final withDiagrams = e._inlineDiagrams;
+      final showText = !withDiagrams || style.show == 2;
+      // Griffbilder stehen unten in der Reihe, die Namen darüber
+      final diagTop = rowTop - 0.7 - Engraver._inlineH;
+      final y = withDiagrams ? diagTop - 0.7 : rowTop - 0.9;
       var lastEnd = -double.infinity;
+      var newTop = withDiagrams ? diagTop : rowTop;
       for (final ev in chordEvs) {
         final parts = e._chordParts(ev.beat.chordId!);
         if (parts.isEmpty) continue;
+        final def = track.chords[ev.beat.chordId!];
+        final diagram = withDiagrams && def != null ? e._diagramFor(def) : null;
         var base = ev.x;
         if (base < lastEnd + 0.6) base = lastEnd + 0.6;
         final n = ev.beat.nudges['chord'] ?? Nudge.zero;
         final x0 = base + n.dx, cy = y + n.dy;
-        var x = x0;
+        var right = x0, hTop = double.infinity, hBottom = -double.infinity;
         _nudge = n;
-        for (final p in parts) {
-          final size = p.raised ? _chordSize * Engraver._raisedScale : _chordSize;
-          text(p.text, x, p.raised ? cy - _chordSize * 0.42 : cy, TextRole.chord, size, bold: true);
-          x += tw(p.text, TextRole.chord, size, bold: true);
+        if (showText || diagram == null) {
+          final d = drawChord(parts, x0, cy, _chordSize, e.measurer);
+          for (final it in d.items) {
+            add(it);
+          }
+          right = x0 + d.width;
+          hTop = d.top;
+          hBottom = cy + _chordSize * 0.25;
+          newTop = math.min(newTop, d.top - n.dy);
+        }
+        if (diagram != null) {
+          final tmp = PageDisplay(0, 0);
+          final gx = x0 + 0.3;
+          final top = diagTop + n.dy;
+          e._diagram(tmp, '', diagram, gx, top, 1.0, Engraver._inlineSs, Engraver._inlineFs, Engraver._inlineFrets);
+          for (final it in tmp.items) {
+            add(it);
+          }
+          right = math.max(right, gx + (diagram.stringCount - 1) * Engraver._inlineSs);
+          hTop = math.min(hTop, top);
+          hBottom = math.max(hBottom, top + Engraver._inlineH);
         }
         _nudge = Nudge.zero;
-        lastEnd = base + (x - x0);
+        lastEnd = base + (right - x0);
         handles.add(
           Engraver.handleFor(
             _beatRef(ev, 'chord'),
-            '${_de ? 'Akkord' : 'Chord'} ${parts.map((p) => p.text).join()}',
+            '${_de ? 'Akkord' : 'Chord'} ${parts.map((p) => p.stack?.join('/') ?? p.text).join()}',
             x0,
-            cy - _chordSize * 0.8 - (parts.any((p) => p.raised) ? _chordSize * 0.3 : 0),
-            x,
-            cy + _chordSize * 0.25,
+            hTop,
+            right,
+            hBottom,
             ev.x,
             _lineTop,
             n,
           ),
         );
       }
-      rowTop = y - _chordSize * 0.8;
+      rowTop = newTop;
     }
     // Freier Text, Sprungzeichen
     final textEvs = events.where((ev) => ev.voice == 0 && ev.beat.text != null).toList();

@@ -4,129 +4,273 @@ library;
 /// Wie Akkordsymbole im Stück geschrieben werden (gehört zum Stück, steht in der Datei).
 class ChordStyle {
   const ChordStyle({
-    this.minor = 'm',
-    this.major7 = 'maj7',
-    this.plusMinus = false,
-    this.raised = false,
-    this.parentheses = false,
-    this.upperWords = false,
-    this.showSus4 = true,
-    this.symbols = false,
-    this.dimSeven = true,
-    this.rootNames = 0,
+    this.show = 0,
+    this.diagramsStringedOnly = true,
     this.diagrams = true,
+    this.triads = 0,
+    this.major7 = 2,
+    this.plusMinus = false,
+    this.accAfter = false,
+    this.moveAlts = true,
+    this.moveAlways = false,
+    this.stacked = true,
+    this.invertOrder = false,
+    this.raised = true,
+    this.upperWords = false,
+    this.noInsteadOfOmit = false,
+    this.showSus4 = true,
+    this.symbols = true,
+    this.symbolsRaised = true,
+    this.dimSeven = true,
+    this.augBefore = true,
+    this.rootAccRaised = false,
+    this.parenAlts = true,
+    this.parenMin = 1,
+    this.parenWords = true,
+    this.parenMinMaj7 = true,
+    this.rootNames = 0,
   });
 
-  /// Moll: „m“, „mi“, „min“ oder „-“.
-  final String minor;
+  /// Was über den Noten steht: 0 nur der Name, 1 nur das Griffbild, 2 Name und Griffbild.
+  final int show;
 
-  /// Grosse Septime: „maj7“, „ma7“, „M7“, „Δ7“ oder „Δ“.
-  final String major7;
+  /// Griffbilder über den Noten nur bei Saiteninstrumenten.
+  final bool diagramsStringedOnly;
 
-  /// Veränderte Töne mit + und − statt ♯ und ♭ (C7+5, C7−9).
+  /// Übersicht der Griffbilder oben auf der ersten Seite.
+  final bool diagrams;
+
+  /// Dur/Moll: Index in [triadOptions].
+  final int triads;
+
+  /// Grosse Septime: Index in [major7Options].
+  final int major7;
+
+  /// Veränderte Töne mit + und − statt ♯ und ♭; [accAfter]: ♯/♭ hinter der Zahl (9♭).
   final bool plusMinus;
+  final bool accAfter;
 
-  /// Zusätze (7, 9, sus4, ♭9 …) klein und hochgestellt.
+  /// Veränderte Töne ans Ende des Akkords: wenn sie gleich nach dem Grundton kämen bzw. [moveAlways] immer.
+  final bool moveAlts;
+  final bool moveAlways;
+
+  /// Mehrere veränderte Töne übereinander ([invertOrder]: der tiefste oben) statt nebeneinander.
+  final bool stacked;
+  final bool invertOrder;
+
+  /// Zahlen und Zusätze (7, 9, sus4, ♭9 …) klein und hochgestellt.
   final bool raised;
 
-  /// Veränderte Töne in Klammern: C7(♭9).
-  final bool parentheses;
-
-  /// SUS, ADD, NO statt sus, add, no.
+  /// SUS, ADD, OMIT statt sus, add, omit; „no“ statt „omit“; „sus4“ statt „sus“.
   final bool upperWords;
-
-  /// „sus4“ statt nur „sus“.
+  final bool noInsteadOfOmit;
   final bool showSus4;
 
-  /// Zeichen statt Wörter: + ° ø statt aug, dim, m7♭5.
+  /// Zeichen statt Wörter: + ° ø statt aug, dim, m7♭5; [symbolsRaised]: klein und hochgestellt.
   final bool symbols;
+  final bool symbolsRaised;
 
   /// Bei vermindert und halbvermindert die 7 zeigen (C°7, Cø7).
   final bool dimSeven;
 
+  /// Übermässig vor der Zahl (Caug7, C+7) statt danach (C7aug, C7+).
+  final bool augBefore;
+
+  /// Vorzeichen des Grundtons hochgestellt.
+  final bool rootAccRaised;
+
+  /// Klammern um veränderte Töne/Zusätze ab [parenMin] Stück; um sus/add/omit; um maj7 bei Moll.
+  final bool parenAlts;
+  final int parenMin;
+  final bool parenWords;
+  final bool parenMinMaj7;
+
   /// Namen der Grundtöne: 0 nach der Sprache, 1 immer international (B), 2 immer deutsch (H).
   final int rootNames;
 
-  /// Griffbilder oben auf der ersten Seite.
-  final bool diagrams;
-
   static const standard = ChordStyle();
+
+  /// Dur/Moll: (Wort für Dur, Wort für Moll, hochgestellt). Dur-Dreiklänge bleiben ohne Zusatz;
+  /// das Dur-Wort erscheint nur, wo es nötig ist (Moll mit grosser Septime).
+  static const triadOptions = <(String, String, bool)>[
+    ('maj', 'm', false), // C / Cm
+    ('ma', 'mi', false), // Cma / Cmi
+    ('MA', 'MI', false), // CMA / CMI
+    ('maj', 'min', false), // Cmaj / Cmin
+    ('M', 'm', false), // CM / Cm
+    ('M', 'm', true), // CM / Cm hochgestellt
+    ('Δ', '−', false), // CΔ / C−
+    ('Δ', '−', true), // CΔ / C− hochgestellt
+  ];
+
+  /// Grosse Septime: (Text, hochgestellt). Ohne „7“ (CΔ) steht die Zahl nur bei 9, 11, 13.
+  static const major7Options = <(String, bool)>[
+    ('ma7', false),
+    ('MA7', false),
+    ('maj7', false),
+    ('M7', false),
+    ('M7', true),
+    ('Δ', false),
+    ('Δ', true),
+    ('Δ7', false),
+    ('Δ7', true),
+  ];
 
   bool get isStandard => toJson().isEmpty;
 
   ChordStyle copyWith({
-    String? minor,
-    String? major7,
+    int? show,
+    bool? diagramsStringedOnly,
+    bool? diagrams,
+    int? triads,
+    int? major7,
     bool? plusMinus,
+    bool? accAfter,
+    bool? moveAlts,
+    bool? moveAlways,
+    bool? stacked,
+    bool? invertOrder,
     bool? raised,
-    bool? parentheses,
     bool? upperWords,
+    bool? noInsteadOfOmit,
     bool? showSus4,
     bool? symbols,
+    bool? symbolsRaised,
     bool? dimSeven,
+    bool? augBefore,
+    bool? rootAccRaised,
+    bool? parenAlts,
+    int? parenMin,
+    bool? parenWords,
+    bool? parenMinMaj7,
     int? rootNames,
-    bool? diagrams,
   }) => ChordStyle(
-    minor: minor ?? this.minor,
+    show: show ?? this.show,
+    diagramsStringedOnly: diagramsStringedOnly ?? this.diagramsStringedOnly,
+    diagrams: diagrams ?? this.diagrams,
+    triads: triads ?? this.triads,
     major7: major7 ?? this.major7,
     plusMinus: plusMinus ?? this.plusMinus,
+    accAfter: accAfter ?? this.accAfter,
+    moveAlts: moveAlts ?? this.moveAlts,
+    moveAlways: moveAlways ?? this.moveAlways,
+    stacked: stacked ?? this.stacked,
+    invertOrder: invertOrder ?? this.invertOrder,
     raised: raised ?? this.raised,
-    parentheses: parentheses ?? this.parentheses,
     upperWords: upperWords ?? this.upperWords,
+    noInsteadOfOmit: noInsteadOfOmit ?? this.noInsteadOfOmit,
     showSus4: showSus4 ?? this.showSus4,
     symbols: symbols ?? this.symbols,
+    symbolsRaised: symbolsRaised ?? this.symbolsRaised,
     dimSeven: dimSeven ?? this.dimSeven,
+    augBefore: augBefore ?? this.augBefore,
+    rootAccRaised: rootAccRaised ?? this.rootAccRaised,
+    parenAlts: parenAlts ?? this.parenAlts,
+    parenMin: parenMin ?? this.parenMin,
+    parenWords: parenWords ?? this.parenWords,
+    parenMinMaj7: parenMinMaj7 ?? this.parenMinMaj7,
     rootNames: rootNames ?? this.rootNames,
-    diagrams: diagrams ?? this.diagrams,
   );
 
-  static const minors = ['m', 'mi', 'min', '-'];
-  static const major7s = ['maj7', 'ma7', 'M7', 'Δ7', 'Δ'];
-
   /// Nur was vom Grundwert abweicht (für die Datei).
-  Map<String, dynamic> toJson() => {
-    if (minor != 'm') 'minor': minor,
-    if (major7 != 'maj7') 'major7': major7,
-    if (plusMinus) 'plusMinus': true,
-    if (raised) 'raised': true,
-    if (parentheses) 'parentheses': true,
-    if (upperWords) 'upperWords': true,
-    if (!showSus4) 'showSus4': false,
-    if (symbols) 'symbols': true,
-    if (!dimSeven) 'dimSeven': false,
-    if (rootNames != 0) 'rootNames': rootNames,
-    if (!diagrams) 'diagrams': false,
-  };
+  Map<String, dynamic> toJson() {
+    const d = standard;
+    return {
+      if (show != d.show) 'show': show,
+      if (diagramsStringedOnly != d.diagramsStringedOnly) 'diagramsStringedOnly': diagramsStringedOnly,
+      if (diagrams != d.diagrams) 'diagrams': diagrams,
+      if (triads != d.triads) 'triads': triads,
+      if (major7 != d.major7) 'major7Style': major7,
+      if (plusMinus != d.plusMinus) 'plusMinus': plusMinus,
+      if (accAfter != d.accAfter) 'accAfter': accAfter,
+      if (moveAlts != d.moveAlts) 'moveAlts': moveAlts,
+      if (moveAlways != d.moveAlways) 'moveAlways': moveAlways,
+      if (stacked != d.stacked) 'stacked': stacked,
+      if (invertOrder != d.invertOrder) 'invertOrder': invertOrder,
+      if (raised != d.raised) 'raised': raised,
+      if (upperWords != d.upperWords) 'upperWords': upperWords,
+      if (noInsteadOfOmit != d.noInsteadOfOmit) 'noInsteadOfOmit': noInsteadOfOmit,
+      if (showSus4 != d.showSus4) 'showSus4': showSus4,
+      if (symbols != d.symbols) 'symbols': symbols,
+      if (symbolsRaised != d.symbolsRaised) 'symbolsRaised': symbolsRaised,
+      if (dimSeven != d.dimSeven) 'dimSeven': dimSeven,
+      if (augBefore != d.augBefore) 'augBefore': augBefore,
+      if (rootAccRaised != d.rootAccRaised) 'rootAccRaised': rootAccRaised,
+      if (parenAlts != d.parenAlts) 'parenAlts': parenAlts,
+      if (parenMin != d.parenMin) 'parenMin': parenMin,
+      if (parenWords != d.parenWords) 'parenWords': parenWords,
+      if (parenMinMaj7 != d.parenMinMaj7) 'parenMinMaj7': parenMinMaj7,
+      if (rootNames != d.rootNames) 'rootNames': rootNames,
+    };
+  }
 
   static ChordStyle fromJson(Object? j) {
     if (j is! Map) return standard;
-    String pick(Object? v, List<String> allowed, String fallback) => allowed.contains(v) ? v as String : fallback;
-    bool flag(Object? v, bool fallback) => v is bool ? v : fallback;
-    final r = j['rootNames'];
+    const d = standard;
+    bool flag(String k, bool fallback) => j[k] is bool ? j[k] as bool : fallback;
+    int number(String k, int fallback, int max) {
+      final v = j[k];
+      return v is int && v >= 0 && v <= max ? v : fallback;
+    }
+
+    // Frühere Schreibweise der Einstellungen (Moll und grosse Septime als Text)
+    final oldMinor = switch (j['minor']) {
+      'mi' => 1,
+      'min' => 3,
+      '-' => 6,
+      _ => null,
+    };
+    final oldMajor7 = switch (j['major7']) {
+      'ma7' => 0,
+      'M7' => 3,
+      'Δ7' => 7,
+      'Δ' => 5,
+      _ => null,
+    };
     return ChordStyle(
-      minor: pick(j['minor'], minors, 'm'),
-      major7: pick(j['major7'], major7s, 'maj7'),
-      plusMinus: flag(j['plusMinus'], false),
-      raised: flag(j['raised'], false),
-      parentheses: flag(j['parentheses'], false),
-      upperWords: flag(j['upperWords'], false),
-      showSus4: flag(j['showSus4'], true),
-      symbols: flag(j['symbols'], false),
-      dimSeven: flag(j['dimSeven'], true),
-      rootNames: r is int && r >= 0 && r <= 2 ? r : 0,
-      diagrams: flag(j['diagrams'], true),
+      show: number('show', d.show, 2),
+      diagramsStringedOnly: flag('diagramsStringedOnly', d.diagramsStringedOnly),
+      diagrams: flag('diagrams', d.diagrams),
+      triads: number('triads', oldMinor ?? d.triads, triadOptions.length - 1),
+      major7: number('major7Style', oldMajor7 ?? d.major7, major7Options.length - 1),
+      plusMinus: flag('plusMinus', d.plusMinus),
+      accAfter: flag('accAfter', d.accAfter),
+      moveAlts: flag('moveAlts', d.moveAlts),
+      moveAlways: flag('moveAlways', d.moveAlways),
+      stacked: flag('stacked', d.stacked),
+      invertOrder: flag('invertOrder', d.invertOrder),
+      raised: flag('raised', d.raised),
+      upperWords: flag('upperWords', d.upperWords),
+      noInsteadOfOmit: flag('noInsteadOfOmit', d.noInsteadOfOmit),
+      showSus4: flag('showSus4', d.showSus4),
+      symbols: flag('symbols', d.symbols),
+      symbolsRaised: flag('symbolsRaised', d.symbolsRaised),
+      dimSeven: flag('dimSeven', d.dimSeven),
+      augBefore: flag('augBefore', d.augBefore),
+      rootAccRaised: flag('rootAccRaised', d.rootAccRaised),
+      parenAlts: flag('parenAlts', d.parenAlts),
+      parenMin: number('parenMin', d.parenMin, 9).clamp(1, 9),
+      parenWords: flag('parenWords', d.parenWords),
+      parenMinMaj7: flag('parenMinMaj7', d.parenMinMaj7),
+      rootNames: number('rootNames', d.rootNames, 2),
     );
   }
 }
 
-/// Ein Stück eines geschriebenen Akkordsymbols; [raised] = klein und hochgestellt.
+/// Ein Stück eines geschriebenen Akkordsymbols: [raised] = klein und hochgestellt;
+/// [stack] = Zeilen übereinander (oberste zuerst); [parens] = hohe Klammern um den Stapel.
 class ChordPart {
-  const ChordPart(this.text, {this.raised = false});
+  const ChordPart(this.text, {this.raised = false, this.stack, this.parens = false});
   final String text;
   final bool raised;
+  final List<String>? stack;
+  final bool parens;
 
   @override
-  String toString() => raised ? '^$text' : text;
+  String toString() {
+    if (stack != null) return parens ? '([${stack!.join('|')}])' : '[${stack!.join('|')}]';
+    return raised ? '^$text' : text;
+  }
 }
 
 /// Ein zerlegter Akkordname.
@@ -185,7 +329,7 @@ class ChordSymbol {
     }
 
     String? number() {
-      final n = RegExp(r'^(69|6/9|13|11|9|7|6|5|4|2)').firstMatch(s);
+      final n = RegExp(r'^(69|6/9|13|11|9|7|6|5|4|3|2)').firstMatch(s);
       if (n == null) return null;
       s = s.substring(n[0]!.length);
       return n[0]!.replaceAll('/', '');
@@ -285,70 +429,133 @@ class ChordSymbol {
     return '$letter${a == 1 ? '♯' : (a == -1 ? '♭' : '')}';
   }
 
-  /// Teile zum Zeichnen: der Grundton in voller Grösse, der Rest nach [style].
+  /// Teile zum Zeichnen nach [style].
   List<ChordPart> parts(ChordStyle style, {bool germanNames = false}) {
     final german = style.rootNames == 2 || (style.rootNames == 0 && germanNames);
-    final out = <ChordPart>[ChordPart(_note(root, rootAcc, german))];
-    final word = style.upperWords ? (String w) => w.toUpperCase() : (String w) => w;
-    // Art und Septime auf der Grundlinie bzw. hochgestellt
-    var base = '';
-    final high = <String>[];
-    switch (kind) {
-      case 'power':
-        high.add('5');
-      case 'dim':
-        base = style.symbols ? '°' : word('dim');
-        if (ext == '7' && (style.dimSeven || !style.symbols)) high.add('7');
-      case 'half':
-        if (style.symbols) {
-          base = 'ø';
-          if (style.dimSeven) high.add('7');
-        } else {
-          base = style.minor == '-' ? '−' : style.minor;
-          high.addAll(['7', style.plusMinus ? '−5' : '♭5']);
-        }
-      case 'aug':
-        base = style.symbols ? '+' : word('aug');
-        if (ext.isNotEmpty) high.add(ext);
-      default:
-        if (minor) base = style.minor == '-' ? '−' : style.minor;
-        if (major7) {
-          final m7 = style.major7;
-          final symbol = m7.startsWith('Δ');
-          final word7 = symbol ? 'Δ' : m7.replaceAll('7', '');
-          final number = ext == '7' ? (m7 == 'Δ' ? '' : '7') : ext;
-          // Moll mit grosser Septime: das Septim-Zeichen in Klammern, damit es nicht wie zwei Akkorde aussieht
-          high.add(minor ? '($word7$number)' : '$word7$number');
-        } else if (ext.isNotEmpty) {
-          high.add(ext == '69' ? '6/9' : ext);
-        }
-    }
-    if (sus.isNotEmpty) high.add(word('sus') + (sus == '2' || style.showSus4 ? sus : ''));
-    for (final a in adds) {
-      high.add('${word('add')}$a');
-    }
-    final alt = <String>[
-      for (final (d, n) in alts)
-        if (d == 0) 'alt' else '${d > 0 ? (style.plusMinus ? '+' : '♯') : (style.plusMinus ? '−' : '♭')}$n',
-    ];
-    for (final o in omits) {
-      high.add('${word('no')}$o');
-    }
-    if (alt.isNotEmpty) high.add(style.parentheses ? '(${alt.join(',')})' : alt.join());
-    if (base.isNotEmpty) out.add(ChordPart(base, raised: style.raised && (base == '°' || base == 'ø' || base == '+')));
-    final rest = high.join();
-    if (rest.isNotEmpty) out.add(ChordPart(rest, raised: style.raised));
-    if (bass != null) out.add(ChordPart('/${_note(bass!, bassAcc, german)}'));
-    // Benachbarte Teile gleicher Lage zusammenfassen
-    final merged = <ChordPart>[];
-    for (final p in out) {
-      if (merged.isNotEmpty && merged.last.raised == p.raised) {
-        merged[merged.length - 1] = ChordPart(merged.last.text + p.text, raised: p.raised);
+    final out = <ChordPart>[];
+    // Steht nach dem Grundton schon etwas? (dann kommen Wörter in Klammern)
+    var rootDone = false, suffix = false;
+    void put(String t, {bool raised = false}) {
+      if (t.isEmpty) return;
+      if (rootDone) suffix = true;
+      if (out.isNotEmpty && out.last.stack == null && out.last.raised == raised) {
+        out[out.length - 1] = ChordPart(out.last.text + t, raised: raised);
       } else {
-        merged.add(p);
+        out.add(ChordPart(t, raised: raised));
       }
     }
-    return merged;
+
+    // Grundton (Vorzeichen auf Wunsch hochgestellt)
+    final rootName = _note(root, rootAcc, german);
+    if (style.rootAccRaised && rootName.length > 1) {
+      put(rootName.substring(0, 1));
+      put(rootName.substring(1), raised: true);
+    } else {
+      put(rootName);
+    }
+    rootDone = true;
+    final hi = style.raised;
+    String word(String w) => style.upperWords ? w.toUpperCase() : w;
+    final (majorWord, minorWord, triadRaised) = ChordStyle.triadOptions[style.triads];
+    final (m7Text, m7Raised) = ChordStyle.major7Options[style.major7];
+    final symRaised = style.symbols && style.symbolsRaised;
+    // Art und Stufe
+    switch (kind) {
+      case 'power':
+        put('5', raised: hi);
+      case 'dim':
+        if (style.symbols) {
+          put('°', raised: symRaised);
+          if (ext == '7' && style.dimSeven) put('7', raised: hi || symRaised);
+        } else {
+          put(word('dim'));
+          if (ext == '7') put('7', raised: hi);
+        }
+      case 'half':
+        if (style.symbols) {
+          put('ø', raised: symRaised);
+          if (style.dimSeven) put('7', raised: hi || symRaised);
+        } else {
+          put(minorWord, raised: triadRaised);
+          put('7${style.plusMinus ? '−5' : '♭5'}', raised: hi);
+        }
+      case 'aug':
+        final a = style.symbols ? '+' : word('aug');
+        final ar = style.symbols ? symRaised : false;
+        if (ext.isEmpty) {
+          put(a, raised: ar);
+        } else if (style.augBefore) {
+          put(a, raised: ar);
+          put(ext, raised: hi || ar);
+        } else {
+          put(ext, raised: hi);
+          put(a, raised: ar || hi);
+        }
+      default:
+        if (minor) put(minorWord, raised: triadRaised);
+        if (major7) {
+          // Grosse Septime: mit Zahl, ausser bei „Δ“ ohne 7 (dort nur 9, 11, 13)
+          final noSeven = !m7Text.endsWith('7');
+          final word7 = noSeven ? m7Text : m7Text.substring(0, m7Text.length - 1);
+          final number = ext == '7' ? (noSeven ? '' : '7') : ext;
+          var t = '$word7$number';
+          // Bei Moll mit grosser Septime das Dur-Wort der Dreiklänge (z. B. „ma“) statt „maj“
+          if (minor && !m7Text.startsWith('Δ') && style.triads != 0 && style.triads != 3) {
+            t = '$majorWord${number.isEmpty ? '7' : number}';
+          }
+          if (minor && style.parenMinMaj7) t = '($t)';
+          put(t, raised: m7Raised || hi);
+        } else if (ext.isNotEmpty) {
+          put(ext == '69' ? '6/9' : ext, raised: hi);
+        }
+    }
+    // Veränderte Töne (sortiert nach Stufe)
+    String alt((int, String) a) {
+      final (d, n) = a;
+      if (d == 0) return 'alt';
+      final sign = style.plusMinus ? (d > 0 ? '+' : '−') : (d > 0 ? '♯' : '♭');
+      return style.accAfter && !style.plusMinus ? '$n$sign' : '$sign$n';
+    }
+
+    final sorted = [...alts]..sort((a, b) => (int.tryParse(a.$2) ?? 99).compareTo(int.tryParse(b.$2) ?? 99));
+    final altTexts = [for (final a in sorted) alt(a)];
+    void putAlts() {
+      if (altTexts.isEmpty) return;
+      final paren = style.parenAlts && altTexts.length >= style.parenMin;
+      if (style.stacked && altTexts.length > 1) {
+        // Höchste Stufe oben (umgekehrt: tiefste oben)
+        final lines = style.invertOrder ? altTexts : altTexts.reversed.toList();
+        out.add(ChordPart('', raised: true, stack: lines, parens: paren));
+        suffix = true;
+      } else {
+        final t = altTexts.join();
+        put(paren ? '($t)' : t, raised: hi);
+      }
+    }
+
+    // Wörter: sus, add, omit/no
+    final words = <String>[
+      if (sus.isNotEmpty) word('sus') + (sus == '2' || style.showSus4 ? sus : ''),
+      for (final a in adds) '${word('add')}$a',
+      for (final o in omits) '${word(style.noInsteadOfOmit ? 'no' : 'omit')}$o',
+    ];
+    void putWords() {
+      if (words.isEmpty) return;
+      final t = words.join();
+      put(style.parenWords && suffix ? '($t)' : t, raised: hi);
+    }
+
+    // Veränderte Töne ans Ende: immer, oder wenn sie sonst gleich nach dem Grundton kämen
+    final toEnd = style.moveAlts && (style.moveAlways || (ext.isEmpty && kind.isEmpty && !minor));
+    if (toEnd) {
+      putWords();
+      putAlts();
+    } else {
+      putAlts();
+      putWords();
+    }
+    if (bass != null) put('/${_note(bass!, bassAcc, german)}');
+    return out;
   }
 
   /// Akkordname nach [style] in Teilen; nicht verstandene Namen bleiben, wie sie sind
